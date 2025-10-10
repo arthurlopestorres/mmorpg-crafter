@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Receitas</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+
+<body>
+    <div class="container">
+        <aside>
+            <ul class="menu">
+                <li data-section="home">Home</li>
+                <li data-section="receitas">Receitas</li>
+                <li data-section="componentes">Componentes</li>
+                <li data-section="estoque">Estoque de Componentes</li>
+                <li data-section="arquivados">Arquivados</li>
+                <li data-section="farmar">O que farmar?</li>
+            </ul>
+        </aside>
+        <main id="conteudo"></main>
+    </div>
+
+    <!-- Modal de erro -->
+    <div id="modalErro" class="modal">
+        <div class="modal-content">
+            <span id="fecharModal" class="close">&times;</span>
+            <p id="mensagemErro"></p>
+        </div>
+    </div>
+
+    <!-- Popup de Receita -->
+    <div id="popupReceita" class="modal">
+        <div class="modal-content">
+            <h2 id="tituloPopupReceita">Nova Receita</h2>
+            <form id="formReceita">
+                <input type="text" id="receitaNome" placeholder="Nome da receita" required>
+                <input type="hidden" id="inputNomeOriginalReceita">
+                <div id="receitaAssociadosContainer"></div>
+                <button type="button" id="btnAddReceitaAssoc" class="primary">+ Adicionar Componente</button>
+                <div class="form-actions">
+                    <button type="submit" class="primary">Salvar</button>
+                    <button type="button" id="btnCancelarReceita" class="secondary">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Popup de Componente -->
+    <div id="popupComponente" class="modal">
+        <div class="modal-content">
+            <h2 id="tituloPopup">Novo Componente</h2>
+            <form id="formComponente">
+                <input type="text" id="inputNome" placeholder="Nome do componente" required>
+                <input type="hidden" id="inputNomeOriginal">
+                <input type="text" id="inputCategoria" placeholder="Categoria" list="categoriasDatalist">
+                <datalist id="categoriasDatalist"></datalist>
+                <input type="number" id="inputQuantidadeProduzida" min="0.001" step="any" value="0.001"
+                    placeholder="Quantidade produzida">
+                <div id="associadosContainer"></div>
+                <button type="button" id="btnAddAssociado" class="primary">+ Adicionar Material</button>
+                <div class="form-actions">
+                    <button type="submit" class="primary">Salvar</button>
+                    <button type="button" id="btnCancelarComponente" class="secondary">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="index.js"></script>
+</body>
+
+</html>
