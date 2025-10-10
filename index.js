@@ -1,4 +1,4 @@
-const API = "http://localhost:10000";
+const API = "";
 
 const conteudo = document.getElementById("conteudo");
 
