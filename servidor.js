@@ -1,6 +1,10 @@
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
+const bcrypt = require('bcrypt');
+const nodemailer = require('nodemailer');
+const session = require('express-session');
+require('dotenv').config();
 const app = express();
 
 const PORT = process.env.PORT || 10000;
@@ -10,10 +14,26 @@ const componentesFile = path.join(DATA_DIR, 'componentes.json');
 const estoqueFile = path.join(DATA_DIR, 'estoque.json');
 const arquivadosFile = path.join(DATA_DIR, 'arquivados.json');
 const logFile = path.join(DATA_DIR, 'log.json');
+const usuariosFile = path.join(DATA_DIR, 'usuarios.json');
 
 // Middleware
 app.use(express.json());
 app.use(express.static(__dirname)); // Servir arquivos estáticos da raiz do projeto
+app.use(session({
+    secret: 'secret-key-mmo-crafter', // Mude para um secret seguro
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: process.env.NODE_ENV === 'production' }
+}));
+
+// Configuração do Nodemailer
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
 
 // Função placeholder para sincronizarEstoque (substitua pelo código original)
 async function sincronizarEstoque() {
@@ -34,7 +54,7 @@ async function inicializarArquivos() {
     try {
         await fs.mkdir(DATA_DIR, { recursive: true });
         console.log('[INIT] Diretório de dados criado ou já existente:', DATA_DIR);
-        const arquivos = [receitasFile, componentesFile, estoqueFile, arquivadosFile, logFile];
+        const arquivos = [receitasFile, componentesFile, estoqueFile, arquivadosFile, logFile, usuariosFile];
         for (const arquivo of arquivos) {
             try {
                 await fs.access(arquivo);
@@ -55,14 +75,109 @@ inicializarArquivos().then(() => {
     console.error('[INIT] Falha ao inicializar arquivos:', error);
 });
 
-// Endpoint: Servir index.html
+// Middleware de autenticação
+const isAuthenticated = (req, res, next) => {
+    if (req.session.user) {
+        next();
+    } else {
+        res.status(401).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+};
+
+// Endpoint: Servir index.html (não protegido)
 app.get('/', (req, res) => {
     console.log('[GET /] Servindo index.html');
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Endpoint: Obter receitas
-app.get('/receitas', async (req, res) => {
+// Endpoint: Login (não protegido)
+app.post('/login', async (req, res) => {
+    const { email, senha } = req.body;
+    try {
+        const usuarios = await fs.readFile(usuariosFile, 'utf8').then(JSON.parse).catch(() => []);
+        const usuario = usuarios.find(u => u.email === email);
+        if (!usuario || !usuario.aprovado || !(await bcrypt.compare(senha, usuario.senhaHash))) {
+            return res.status(401).json({ sucesso: false, erro: 'Usuário ou senha não encontrados' });
+        }
+        req.session.user = email;
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /login] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao fazer login' });
+    }
+});
+
+// Endpoint: Cadastro (não protegido)
+app.post('/cadastro', async (req, res) => {
+    const { nome, email, senha } = req.body;
+    try {
+        let usuarios = await fs.readFile(usuariosFile, 'utf8').then(JSON.parse).catch(() => []);
+        if (usuarios.some(u => u.email === email)) {
+            return res.status(400).json({ sucesso: false, erro: 'Email já cadastrado' });
+        }
+        const senhaHash = await bcrypt.hash(senha, 10);
+        usuarios.push({ nome, email, senhaHash, aprovado: false });
+        await fs.writeFile(usuariosFile, JSON.stringify(usuarios, null, 2));
+
+        // Enviar email
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: 'arthurlttorres@gmail.com',
+            subject: 'Solicitação de Acesso',
+            text: `Usuário solicitou acesso:\nNome: ${nome}\nEmail: ${email}`
+        });
+
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /cadastro] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao cadastrar' });
+    }
+});
+
+// Endpoint: Aprovação manual (não protegido, pois manual via Postman)
+app.put('/data/usuarios', async (req, res) => {
+    const { email, aprovadoParaAcesso } = req.body;
+    try {
+        let usuarios = await fs.readFile(usuariosFile, 'utf8').then(JSON.parse).catch(() => []);
+        const index = usuarios.findIndex(u => u.email === email);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+        }
+        usuarios[index].aprovado = aprovadoParaAcesso;
+        await fs.writeFile(usuariosFile, JSON.stringify(usuarios, null, 2));
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[PUT /data/usuarios] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao aprovar' });
+    }
+});
+
+// Endpoint: Troca de senha (protegido por headers)
+app.put('/data/usuarios/troca-de-senha', async (req, res) => {
+    const key = req.headers['atboficial-mmo-crafter'];
+    const token = req.headers['aisdbfaidfbhyadhiyfad'];
+    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyfad') {
+        return res.status(403).json({ sucesso: false, erro: 'Acesso negado' });
+    }
+    const { email, novaSenha } = req.body; // Assumindo novaSenha; ajuste se necessário
+    try {
+        let usuarios = await fs.readFile(usuariosFile, 'utf8').then(JSON.parse).catch(() => []);
+        const index = usuarios.findIndex(u => u.email === email);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+        }
+        const senhaHash = await bcrypt.hash(novaSenha, 10);
+        usuarios[index].senhaHash = senhaHash;
+        await fs.writeFile(usuariosFile, JSON.stringify(usuarios, null, 2));
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[PUT /data/usuarios/troca-de-senha] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao trocar senha' });
+    }
+});
+
+// Endpoints protegidos
+app.get('/receitas', isAuthenticated, async (req, res) => {
     console.log('[GET /receitas] Requisição recebida');
     try {
         const data = await fs.readFile(receitasFile, 'utf8');
@@ -74,8 +189,7 @@ app.get('/receitas', async (req, res) => {
     }
 });
 
-// Endpoint: Criar ou atualizar lista de receitas
-app.post('/receitas', async (req, res) => {
+app.post('/receitas', isAuthenticated, async (req, res) => {
     console.log('[POST /receitas] Requisição recebida:', req.body);
     try {
         const novaReceita = req.body;
@@ -110,8 +224,7 @@ app.post('/receitas', async (req, res) => {
     }
 });
 
-// Endpoint: Editar receita
-app.post('/receitas/editar', async (req, res) => {
+app.post('/receitas/editar', isAuthenticated, async (req, res) => {
     console.log('[POST /receitas/editar] Requisição recebida:', req.body);
     try {
         const { nomeOriginal, nome, componentes } = req.body;
@@ -149,8 +262,7 @@ app.post('/receitas/editar', async (req, res) => {
     }
 });
 
-// Endpoint: Obter componentes
-app.get('/componentes', async (req, res) => {
+app.get('/componentes', isAuthenticated, async (req, res) => {
     console.log('[GET /componentes] Requisição recebida');
     try {
         const data = await fs.readFile(componentesFile, 'utf8');
@@ -162,8 +274,7 @@ app.get('/componentes', async (req, res) => {
     }
 });
 
-// Endpoint: Criar componente
-app.post('/componentes', async (req, res) => {
+app.post('/componentes', isAuthenticated, async (req, res) => {
     console.log('[POST /componentes] Requisição recebida:', req.body);
     try {
         const novoComponente = req.body;
@@ -212,8 +323,7 @@ app.post('/componentes', async (req, res) => {
     }
 });
 
-// Endpoint: Editar componente
-app.post('/componentes/editar', async (req, res) => {
+app.post('/componentes/editar', isAuthenticated, async (req, res) => {
     console.log('[POST /componentes/editar] Requisição recebida:', req.body);
     try {
         const { nomeOriginal, nome, categoria, associados, quantidadeProduzida } = req.body;
@@ -251,8 +361,7 @@ app.post('/componentes/editar', async (req, res) => {
     }
 });
 
-// Endpoint: Excluir componente
-app.post('/componentes/excluir', async (req, res) => {
+app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
     console.log('[POST /componentes/excluir] Requisição recebida:', req.body);
     try {
         const { nome } = req.body;
@@ -285,8 +394,7 @@ app.post('/componentes/excluir', async (req, res) => {
     }
 });
 
-// Endpoint: Obter estoque
-app.get('/estoque', async (req, res) => {
+app.get('/estoque', isAuthenticated, async (req, res) => {
     console.log('[GET /estoque] Requisição recebida');
     try {
         const data = await fs.readFile(estoqueFile, 'utf8');
@@ -298,8 +406,7 @@ app.get('/estoque', async (req, res) => {
     }
 });
 
-// Endpoint: Atualizar estoque
-app.post('/estoque', async (req, res) => {
+app.post('/estoque', isAuthenticated, async (req, res) => {
     console.log('[POST /estoque] Requisição recebida:', req.body);
     try {
         const { componente, quantidade, operacao } = req.body;
@@ -344,8 +451,7 @@ app.post('/estoque', async (req, res) => {
     }
 });
 
-// Endpoint: Excluir item do estoque
-app.delete('/data', async (req, res) => {
+app.delete('/data', isAuthenticated, async (req, res) => {
     console.log('[DELETE /data] Requisição recebida:', req.body);
     try {
         const { componente } = req.body;
@@ -378,8 +484,7 @@ app.delete('/data', async (req, res) => {
     }
 });
 
-// Endpoint: Obter arquivados
-app.get('/arquivados', async (req, res) => {
+app.get('/arquivados', isAuthenticated, async (req, res) => {
     console.log('[GET /arquivados] Requisição recebida');
     try {
         const data = await fs.readFile(arquivadosFile, 'utf8');
@@ -391,8 +496,7 @@ app.get('/arquivados', async (req, res) => {
     }
 });
 
-// Endpoint: Atualizar arquivados
-app.post('/arquivados', async (req, res) => {
+app.post('/arquivados', isAuthenticated, async (req, res) => {
     console.log('[POST /arquivados] Requisição recebida:', req.body);
     try {
         const arquivados = req.body;
@@ -405,8 +509,7 @@ app.post('/arquivados', async (req, res) => {
     }
 });
 
-// Endpoint: Obter log
-app.get('/log', async (req, res) => {
+app.get('/log', isAuthenticated, async (req, res) => {
     console.log('[GET /log] Requisição recebida');
     try {
         const data = await fs.readFile(logFile, 'utf8');
@@ -418,8 +521,7 @@ app.get('/log', async (req, res) => {
     }
 });
 
-// Endpoint: Adicionar ao log
-app.post('/log', async (req, res) => {
+app.post('/log', isAuthenticated, async (req, res) => {
     console.log('[POST /log] Requisição recebida:', req.body);
     try {
         const novosLogs = Array.isArray(req.body) ? req.body : [req.body];
@@ -441,7 +543,7 @@ app.post('/log', async (req, res) => {
     }
 });
 
-// Endpoint: Verificar status do servidor
+// Endpoint: Verificar status do servidor (não protegido)
 app.get('/health', (req, res) => {
     console.log('[GET /health] Verificação de status do servidor');
     res.json({ status: 'OK', timestamp: new Date().toISOString() });

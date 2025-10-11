@@ -4,9 +4,13 @@ const API = "https://mmorpg-crafter.onrender.com";
 const conteudo = document.getElementById("conteudo");
 
 document.addEventListener("DOMContentLoaded", () => {
-    initMenu();
-    const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
-    carregarSecao(ultimaSecao);
+    if (sessionStorage.getItem("loggedIn")) {
+        initMenu();
+        const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
+        carregarSecao(ultimaSecao);
+    } else {
+        mostrarPopupLogin();
+    }
 });
 
 function initMenu() {
@@ -21,6 +25,135 @@ function initMenu() {
             if (modalErro) modalErro.style.display = "none";
         });
     }
+}
+
+/* ------------------ Funções de Login e Cadastro ------------------ */
+function criarOverlay() {
+    const overlay = document.createElement("div");
+    overlay.id = "overlay";
+    overlay.style.position = "fixed";
+    overlay.style.top = "0";
+    overlay.style.left = "0";
+    overlay.style.width = "100%";
+    overlay.style.height = "100%";
+    overlay.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+    overlay.style.zIndex = "999";
+    document.body.appendChild(overlay);
+    return overlay;
+}
+
+function mostrarPopupLogin() {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupLogin";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.innerHTML = `
+        <h2>Login</h2>
+        <form id="formLogin">
+            <input type="email" id="emailLogin" placeholder="Email" required>
+            <input type="password" id="senhaLogin" placeholder="Senha" required>
+            <button type="submit">Entrar</button>
+            <button type="button" id="btnCadastrar">Cadastrar-se</button>
+            <p id="erroLogin" style="color: red; display: none;">Usuário ou senha não encontrados</p>
+        </form>
+    `;
+    document.body.appendChild(popup);
+
+    document.getElementById("formLogin").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = document.getElementById("emailLogin").value;
+        const senha = document.getElementById("senhaLogin").value;
+        try {
+            const response = await fetch(`${API}/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, senha })
+            });
+            const data = await response.json();
+            if (data.sucesso) {
+                sessionStorage.setItem("loggedIn", "true");
+                popup.remove();
+                overlay.remove();
+                initMenu();
+                const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
+                carregarSecao(ultimaSecao);
+            } else {
+                document.getElementById("erroLogin").style.display = "block";
+                document.getElementById("emailLogin").style.border = "1px solid red";
+                document.getElementById("senhaLogin").style.border = "1px solid red";
+            }
+        } catch (error) {
+            mostrarErro("Erro ao fazer login");
+        }
+    });
+
+    document.getElementById("btnCadastrar").addEventListener("click", () => {
+        popup.remove();
+        mostrarPopupCadastro();
+    });
+}
+
+function mostrarPopupCadastro() {
+    const popup = document.createElement("div");
+    popup.id = "popupCadastro";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.innerHTML = `
+        <h2>Cadastro</h2>
+        <form id="formCadastro">
+            <input type="text" id="nomeCadastro" placeholder="Nome" required>
+            <input type="email" id="emailCadastro" placeholder="Email" required>
+            <input type="password" id="senhaCadastro" placeholder="Senha" required>
+            <input type="password" id="confirmaSenha" placeholder="Confirme sua senha" required>
+            <button type="submit">Enviar solicitação de acesso</button>
+            <p id="mensagemCadastro" style="display: none;">Solicitação enviada</p>
+        </form>
+    `;
+    document.body.appendChild(popup);
+
+    document.getElementById("formCadastro").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const nome = document.getElementById("nomeCadastro").value;
+        const email = document.getElementById("emailCadastro").value;
+        const senha = document.getElementById("senhaCadastro").value;
+        const confirma = document.getElementById("confirmaSenha").value;
+        if (senha !== confirma) {
+            mostrarErro("Senhas não coincidem");
+            return;
+        }
+        try {
+            const response = await fetch(`${API}/cadastro`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nome, email, senha })
+            });
+            const data = await response.json();
+            if (data.sucesso) {
+                document.getElementById("formCadastro").querySelectorAll("input, button").forEach(el => el.style.display = "none");
+                document.getElementById("mensagemCadastro").style.display = "block";
+                setTimeout(() => {
+                    popup.remove();
+                    document.getElementById("overlay").remove();
+                    mostrarPopupLogin();
+                }, 2000);
+            } else {
+                mostrarErro(data.erro || "Erro ao cadastrar");
+            }
+        } catch (error) {
+            mostrarErro("Erro ao cadastrar");
+        }
+    });
 }
 
 /* ------------------ Seções ------------------ */
