@@ -1,10 +1,12 @@
+//sempre substituir a API abaixo de volta para https://mmorpg-crafter.onrender.com
 const API = "https://mmorpg-crafter.onrender.com";
 
 const conteudo = document.getElementById("conteudo");
 
 document.addEventListener("DOMContentLoaded", () => {
     initMenu();
-    carregarSecao("receitas");
+    const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
+    carregarSecao(ultimaSecao);
 });
 
 function initMenu() {
@@ -23,12 +25,21 @@ function initMenu() {
 
 /* ------------------ Seções ------------------ */
 async function carregarSecao(secao) {
+    localStorage.setItem("ultimaSecao", secao); // Salvar a seção atual no localStorage
     if (secao === "receitas") return montarReceitas();
     if (secao === "componentes") return montarComponentes();
     if (secao === "estoque") return montarEstoque();
     if (secao === "arquivados") return montarArquivados();
     if (secao === "farmar") return montarFarmar();
-    conteudo.innerHTML = `<h1>Bem-vindo!</h1><p>Selecione uma seção.</p>`;
+    conteudo.innerHTML = `<h1>Bem-vindo!</h1>
+<p>Essa aplicação tem como finalidade servir como calculadora e gestão de estoque para qualquer jogo de RPG (aqueles que envolvem craft e coleta de itens)!</p>
+<p>No momento, estamos jogando somente o jogo Pax Dei, por isso, seguem alguns links úteis para o jogo:</p>
+<ul class="home lista-de-recomendacoes">
+    <li><div><a href="https://paxdei.gaming.tools">PAX DEI DATABASE</a></div></li>
+    <li><div><a href="https://paxdei.th.gl">MAPA INTERATIVO</a></div></li>
+</ul>
+<iframe id="mapaIframe" src="https://paxdei.th.gl/" title="Pax Dei Interactive Map"></iframe>
+<iframe id="paxDeiIframe" src="https://paxdei.gaming.tools/" title="Pax Dei DataBase"></iframe>`;
 }
 
 /* ------------------ Funções Auxiliares de Filtro e Ordenação ------------------ */
@@ -431,6 +442,8 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
 
         // Registrar no log
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
+        //SEO Optimized Response
+
         const logEntries = Object.entries(requisitos).map(([componente, quantidade]) => ({
             dataHora,
             componente,
