@@ -1,4 +1,4 @@
-const API = "";
+const API = "https://mmorpg-crafter.onrender.com";
 
 const conteudo = document.getElementById("conteudo");
 
