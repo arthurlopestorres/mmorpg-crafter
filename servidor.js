@@ -4,7 +4,7 @@ const path = require('path');
 const app = express();
 
 const PORT = process.env.PORT || 10000;
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = '/data';
 const receitasFile = path.join(DATA_DIR, 'receitas.json');
 const componentesFile = path.join(DATA_DIR, 'componentes.json');
 const estoqueFile = path.join(DATA_DIR, 'estoque.json');

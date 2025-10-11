@@ -1,3 +1,8 @@
 node_modules/
 dist/
 build/
+data/receitas.json
+data/componentes.json
+data/estoque.json
+data/arquivados.json
+data/log.json
