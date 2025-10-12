@@ -357,6 +357,66 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
         componentes[index] = { nome, categoria, associados, quantidadeProduzida };
         await fs.writeFile(componentesFile, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes/editar] Componente editado:', nomeOriginal, '->', nome);
+
+        // Se o nome mudou, propagar a mudança para estoque, receitas e outros componentes
+        if (nome !== nomeOriginal) {
+            // Atualizar estoque
+            let estoque = [];
+            try {
+                const data = await fs.readFile(estoqueFile, 'utf8');
+                estoque = JSON.parse(data);
+            } catch (err) {
+                if (err.code !== 'ENOENT') throw err;
+            }
+            const estoqueIndex = estoque.findIndex(e => e.componente === nomeOriginal);
+            if (estoqueIndex !== -1) {
+                estoque[estoqueIndex].componente = nome;
+                await fs.writeFile(estoqueFile, JSON.stringify(estoque, null, 2));
+                console.log('[POST /componentes/editar] Nome atualizado no estoque:', nomeOriginal, '->', nome);
+            }
+
+            // Atualizar receitas
+            let receitas = [];
+            try {
+                const data = await fs.readFile(receitasFile, 'utf8');
+                receitas = JSON.parse(data);
+            } catch (err) {
+                if (err.code !== 'ENOENT') throw err;
+            }
+            let receitasAtualizadas = false;
+            receitas.forEach(receita => {
+                if (receita.componentes) {
+                    receita.componentes.forEach(comp => {
+                        if (comp.nome === nomeOriginal) {
+                            comp.nome = nome;
+                            receitasAtualizadas = true;
+                        }
+                    });
+                }
+            });
+            if (receitasAtualizadas) {
+                await fs.writeFile(receitasFile, JSON.stringify(receitas, null, 2));
+                console.log('[POST /componentes/editar] Nome atualizado nas receitas:', nomeOriginal, '->', nome);
+            }
+
+            // Atualizar associados em outros componentes
+            let componentesAtualizados = false;
+            componentes.forEach(comp => {
+                if (comp.associados) {
+                    comp.associados.forEach(assoc => {
+                        if (assoc.nome === nomeOriginal) {
+                            assoc.nome = nome;
+                            componentesAtualizados = true;
+                        }
+                    });
+                }
+            });
+            if (componentesAtualizados) {
+                await fs.writeFile(componentesFile, JSON.stringify(componentes, null, 2));
+                console.log('[POST /componentes/editar] Nome atualizado nos associados de outros componentes:', nomeOriginal, '->', nome);
+            }
+        }
+
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /componentes/editar] Erro:', error);
@@ -387,9 +447,88 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
             return res.status(404).json({ sucesso: false, erro: 'Componente não encontrado' });
         }
 
+        // Remover referências em receitas
+        let receitas = [];
+        try {
+            const data = await fs.readFile(receitasFile, 'utf8');
+            receitas = JSON.parse(data);
+        } catch (err) {
+            if (err.code !== 'ENOENT') throw err;
+        }
+        let receitasAtualizadas = false;
+        receitas.forEach(receita => {
+            if (receita.componentes) {
+                const originalLength = receita.componentes.length;
+                receita.componentes = receita.componentes.filter(comp => comp.nome !== nome);
+                if (receita.componentes.length !== originalLength) {
+                    receitasAtualizadas = true;
+                }
+            }
+        });
+        if (receitasAtualizadas) {
+            await fs.writeFile(receitasFile, JSON.stringify(receitas, null, 2));
+            console.log('[POST /componentes/excluir] Referências removidas nas receitas para:', nome);
+        }
+
+        // Remover referências em arquivados
+        let arquivados = [];
+        try {
+            const data = await fs.readFile(arquivadosFile, 'utf8');
+            arquivados = JSON.parse(data);
+        } catch (err) {
+            if (err.code !== 'ENOENT') throw err;
+        }
+        let arquivadosAtualizados = false;
+        arquivados.forEach(arquivado => {
+            if (arquivado.componentes) {
+                const originalLength = arquivado.componentes.length;
+                arquivado.componentes = arquivado.componentes.filter(comp => comp.nome !== nome);
+                if (arquivado.componentes.length !== originalLength) {
+                    arquivadosAtualizados = true;
+                }
+            }
+        });
+        if (arquivadosAtualizados) {
+            await fs.writeFile(arquivadosFile, JSON.stringify(arquivados, null, 2));
+            console.log('[POST /componentes/excluir] Referências removidas nos arquivados para:', nome);
+        }
+
+        // Remover referências em associados de outros componentes
+        let componentesAtualizados = false;
+        componentes.forEach(comp => {
+            if (comp.associados) {
+                const originalLength = comp.associados.length;
+                comp.associados = comp.associados.filter(assoc => assoc.nome !== nome);
+                if (comp.associados.length !== originalLength) {
+                    componentesAtualizados = true;
+                }
+            }
+        });
+        if (componentesAtualizados) {
+            await fs.writeFile(componentesFile, JSON.stringify(componentes, null, 2));
+            console.log('[POST /componentes/excluir] Referências removidas nos associados de outros componentes para:', nome);
+        }
+
+        // Remover o componente
         componentes.splice(index, 1);
         await fs.writeFile(componentesFile, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes/excluir] Componente excluído:', nome);
+
+        // Remover do estoque
+        let estoque = [];
+        try {
+            const data = await fs.readFile(estoqueFile, 'utf8');
+            estoque = JSON.parse(data);
+        } catch (err) {
+            if (err.code !== 'ENOENT') throw err;
+        }
+        const estoqueIndex = estoque.findIndex(e => e.componente === nome);
+        if (estoqueIndex !== -1) {
+            estoque.splice(estoqueIndex, 1);
+            await fs.writeFile(estoqueFile, JSON.stringify(estoque, null, 2));
+            console.log('[POST /componentes/excluir] Componente removido do estoque:', nome);
+        }
+
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /componentes/excluir] Erro:', error);

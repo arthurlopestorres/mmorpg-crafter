@@ -815,12 +815,16 @@ async function adicionarLinhaReceita(dados = {}) {
     const container = document.getElementById("receitaAssociadosContainer");
     const row = document.createElement("div");
     row.className = "associado-row";
+    const rowId = Math.random().toString(36).substring(7); // ID único para o datalist
     const comps = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
     row.innerHTML = `
-    <select class="assoc-nome">${comps.map(c => `<option value="${c.nome}" ${dados.nome === c.nome ? "selected" : ""}>${c.nome}</option>`).join("")}</select>
-    <input type="number" class="assoc-qtd" min="0.001" step="any" placeholder="Qtd" value="${formatQuantity(dados.quantidade || 0.001)}" />
-    <button type="button">❌</button>
-  `;
+      <input type="text" class="assoc-nome" list="assoc-datalist-${rowId}" value="${dados.nome || ''}" placeholder="Digite para buscar..." />
+      <datalist id="assoc-datalist-${rowId}">
+        ${comps.map(c => `<option value="${c.nome}">`).join("")}
+      </datalist>
+      <input type="number" class="assoc-qtd" min="0.001" step="any" placeholder="Qtd" value="${formatQuantity(dados.quantidade || 0.001)}" />
+      <button type="button">❌</button>
+    `;
     row.querySelector("button").addEventListener("click", () => row.remove());
     container.appendChild(row);
 }
@@ -957,12 +961,13 @@ function adicionarAssociadoRow(nome = "", quantidade = "") {
     const container = document.getElementById("associadosContainer");
     const row = document.createElement("div");
     row.className = "associado-row";
+    const rowId = Math.random().toString(36).substring(7); // ID único para o datalist
     fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json()).then(comps => {
         row.innerHTML = `
-      <select class="assoc-nome">
-        <option value="">Selecione...</option>
-        ${comps.map(c => `<option value="${c.nome}" ${c.nome === nome ? "selected" : ""}>${c.nome}</option>`).join("")}
-      </select>
+      <input type="text" class="assoc-nome" list="assoc-datalist-${rowId}" value="${nome}" placeholder="Digite para buscar..." />
+      <datalist id="assoc-datalist-${rowId}">
+        ${comps.map(c => `<option value="${c.nome}">`).join("")}
+      </datalist>
       <input class="assoc-qtd" type="number" min="0.001" step="any" value="${formatQuantity(quantidade || 0.001)}" />
       <button type="button">❌</button>
     `;
