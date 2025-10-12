@@ -287,7 +287,7 @@ button.btn-arquivar:hover {
     background: rgba(0, 0, 0, 0.5);
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 2000;
 }
 
 .modal-content {
@@ -531,4 +531,66 @@ aside>* {
 
 #popupLogin h2 {
     color: black;
+    margin-top: 0px;
+}
+
+#popupLogin {
+    display: flex;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    padding: 20px;
+    z-index: 1000;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+#formLogin button {
+    background: #1a2634;
+    color: white;
+}
+
+#formLogin button:hover {
+    background: white;
+    color: #1a2634;
+}
+
+#popupCadastro h2 {
+    color: black;
+    margin-top: 0px;
+}
+
+#popupCadastro {
+    display: flex;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    padding: 20px;
+    z-index: 1000;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+#popupCadastro button {
+    background: #1a2634;
+    color: white;
+}
+
+#popupCadastro button:hover {
+    background: white;
+    color: #1a2634;
+}
+
+#mensagemErro {
+    color: red;
+}
+
+#modalErro h3 {
+    color: black
 }

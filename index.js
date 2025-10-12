@@ -1,5 +1,7 @@
 //sempre substituir a API abaixo de volta para https://mmorpg-crafter.onrender.com
-const API = "https://mmorpg-crafter.onrender.com";
+//para teste local: http://localhost:10000
+//rodar node servidor.js (no terminal)
+const API = "http://localhost:10000";
 
 const conteudo = document.getElementById("conteudo");
 
@@ -17,14 +19,6 @@ function initMenu() {
     document.querySelectorAll(".menu li").forEach(li => {
         li.addEventListener("click", () => carregarSecao(li.dataset.section));
     });
-
-    const fecharModal = document.getElementById("fecharModal");
-    if (fecharModal) {
-        fecharModal.addEventListener("click", () => {
-            const modalErro = document.getElementById("modalErro");
-            if (modalErro) modalErro.style.display = "none";
-        });
-    }
 }
 
 /* ------------------ Funções de Login e Cadastro ------------------ */
@@ -84,22 +78,28 @@ function mostrarPopupLogin() {
                 const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
                 carregarSecao(ultimaSecao);
             } else {
+                document.getElementById("erroLogin").textContent = data.erro || "Usuário ou senha não encontrados";
                 document.getElementById("erroLogin").style.display = "block";
                 document.getElementById("emailLogin").style.border = "1px solid red";
                 document.getElementById("senhaLogin").style.border = "1px solid red";
             }
         } catch (error) {
-            mostrarErro("Erro ao fazer login");
+            document.getElementById("erroLogin").textContent = "Erro ao fazer login";
+            document.getElementById("erroLogin").style.display = "block";
+            document.getElementById("emailLogin").style.border = "1px solid red";
+            document.getElementById("senhaLogin").style.border = "1px solid red";
         }
     });
 
     document.getElementById("btnCadastrar").addEventListener("click", () => {
         popup.remove();
+        overlay.remove();
         mostrarPopupCadastro();
     });
 }
 
 function mostrarPopupCadastro() {
+    const overlay = criarOverlay();
     const popup = document.createElement("div");
     popup.id = "popupCadastro";
     popup.style.position = "fixed";
@@ -117,7 +117,12 @@ function mostrarPopupCadastro() {
             <input type="password" id="senhaCadastro" placeholder="Senha" required>
             <input type="password" id="confirmaSenha" placeholder="Confirme sua senha" required>
             <button type="submit">Enviar solicitação de acesso</button>
+            <button type="button" id="btnVoltarLogin">Voltar para Login</button>
+            <p id="erroCadastro" style="color: red; display: none;"></p>
             <p id="mensagemCadastro" style="display: none;">Solicitação enviada</p>
+            <div id="voltarConfirmacao" style="display: none;">
+                <button type="button" id="btnVoltarLoginConfirmacao">Voltar para Login</button>
+            </div>
         </form>
     `;
     document.body.appendChild(popup);
@@ -129,7 +134,10 @@ function mostrarPopupCadastro() {
         const senha = document.getElementById("senhaCadastro").value;
         const confirma = document.getElementById("confirmaSenha").value;
         if (senha !== confirma) {
-            mostrarErro("Senhas não coincidem");
+            document.getElementById("erroCadastro").textContent = "Senhas não coincidem";
+            document.getElementById("erroCadastro").style.display = "block";
+            document.getElementById("senhaCadastro").style.border = "1px solid red";
+            document.getElementById("confirmaSenha").style.border = "1px solid red";
             return;
         }
         try {
@@ -142,17 +150,36 @@ function mostrarPopupCadastro() {
             if (data.sucesso) {
                 document.getElementById("formCadastro").querySelectorAll("input, button").forEach(el => el.style.display = "none");
                 document.getElementById("mensagemCadastro").style.display = "block";
+                document.getElementById("voltarConfirmacao").style.display = "block";
                 setTimeout(() => {
                     popup.remove();
-                    document.getElementById("overlay").remove();
+                    overlay.remove();
                     mostrarPopupLogin();
                 }, 2000);
             } else {
-                mostrarErro(data.erro || "Erro ao cadastrar");
+                document.getElementById("erroCadastro").textContent = data.erro || "Erro ao cadastrar";
+                document.getElementById("erroCadastro").style.display = "block";
+                document.getElementById("emailCadastro").style.border = "1px solid red";
             }
         } catch (error) {
-            mostrarErro("Erro ao cadastrar");
+            document.getElementById("erroCadastro").textContent = "Erro ao cadastrar";
+            document.getElementById("erroCadastro").style.display = "block";
+            document.getElementById("emailCadastro").style.border = "1px solid red";
         }
+    });
+
+    document.getElementById("btnVoltarLogin").addEventListener("click", () => {
+        const overlay = document.getElementById("overlay");
+        if (overlay) overlay.remove();
+        popup.remove();
+        mostrarPopupLogin();
+    });
+
+    document.getElementById("btnVoltarLoginConfirmacao").addEventListener("click", () => {
+        const overlay = document.getElementById("overlay");
+        if (overlay) overlay.remove();
+        popup.remove();
+        mostrarPopupLogin();
     });
 }
 
@@ -575,8 +602,6 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
 
         // Registrar no log
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
-        //SEO Optimized Response
-
         const logEntries = Object.entries(requisitos).map(([componente, quantidade]) => ({
             dataHora,
             componente,
@@ -1251,12 +1276,31 @@ function formatQuantity(quantity) {
 }
 
 function mostrarErro(msg) {
-    const mensagemErro = document.getElementById("mensagemErro");
-    const modalErro = document.getElementById("modalErro");
-    if (mensagemErro && modalErro) {
-        mensagemErro.textContent = msg;
-        modalErro.style.display = "flex";
-    } else {
-        console.error("Erro: Não foi possível exibir o modal de erro. Mensagem:", msg);
-    }
+    const overlay = document.getElementById("overlay") || criarOverlay();
+    const modalErro = document.createElement("div");
+    modalErro.id = "modalErro";
+    modalErro.style.position = "fixed";
+    modalErro.style.top = "50%";
+    modalErro.style.left = "50%";
+    modalErro.style.transform = "translate(-50%, -50%)";
+    modalErro.style.backgroundColor = "white";
+    modalErro.style.padding = "20px";
+    modalErro.style.zIndex = "1000";
+    modalErro.style.borderRadius = "5px";
+    modalErro.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.1)";
+    modalErro.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>Erro</h3>
+            <button id="fecharModal" style="background: none; border: none; font-size: 16px; cursor: pointer;">❌</button>
+        </div>
+        <p id="mensagemErro">${msg}</p>
+    `;
+    document.body.appendChild(modalErro);
+
+    const fecharModal = document.getElementById("fecharModal");
+    fecharModal.addEventListener("click", () => {
+        modalErro.remove();
+        const overlay = document.getElementById("overlay");
+        if (overlay) overlay.remove();
+    });
 }
