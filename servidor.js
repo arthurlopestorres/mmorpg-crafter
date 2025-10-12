@@ -1,3 +1,4 @@
+// servidor.js
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
@@ -6,6 +7,8 @@ const nodemailer = require('nodemailer');
 const session = require('express-session');
 require('dotenv').config();
 const app = express();
+
+app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 10000;
 const DATA_DIR = '/data';
