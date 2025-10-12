@@ -77,7 +77,7 @@ aside {
 main {
     flex: 1;
     padding: 24px;
-    max-width: 1200px;
+    max-width: 1600px;
 }
 
 h2 {
@@ -206,6 +206,7 @@ button.btn-arquivar:hover {
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
+    justify-content: space-around;
 }
 
 .receita-header strong {
@@ -214,9 +215,15 @@ button.btn-arquivar:hover {
 }
 
 .comps-lista {
+    display: flex;
+    flex-wrap: nowrap;
     font-size: 0.85rem;
     color: #6b7280;
     padding: 10px 0px 10px 0px;
+    max-width: 436px;
+    max-height: 13px;
+    overflow: hidden;
+    margin-bottom: 3px;
 }
 
 .qtd-desejada {

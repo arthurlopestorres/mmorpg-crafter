@@ -884,8 +884,8 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az") {
           </div>
         </div>
         <div class="acoes">
-          <button onclick="abrirPopupComponente('${escapeHtml(c.nome)}')" class="primary">Editar</button>
-          <button onclick="excluirComponente('${escapeHtml(c.nome)}')" class="warn">Excluir</button>
+          <button onclick="abrirPopupComponente('${escapeJsString(c.nome)}')" class="primary">Editar</button>
+          <button onclick="excluirComponente('${escapeJsString(c.nome)}')" class="warn">Excluir</button>
         </div>
       </div>`;
     }).join("");
@@ -897,6 +897,10 @@ function escapeHtml(s) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
+}
+
+function escapeJsString(s) {
+    return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 /* ------------------ Popup de Componente ------------------ */
