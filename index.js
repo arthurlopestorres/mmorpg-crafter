@@ -67,7 +67,8 @@ function mostrarPopupLogin() {
             const response = await fetch(`${API}/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, senha })
+                body: JSON.stringify({ email, senha }),
+                credentials: 'include'
             });
             const data = await response.json();
             if (data.sucesso) {
@@ -144,7 +145,8 @@ function mostrarPopupCadastro() {
             const response = await fetch(`${API}/cadastro`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ nome, email, senha })
+                body: JSON.stringify({ nome, email, senha }),
+                credentials: 'include'
             });
             const data = await response.json();
             if (data.sucesso) {
@@ -243,9 +245,9 @@ async function montarReceitas() {
 }
 
 async function carregarListaReceitas(termoBusca = "", ordem = "az") {
-    const receitas = await fetch(`${API}/receitas`).then(r => r.json());
-    const componentes = await fetch(`${API}/componentes`).then(r => r.json());
-    const estoqueList = await fetch(`${API}/estoque`).then(r => r.json());
+    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
+    const componentes = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
+    const estoqueList = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
     const estoque = {};
     estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
 
@@ -355,7 +357,7 @@ async function arquivarReceita(receitaNome) {
 
     try {
         // Carregar receitas atuais
-        const receitasAtuais = await fetch(`${API}/receitas`).then(r => r.json());
+        const receitasAtuais = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
         console.log(`[ARQUIVAR] Receitas atuais carregadas:`, receitasAtuais);
         const receitaIndex = receitasAtuais.findIndex(r => r.nome === receitaNome);
         if (receitaIndex === -1) {
@@ -370,7 +372,8 @@ async function arquivarReceita(receitaNome) {
         const receitasResponse = await fetch(`${API}/receitas`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(receitasAtuais)
+            body: JSON.stringify(receitasAtuais),
+            credentials: 'include'
         });
         const receitasData = await receitasResponse.json();
         console.log(`[ARQUIVAR] Resposta do servidor (receitas):`, receitasData);
@@ -381,14 +384,15 @@ async function arquivarReceita(receitaNome) {
         }
 
         // Adicionar receita a arquivados.json
-        const arquivados = await fetch(`${API}/arquivados`).then(r => r.json()).catch(() => []);
+        const arquivados = await fetch(`${API}/arquivados`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
         console.log(`[ARQUIVAR] Arquivados atuais:`, arquivados);
         arquivados.push(receitaArquivada);
         console.log(`[ARQUIVAR] Adicionando receita "${receitaNome}" a arquivados.json`);
         const arquivadosResponse = await fetch(`${API}/arquivados`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(arquivados)
+            body: JSON.stringify(arquivados),
+            credentials: 'include'
         });
         const arquivadosData = await arquivadosResponse.json();
         console.log(`[ARQUIVAR] Resposta do servidor (arquivados):`, arquivadosData);
@@ -415,7 +419,7 @@ async function arquivarReceita(receitaNome) {
 }
 
 async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque) {
-    const receitas = await fetch(`${API}/receitas`).then(r => r.json());
+    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
     const receita = receitas.find(r => r.nome === receitaNome);
     if (!receita) {
         console.error(`[DETALHES] Receita "${receitaNome}" não encontrada`);
@@ -528,7 +532,7 @@ function mergeReq(target, source) {
 }
 
 async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque) {
-    const receitas = await fetch(`${API}/receitas`).then(r => r.json());
+    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
     const receita = receitas.find(r => r.nome === receitaNome);
     if (!receita) {
         console.error(`[CONCLUIR] Receita "${receitaNome}" não encontrada`);
@@ -544,7 +548,7 @@ async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque
     const btn = document.querySelector(`[data-receita="${receitaNome}"] .btn-concluir`);
     if (!btn) return;
 
-    const estoqueAtualizado = await fetch(`${API}/estoque`).then(r => r.json());
+    const estoqueAtualizado = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
     const estoqueMap = {};
     estoqueAtualizado.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
 
@@ -559,7 +563,7 @@ async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque
 async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
     console.log(`[CONCLUIR] Iniciando conclusão da receita: ${receitaNome}, quantidade: ${qtd}`);
 
-    const receitas = await fetch(`${API}/receitas`).then(r => r.json());
+    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
     console.log("[CONCLUIR] Receitas recebidas do servidor:", receitas);
     const receita = receitas.find(r => r.nome === receitaNome);
     if (!receita) {
@@ -591,7 +595,8 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             const response = await fetch(`${API}/estoque`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ componente, quantidade, operacao: "debitar" })
+                body: JSON.stringify({ componente, quantidade, operacao: "debitar" }),
+                credentials: 'include'
             });
             const data = await response.json();
             if (!data.sucesso) {
@@ -613,7 +618,8 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
         const logResponse = await fetch(`${API}/log`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(logEntries)
+            body: JSON.stringify(logEntries),
+            credentials: 'include'
         });
         const logData = await logResponse.json();
         if (!logData.sucesso) {
@@ -622,7 +628,7 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
         }
 
         // Arquivar a receita e remover de receitas
-        const receitasAtuais = await fetch(`${API}/receitas`).then(r => r.json());
+        const receitasAtuais = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
         console.log("[CONCLUIR] Receitas atuais antes da remoção:", receitasAtuais);
         const receitaIndex = receitasAtuais.findIndex(r => r.nome === receitaNome);
         if (receitaIndex === -1) {
@@ -637,7 +643,8 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
         const receitasResponse = await fetch(`${API}/receitas`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(receitasAtuais)
+            body: JSON.stringify(receitasAtuais),
+            credentials: 'include'
         });
         const receitasData = await receitasResponse.json();
         console.log("[CONCLUIR] Resposta do servidor (receitas):", receitasData);
@@ -647,13 +654,14 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             return;
         }
 
-        const arquivados = await fetch(`${API}/arquivados`).then(r => r.json()).catch(() => []);
+        const arquivados = await fetch(`${API}/arquivados`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
         arquivados.push(receitaArquivada);
         console.log(`[CONCLUIR] Adicionando receita "${receitaNome}" a arquivados.json`);
         const arquivadosResponse = await fetch(`${API}/arquivados`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(arquivados)
+            body: JSON.stringify(arquivados),
+            credentials: 'include'
         });
         const arquivadosData = await arquivadosResponse.json();
         console.log("[CONCLUIR] Resposta do servidor (arquivados):", arquivadosData);
@@ -665,7 +673,7 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
 
         // Atualizar UI
         console.log("[CONCLUIR] Atualizando interface do usuário");
-        const estoqueList = await fetch(`${API}/estoque`).then(r => r.json());
+        const estoqueList = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
         estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
         await carregarListaReceitas();
         await carregarEstoque();
@@ -689,7 +697,7 @@ async function editarReceita(nome) {
 
 async function duplicarReceita(nome) {
     console.log(`[DUPLICAR] Iniciando duplicação da receita: ${nome}`);
-    const receitas = await fetch(`${API}/receitas`).then(r => r.json());
+    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
     const receita = receitas.find(r => r.nome === nome);
     if (!receita) {
         console.error(`[DUPLICAR] Receita "${nome}" não encontrada`);
@@ -722,7 +730,7 @@ function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
 
     if (nome) {
         titulo.textContent = duplicar ? "Duplicar Receita" : "Editar Receita";
-        fetch(`${API}/receitas`).then(r => r.json()).then(list => {
+        fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json()).then(list => {
             const receita = list.find(r => r.nome === nome);
             if (!receita) {
                 console.error(`[POPUP] Receita "${nome}" não encontrada`);
@@ -769,7 +777,8 @@ function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
                 const response = await fetch(`${API}/receitas/editar`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ nomeOriginal: inputNomeOriginal.value, ...payload })
+                    body: JSON.stringify({ nomeOriginal: inputNomeOriginal.value, ...payload }),
+                    credentials: 'include'
                 });
                 const data = await response.json();
                 console.log("[FORM] Resposta do servidor (edição):", data);
@@ -781,7 +790,8 @@ function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
                 const response = await fetch(endpoint, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload),
+                    credentials: 'include'
                 });
                 const data = await response.json();
                 console.log("[FORM] Resposta do servidor (nova receita):", data);
@@ -804,7 +814,7 @@ async function adicionarLinhaReceita(dados = {}) {
     const container = document.getElementById("receitaAssociadosContainer");
     const row = document.createElement("div");
     row.className = "associado-row";
-    const comps = await fetch(`${API}/componentes`).then(r => r.json());
+    const comps = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
     row.innerHTML = `
     <select class="assoc-nome">${comps.map(c => `<option value="${c.nome}" ${dados.nome === c.nome ? "selected" : ""}>${c.nome}</option>`).join("")}</select>
     <input type="number" class="assoc-qtd" min="0.001" step="any" placeholder="Qtd" value="${formatQuantity(dados.quantidade || 0.001)}" />
@@ -838,7 +848,7 @@ async function montarComponentes() {
 }
 
 async function carregarComponentesLista(termoBusca = "", ordem = "az") {
-    const comps = await fetch(`${API}/componentes`).then(r => r.json());
+    const comps = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
     const compsFiltrados = filtrarItens(comps, termoBusca, "nome");
     const compsOrdenados = ordenarItens(compsFiltrados, ordem, "nome");
 
@@ -887,7 +897,7 @@ function abrirPopupComponente(nome = null) {
     inputNomeOriginal.value = "";
 
     if (nome) {
-        fetch(`${API}/componentes`).then(r => r.json()).then(list => {
+        fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json()).then(list => {
             const comp = list.find(c => c.nome === nome);
             if (!comp) return;
             titulo.textContent = "Editar Componente";
@@ -925,7 +935,10 @@ function abrirPopupComponente(nome = null) {
         }
 
         const res = await fetch(endpoint, {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            credentials: 'include'
         });
         const data = await res.json();
         if (!data.sucesso) return mostrarErro(data.erro || "Erro ao salvar componente");
@@ -943,7 +956,7 @@ function adicionarAssociadoRow(nome = "", quantidade = "") {
     const container = document.getElementById("associadosContainer");
     const row = document.createElement("div");
     row.className = "associado-row";
-    fetch(`${API}/componentes`).then(r => r.json()).then(comps => {
+    fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json()).then(comps => {
         row.innerHTML = `
       <select class="assoc-nome">
         <option value="">Selecione...</option>
@@ -960,7 +973,10 @@ function adicionarAssociadoRow(nome = "", quantidade = "") {
 async function excluirComponente(nome) {
     if (!confirm(`Confirmar exclusão de "${nome}"?`)) return;
     const res = await fetch(`${API}/componentes/excluir`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome }),
+        credentials: 'include'
     });
     const data = await res.json();
     if (!data.sucesso) return mostrarErro(data.erro || "Erro ao excluir");
@@ -969,7 +985,7 @@ async function excluirComponente(nome) {
 }
 
 async function carregarCategoriasDatalist() {
-    const comps = await fetch(`${API}/componentes`).then(r => r.json());
+    const comps = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
     const categorias = [...new Set(comps.map(c => c.categoria).filter(Boolean))];
     const datalist = document.getElementById("categoriasDatalist");
     if (datalist) datalist.innerHTML = categorias.map(x => `<option value="${x}">`).join("");
@@ -1015,7 +1031,7 @@ async function montarEstoque() {
     `;
 
     // Carregar componentes para o datalist do estoque
-    const comps = await fetch(`${API}/componentes`).then(r => r.json());
+    const comps = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
     const datalist = document.getElementById("componentesDatalist");
     datalist.innerHTML = comps.map(c => `<option value="${c.nome}">`).join("");
 
@@ -1039,7 +1055,7 @@ async function montarEstoque() {
     const limparFiltrosLog = document.getElementById("limparFiltrosLog");
 
     // Carregar componentes únicos para o datalist do log
-    const logs = await fetch(`${API}/log`).then(r => r.json());
+    const logs = await fetch(`${API}/log`, { credentials: 'include' }).then(r => r.json());
     const componentesUnicos = [...new Set(logs.map(log => log.componente).filter(Boolean))];
     const logDatalist = document.getElementById("logComponentesDatalist");
     logDatalist.innerHTML = componentesUnicos.map(c => `<option value="${c}">`).join("");
@@ -1073,7 +1089,8 @@ async function montarEstoque() {
         const res = await fetch(`${API}/estoque`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ componente, quantidade, operacao })
+            body: JSON.stringify({ componente, quantidade, operacao }),
+            credentials: 'include'
         });
         const data = await res.json();
         if (!data.sucesso) return mostrarErro(data.erro || "Erro ao movimentar estoque");
@@ -1088,7 +1105,8 @@ async function montarEstoque() {
         const logResponse = await fetch(`${API}/log`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify([logEntry])
+            body: JSON.stringify([logEntry]),
+            credentials: 'include'
         });
         const logData = await logResponse.json();
         if (!logData.sucesso) return mostrarErro("Erro ao registrar log.");
@@ -1102,7 +1120,7 @@ async function montarEstoque() {
 }
 
 async function carregarEstoque(termoBusca = "", ordem = "az") {
-    const estoque = await fetch(`${API}/estoque`).then(r => r.json());
+    const estoque = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
     const estoqueFiltrado = filtrarItens(estoque, termoBusca, "componente");
     const estoqueOrdenado = ordenarItens(estoqueFiltrado, ordem, "componente");
 
@@ -1115,7 +1133,7 @@ async function carregarEstoque(termoBusca = "", ordem = "az") {
 }
 
 async function carregarLog(componenteFiltro = "", dataFiltro = "") {
-    const logs = await fetch(`${API}/log`).then(r => r.json());
+    const logs = await fetch(`${API}/log`, { credentials: 'include' }).then(r => r.json());
     let logsFiltrados = logs.reverse();
 
     // Filtro por componente
@@ -1151,7 +1169,7 @@ async function montarArquivados() {
 }
 
 async function carregarArquivados() {
-    const arquivados = await fetch(`${API}/arquivados`).then(r => r.json()).catch(() => []);
+    const arquivados = await fetch(`${API}/arquivados`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
     const div = document.getElementById("listaArquivados");
     if (div) {
         div.innerHTML = arquivados.map(r => {
@@ -1194,9 +1212,9 @@ async function montarFarmar() {
 }
 
 async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", receitaFiltro = "") {
-    const receitas = await fetch(`${API}/receitas`).then(r => r.json());
-    const componentes = await fetch(`${API}/componentes`).then(r => r.json());
-    const estoqueList = await fetch(`${API}/estoque`).then(r => r.json());
+    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
+    const componentes = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
+    const estoqueList = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
 
     const datalist = document.getElementById("receitasDatalist");
     if (datalist) datalist.innerHTML = receitas.map(r => `<option value="${r.nome}">`).join("");
@@ -1304,3 +1322,4 @@ function mostrarErro(msg) {
         if (overlay) overlay.remove();
     });
 }
+</xaiArtifact >
