@@ -1322,4 +1322,3 @@ function mostrarErro(msg) {
         if (overlay) overlay.remove();
     });
 }
-</xaiArtifact >
