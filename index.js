@@ -2,7 +2,7 @@
 //sempre substituir a API abaixo de volta para https://mmorpg-crafter.onrender.com
 //para teste local: http://localhost:10000
 //rodar node servidor.js (no terminal)
-const API = "https://mmorpg-crafter.onrender.com";
+const API = "http://localhost:10000";
 
 const conteudo = document.getElementById("conteudo");
 
@@ -1188,12 +1188,19 @@ async function carregarArquivados() {
 
 /* ------------------ O QUE FARMAR? ------------------ */
 async function montarFarmar() {
+    const componentes = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
+    const categorias = [...new Set(componentes.map(c => c.categoria).filter(Boolean))].sort();
+
     conteudo.innerHTML = `
     <h2>O que farmar?</h2>
     <div class="filtros">
         <input type="text" id="buscaFarmar" placeholder="Buscar por matéria prima...">
         <input type="text" id="filtroReceitaFarmar" list="receitasDatalist" placeholder="Filtrar por receita...">
         <datalist id="receitasDatalist"></datalist>
+        <select id="filtroCategoriaFarmar">
+            <option value="">Todas as categorias</option>
+            ${categorias.map(cat => `<option value="${cat}">${cat}</option>`).join("")}
+        </select>
         <select id="ordemFarmar">
             <option value="pendente-desc">Pendente Maior-Menor</option>
             <option value="pendente-asc">Pendente Menor-Maior</option>
@@ -1205,14 +1212,16 @@ async function montarFarmar() {
     `;
     const buscaInput = document.getElementById("buscaFarmar");
     const receitaInput = document.getElementById("filtroReceitaFarmar");
+    const categoriaSelect = document.getElementById("filtroCategoriaFarmar");
     const ordemSelect = document.getElementById("ordemFarmar");
-    buscaInput.addEventListener("input", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, receitaInput.value));
-    receitaInput.addEventListener("input", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, receitaInput.value));
-    ordemSelect.addEventListener("change", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, receitaInput.value));
+    buscaInput.addEventListener("input", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, receitaInput.value, categoriaSelect.value));
+    receitaInput.addEventListener("input", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, receitaInput.value, categoriaSelect.value));
+    categoriaSelect.addEventListener("change", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, receitaInput.value, categoriaSelect.value));
+    ordemSelect.addEventListener("change", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, receitaInput.value, categoriaSelect.value));
     await carregarListaFarmar();
 }
 
-async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", receitaFiltro = "") {
+async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", receitaFiltro = "", categoriaFiltro = "") {
     const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
     const componentes = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
     const estoqueList = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
@@ -1230,8 +1239,10 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
         });
     }
 
+    const receitasFiltradas = receitaFiltro ? receitas.filter(r => r.nome.toLowerCase() === receitaFiltro.toLowerCase()) : receitas;
+
     const bases = new Map();
-    const receitasFiltradas = receitaFiltro ? receitas.filter(r => r.nome.toLowerCase().includes(receitaFiltro.toLowerCase())) : receitas;
+
 
     const estoqueMap = {};
     estoqueList.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
@@ -1260,6 +1271,13 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
 
     listaMaterias = filtrarItens(listaMaterias, termoBusca, "nome");
 
+    if (categoriaFiltro) {
+        listaMaterias = listaMaterias.filter(m => {
+            const comp = componentes.find(c => c.nome === m.nome);
+            return comp && comp.categoria === categoriaFiltro;
+        });
+    }
+
     if (ordem === "pendente-desc") {
         listaMaterias.sort((a, b) => b.pendente - a.pendente);
     } else if (ordem === "pendente-asc") {
@@ -1270,8 +1288,13 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
 
     const div = document.getElementById("listaFarmar");
     if (div) {
-        div.innerHTML = listaMaterias.map(m => `
-            <div class="item">
+        div.innerHTML = listaMaterias.map(m => {
+            const percentage = (m.disp / m.nec) * 100 || 0;
+            let color = 'darkred';
+            if (percentage >= 100) color = 'darkgreen';
+            else if (percentage >= 50) color = 'darkgoldenrod';
+            return `
+            <div class="item" style="background-color: ${color}; color: white;">
                 <div class="comp-item">
                     <span class="comp-nome">${m.nome}</span>
                     <span class="comp-nec">Nec: ${formatQuantity(m.nec)}</span>
@@ -1283,7 +1306,7 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                     ${m.receitas.sort().map(r => `<option>${r}</option>`).join("")}
                 </select>
             </div>
-        `).join("");
+        `}).join("");
     } else {
         console.log("[FARMAR] Skip updating farmar list as div not found.");
     }
