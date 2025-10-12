@@ -2,7 +2,7 @@
 //sempre substituir a API abaixo de volta para https://mmorpg-crafter.onrender.com
 //para teste local: http://localhost:10000
 //rodar node servidor.js (no terminal)
-const API = "https://mmorpg-crafter.onrender.com";
+const API = "http://localhost:10000";
 
 const conteudo = document.getElementById("conteudo");
 
@@ -17,8 +17,23 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function initMenu() {
-    document.querySelectorAll(".menu li").forEach(li => {
-        li.addEventListener("click", () => carregarSecao(li.dataset.section));
+    const menu = document.querySelector(".menu");
+    if (!menu) return;
+    menu.innerHTML = ''; // Limpar menu existente para reordenar
+    const sections = [
+        { section: "home", text: "Home" },
+        { section: "componentes", text: "Componentes" },
+        { section: "estoque", text: "Estoque de componentes" },
+        { section: "receitas", text: "Receitas" },
+        { section: "farmar", text: "O que Farmar?" },
+        { section: "arquivados", text: "Arquivados" },
+    ];
+    sections.forEach(sec => {
+        const li = document.createElement("li");
+        li.dataset.section = sec.section;
+        li.textContent = sec.text;
+        li.addEventListener("click", () => carregarSecao(sec.section));
+        menu.appendChild(li);
     });
 }
 
