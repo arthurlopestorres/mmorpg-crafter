@@ -1,7 +1,7 @@
 //sempre substituir a API abaixo de volta para https://mmorpg-crafter.onrender.com
 //para teste local: http://localhost:10000
 //rodar node servidor.js (no terminal)
-const API = "http://localhost:10000";
+const API = "https://mmorpg-crafter.onrender.com";
 
 const conteudo = document.getElementById("conteudo");
 
