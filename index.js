@@ -7,8 +7,9 @@ const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTI
 
 const conteudo = document.getElementById("conteudo");
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     if (sessionStorage.getItem("loggedIn")) {
+        await initGames();
         initMenu();
         const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
         carregarSecao(ultimaSecao);
@@ -16,6 +17,104 @@ document.addEventListener("DOMContentLoaded", () => {
         mostrarPopupLogin();
     }
 });
+
+async function initGames() {
+    let currentGame = localStorage.getItem("currentGame");
+    if (!currentGame) {
+        currentGame = "Pax Dei";
+        localStorage.setItem("currentGame", currentGame);
+    }
+    await carregarGamesSelector();
+}
+
+async function carregarGamesSelector() {
+    const games = await fetch(`${API}/games`, { credentials: 'include' }).then(r => r.json());
+    const menu = document.querySelector(".menu");
+    if (!menu) return;
+
+    // Adicionar seletor de jogos
+    const gameSelectorLi = document.createElement("li");
+    gameSelectorLi.innerHTML = `
+        <select id="gameSelector">
+            ${games.map(g => `<option value="${g}" ${g === localStorage.getItem("currentGame") ? 'selected' : ''}>${g}</option>`).join("")}
+        </select>
+    `;
+    menu.prepend(gameSelectorLi);
+
+    document.getElementById("gameSelector").addEventListener("change", async (e) => {
+        const newGame = e.target.value;
+        localStorage.setItem("currentGame", newGame);
+        const currentSecao = localStorage.getItem("ultimaSecao") || "receitas";
+        await carregarSecao(currentSecao);
+    });
+
+    // Adicionar botão Novo Jogo
+    const newGameLi = document.createElement("li");
+    newGameLi.textContent = "Novo Jogo";
+    newGameLi.addEventListener("click", mostrarPopupNovoJogo);
+    menu.appendChild(newGameLi);
+}
+
+function mostrarPopupNovoJogo() {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupNovoJogo";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.innerHTML = `
+        <h2>Novo Jogo</h2>
+        <form id="formNovoJogo">
+            <input type="text" id="nomeJogo" placeholder="Nome do Jogo" required pattern="[a-zA-Z0-9 ]+">
+            <button type="submit">Criar</button>
+            <button type="button" id="btnCancelarNovoJogo">Cancelar</button>
+            <p id="erroNovoJogo" style="color: red; display: none;"></p>
+        </form>
+    `;
+    document.body.appendChild(popup);
+
+    document.getElementById("formNovoJogo").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const nome = document.getElementById("nomeJogo").value.trim();
+        if (!nome) {
+            document.getElementById("erroNovoJogo").textContent = "Nome do jogo é obrigatório";
+            document.getElementById("erroNovoJogo").style.display = "block";
+            return;
+        }
+        try {
+            const response = await fetch(`${API}/games`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: nome }),
+                credentials: 'include'
+            });
+            const data = await response.json();
+            if (data.sucesso) {
+                localStorage.setItem("currentGame", nome);
+                popup.remove();
+                overlay.remove();
+                await carregarGamesSelector();
+                const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
+                carregarSecao(ultimaSecao);
+            } else {
+                document.getElementById("erroNovoJogo").textContent = data.erro || "Erro ao criar jogo";
+                document.getElementById("erroNovoJogo").style.display = "block";
+            }
+        } catch (error) {
+            document.getElementById("erroNovoJogo").textContent = "Erro ao criar jogo";
+            document.getElementById("erroNovoJogo").style.display = "block";
+        }
+    });
+
+    document.getElementById("btnCancelarNovoJogo").addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+    });
+}
 
 function initMenu() {
     const menu = document.querySelector(".menu");
@@ -142,6 +241,7 @@ function mostrarPopupLogin() {
                 sessionStorage.setItem("loggedIn", "true");
                 popup.remove();
                 overlay.remove();
+                await initGames();
                 initMenu();
                 const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
                 carregarSecao(ultimaSecao);
@@ -346,15 +446,16 @@ async function montarReceitas() {
 }
 
 async function carregarListaReceitas(termoBusca = "", ordem = "az") {
-    let url = `${API}/receitas?order=${ordem}`;
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    let url = `${API}/receitas?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
     if (termoBusca) {
         url += `&search=${encodeURIComponent(termoBusca)}`;
     } else {
         url += `&limit=10`;
     }
     const receitas = await fetch(url, { credentials: 'include' }).then(r => r.json());
-    const componentes = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
-    const estoqueList = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
+    const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const estoque = {};
     estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
 
@@ -459,9 +560,11 @@ async function arquivarReceita(receitaNome) {
         return;
     }
 
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+
     try {
         // Carregar receitas atuais
-        const receitasAtuais = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
+        const receitasAtuais = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
         console.log(`[ARQUIVAR] Receitas atuais carregadas:`, receitasAtuais);
         const receitaIndex = receitasAtuais.findIndex(r => r.nome === receitaNome);
         if (receitaIndex === -1) {
@@ -473,7 +576,7 @@ async function arquivarReceita(receitaNome) {
         // Remover receita de receitas.json
         const receitaArquivada = receitasAtuais.splice(receitaIndex, 1)[0];
         console.log(`[ARQUIVAR] Removendo receita "${receitaNome}" de receitas.json`);
-        const receitasResponse = await fetch(`${API}/receitas`, {
+        const receitasResponse = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(receitasAtuais),
@@ -488,11 +591,11 @@ async function arquivarReceita(receitaNome) {
         }
 
         // Adicionar receita a arquivados.json
-        const arquivados = await fetch(`${API}/arquivados`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
+        const arquivados = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
         console.log(`[ARQUIVAR] Arquivados atuais:`, arquivados);
         arquivados.push(receitaArquivada);
         console.log(`[ARQUIVAR] Adicionando receita "${receitaNome}" a arquivados.json`);
-        const arquivadosResponse = await fetch(`${API}/arquivados`, {
+        const arquivadosResponse = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(arquivados),
@@ -523,7 +626,8 @@ async function arquivarReceita(receitaNome) {
 }
 
 async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque) {
-    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const receita = receitas.find(r => r.nome === receitaNome);
     if (!receita) {
         console.error(`[DETALHES] Receita "${receitaNome}" não encontrada`);
@@ -636,7 +740,8 @@ function mergeReq(target, source) {
 }
 
 async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque) {
-    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const receita = receitas.find(r => r.nome === receitaNome);
     if (!receita) {
         console.error(`[CONCLUIR] Receita "${receitaNome}" não encontrada`);
@@ -652,7 +757,7 @@ async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque
     const btn = document.querySelector(`[data-receita="${receitaNome}"] .btn-concluir`);
     if (!btn) return;
 
-    const estoqueAtualizado = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
+    const estoqueAtualizado = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const estoqueMap = {};
     estoqueAtualizado.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
 
@@ -667,7 +772,9 @@ async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque
 async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
     console.log(`[CONCLUIR] Iniciando conclusão da receita: ${receitaNome}, quantidade: ${qtd}`);
 
-    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+
+    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     console.log("[CONCLUIR] Receitas recebidas do servidor:", receitas);
     const receita = receitas.find(r => r.nome === receitaNome);
     if (!receita) {
@@ -696,7 +803,7 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
         // Debitar do estoque
         for (const [componente, quantidade] of Object.entries(requisitos)) {
             console.log(`[CONCLUIR] Debitando ${quantidade} de ${componente} do estoque`);
-            const response = await fetch(`${API}/estoque`, {
+            const response = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ componente, quantidade, operacao: "debitar" }),
@@ -719,7 +826,7 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             origem: `Conclusão de ${receitaNome}`
         }));
         console.log("[CONCLUIR] Registrando no log:", logEntries);
-        const logResponse = await fetch(`${API}/log`, {
+        const logResponse = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(logEntries),
@@ -732,7 +839,7 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
         }
 
         // Arquivar a receita e remover de receitas
-        const receitasAtuais = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
+        const receitasAtuais = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
         console.log("[CONCLUIR] Receitas atuais antes da remoção:", receitasAtuais);
         const receitaIndex = receitasAtuais.findIndex(r => r.nome === receitaNome);
         if (receitaIndex === -1) {
@@ -744,7 +851,7 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
         const receitaArquivada = receitasAtuais.splice(receitaIndex, 1)[0];
         console.log(`[CONCLUIR] Removendo receita "${receitaNome}" de receitas.json`);
         console.log("[CONCLUIR] Receitas após remoção:", receitasAtuais);
-        const receitasResponse = await fetch(`${API}/receitas`, {
+        const receitasResponse = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(receitasAtuais),
@@ -758,10 +865,10 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             return;
         }
 
-        const arquivados = await fetch(`${API}/arquivados`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
+        const arquivados = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
         arquivados.push(receitaArquivada);
         console.log(`[CONCLUIR] Adicionando receita "${receitaNome}" a arquivados.json`);
-        const arquivadosResponse = await fetch(`${API}/arquivados`, {
+        const arquivadosResponse = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(arquivados),
@@ -777,7 +884,7 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
 
         // Atualizar UI
         console.log("[CONCLUIR] Atualizando interface do usuário");
-        const estoqueList = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
+        const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
         estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
         await carregarListaReceitas();
         await carregarEstoque();
@@ -801,7 +908,8 @@ async function editarReceita(nome) {
 
 async function duplicarReceita(nome) {
     console.log(`[DUPLICAR] Iniciando duplicação da receita: ${nome}`);
-    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const receita = receitas.find(r => r.nome === nome);
     if (!receita) {
         console.error(`[DUPLICAR] Receita "${nome}" não encontrada`);
@@ -832,9 +940,11 @@ function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
     inputNome.value = "";
     inputNomeOriginal.value = "";
 
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+
     if (nome) {
         titulo.textContent = duplicar ? "Duplicar Receita" : "Editar Receita";
-        fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json()).then(list => {
+        fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).then(list => {
             const receita = list.find(r => r.nome === nome);
             if (!receita) {
                 console.error(`[POPUP] Receita "${nome}" não encontrada`);
@@ -875,10 +985,10 @@ function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
         const payload = { nome: nomeVal, componentes };
         console.log("[FORM] Payload enviado:", payload);
 
-        let endpoint = `${API}/receitas`;
+        let endpoint = `${API}/receitas?game=${encodeURIComponent(currentGame)}`;
         try {
             if (inputNomeOriginal.value && !duplicar) {
-                const response = await fetch(`${API}/receitas/editar`, {
+                const response = await fetch(`${API}/receitas/editar?game=${encodeURIComponent(currentGame)}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ nomeOriginal: inputNomeOriginal.value, ...payload }),
@@ -919,7 +1029,8 @@ async function adicionarLinhaReceita(dados = {}) {
     const row = document.createElement("div");
     row.className = "associado-row";
     const rowId = Math.random().toString(36).substring(7); // ID único para o datalist
-    const comps = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const comps = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     row.innerHTML = `
       <input type="text" class="assoc-nome" list="assoc-datalist-${rowId}" value="${dados.nome || ''}" placeholder="Digite para buscar..." />
       <datalist id="assoc-datalist-${rowId}">
@@ -956,7 +1067,8 @@ async function montarComponentes() {
 }
 
 async function carregarComponentesLista(termoBusca = "", ordem = "az") {
-    let url = `${API}/componentes?order=${ordem}`;
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    let url = `${API}/componentes?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
     if (termoBusca) {
         url += `&search=${encodeURIComponent(termoBusca)}`;
     } else {
@@ -1012,8 +1124,10 @@ function abrirPopupComponente(nome = null) {
     inputQuantidadeProduzida.value = formatQuantity(0.001);
     inputNomeOriginal.value = "";
 
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+
     if (nome) {
-        fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json()).then(list => {
+        fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).then(list => {
             const comp = list.find(c => c.nome === nome);
             if (!comp) return;
             titulo.textContent = "Editar Componente";
@@ -1044,10 +1158,10 @@ function abrirPopupComponente(nome = null) {
         if (!nomeVal) return mostrarErro("Nome inválido");
 
         const payload = { nome: nomeVal, categoria: categoriaVal, associados, quantidadeProduzida: qtdProd };
-        let endpoint = `${API}/componentes`;
+        let endpoint = `${API}/componentes?game=${encodeURIComponent(currentGame)}`;
         if (inputNomeOriginal.value) {
             payload.nomeOriginal = inputNomeOriginal.value;
-            endpoint = `${API}/componentes/editar`;
+            endpoint = `${API}/componentes/editar?game=${encodeURIComponent(currentGame)}`;
         }
 
         const res = await fetch(endpoint, {
@@ -1073,7 +1187,8 @@ function adicionarAssociadoRow(nome = "", quantidade = "") {
     const row = document.createElement("div");
     row.className = "associado-row";
     const rowId = Math.random().toString(36).substring(7); // ID único para o datalist
-    fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json()).then(comps => {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).then(comps => {
         row.innerHTML = `
       <input type="text" class="assoc-nome" list="assoc-datalist-${rowId}" value="${nome}" placeholder="Digite para buscar..." />
       <datalist id="assoc-datalist-${rowId}">
@@ -1089,7 +1204,8 @@ function adicionarAssociadoRow(nome = "", quantidade = "") {
 
 async function excluirComponente(nome) {
     if (!confirm(`Confirmar exclusão de "${nome}"?`)) return;
-    const res = await fetch(`${API}/componentes/excluir`, {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const res = await fetch(`${API}/componentes/excluir?game=${encodeURIComponent(currentGame)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome }),
@@ -1102,7 +1218,8 @@ async function excluirComponente(nome) {
 }
 
 async function carregarCategoriasDatalist() {
-    const comps = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const comps = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const categorias = [...new Set(comps.map(c => c.categoria).filter(Boolean))];
     const datalist = document.getElementById("categoriasDatalist");
     if (datalist) datalist.innerHTML = categorias.map(x => `<option value="${x}">`).join("");
@@ -1147,8 +1264,10 @@ async function montarEstoque() {
     </div>
     `;
 
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+
     // Carregar componentes para o datalist do estoque
-    const comps = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
+    const comps = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const datalist = document.getElementById("componentesDatalist");
     datalist.innerHTML = comps.map(c => `<option value="${c.nome}">`).join("");
 
@@ -1172,7 +1291,7 @@ async function montarEstoque() {
     const limparFiltrosLog = document.getElementById("limparFiltrosLog");
 
     // Carregar componentes únicos para o datalist do log
-    const logs = await fetch(`${API}/log`, { credentials: 'include' }).then(r => r.json());
+    const logs = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const componentesUnicos = [...new Set(logs.map(log => log.componente).filter(Boolean))];
     const logDatalist = document.getElementById("logComponentesDatalist");
     logDatalist.innerHTML = componentesUnicos.map(c => `<option value="${c}">`).join("");
@@ -1203,7 +1322,7 @@ async function montarEstoque() {
         const operacao = document.getElementById("selectOperacao").value;
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
 
-        const res = await fetch(`${API}/estoque`, {
+        const res = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ componente, quantidade, operacao }),
@@ -1219,7 +1338,7 @@ async function montarEstoque() {
             operacao,
             origem: "Movimentação manual"
         };
-        const logResponse = await fetch(`${API}/log`, {
+        const logResponse = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify([logEntry]),
@@ -1237,7 +1356,8 @@ async function montarEstoque() {
 }
 
 async function carregarEstoque(termoBusca = "", ordem = "az") {
-    let url = `${API}/estoque?order=${ordem}`;
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    let url = `${API}/estoque?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
     if (termoBusca) {
         url += `&search=${encodeURIComponent(termoBusca)}`;
     } else {
@@ -1274,6 +1394,8 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
     `;
     document.body.appendChild(popup);
 
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+
     document.getElementById("formEditarEstoque").addEventListener("submit", async (e) => {
         e.preventDefault();
         const novaQtd = Number(document.getElementById("novaQuantidade").value);
@@ -1290,7 +1412,7 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
         const operacao = diff > 0 ? "adicionar" : "debitar";
         const qtd = Math.abs(diff);
         try {
-            const response = await fetch(`${API}/estoque`, {
+            const response = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ componente, quantidade: qtd, operacao }),
@@ -1310,7 +1432,7 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
                 operacao,
                 origem: "Edição manual"
             };
-            const logResponse = await fetch(`${API}/log`, {
+            const logResponse = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify([logEntry]),
@@ -1339,7 +1461,8 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
 
 async function excluirEstoqueItem(nome) {
     if (!confirm(`Confirmar exclusão do item "${nome}" do estoque? Isso também excluirá o componente e afetará receitas e outros módulos.`)) return;
-    const res = await fetch(`${API}/componentes/excluir`, {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const res = await fetch(`${API}/componentes/excluir?game=${encodeURIComponent(currentGame)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome }),
@@ -1354,7 +1477,8 @@ async function excluirEstoqueItem(nome) {
 }
 
 async function carregarLog(componenteFiltro = "", dataFiltro = "") {
-    const logs = await fetch(`${API}/log`, { credentials: 'include' }).then(r => r.json());
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const logs = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     let logsFiltrados = logs.reverse();
 
     // Filtro por componente
@@ -1390,7 +1514,8 @@ async function montarArquivados() {
 }
 
 async function carregarArquivados() {
-    const arquivados = await fetch(`${API}/arquivados`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const arquivados = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
     const div = document.getElementById("listaArquivados");
     if (div) {
         div.innerHTML = arquivados.map(r => {
@@ -1409,15 +1534,16 @@ async function carregarArquivados() {
 
 async function excluirArquivado(nome) {
     if (!confirm(`Confirmar exclusão da receita arquivada "${nome}"?`)) return;
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
-        const arquivados = await fetch(`${API}/arquivados`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
+        const arquivados = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
         const index = arquivados.findIndex(r => r.nome === nome);
         if (index === -1) {
             mostrarErro("Receita arquivada não encontrada.");
             return;
         }
         arquivados.splice(index, 1);
-        const res = await fetch(`${API}/arquivados`, {
+        const res = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(arquivados),
@@ -1436,7 +1562,8 @@ async function excluirArquivado(nome) {
 
 /* ------------------ O QUE FARMAR? ------------------ */
 async function montarFarmar() {
-    const componentes = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const categorias = [...new Set(componentes.map(c => c.categoria).filter(Boolean))].sort();
 
     conteudo.innerHTML = `
@@ -1470,9 +1597,10 @@ async function montarFarmar() {
 }
 
 async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", receitaFiltro = "", categoriaFiltro = "") {
-    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
-    const componentes = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
-    const estoqueList = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
 
     const datalist = document.getElementById("receitasDatalist");
     if (datalist) datalist.innerHTML = receitas.map(r => `<option value="${r.nome}">`).join("");

@@ -13,12 +13,7 @@ app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 10000;
 const DATA_DIR = '/data';
-const receitasFile = path.join(DATA_DIR, 'receitas.json');
-const componentesFile = path.join(DATA_DIR, 'componentes.json');
-const estoqueFile = path.join(DATA_DIR, 'estoque.json');
-const arquivadosFile = path.join(DATA_DIR, 'arquivados.json');
-const logFile = path.join(DATA_DIR, 'log.json');
-const usuariosFile = path.join(DATA_DIR, 'usuarios.json');
+const DEFAULT_GAME = 'Pax Dei';
 
 // Middleware
 app.use(express.json());
@@ -58,15 +53,39 @@ async function inicializarArquivos() {
     try {
         await fs.mkdir(DATA_DIR, { recursive: true });
         console.log('[INIT] Diretório de dados criado ou já existente:', DATA_DIR);
-        const arquivos = [receitasFile, componentesFile, estoqueFile, arquivadosFile, logFile, usuariosFile];
-        for (const arquivo of arquivos) {
-            try {
-                await fs.access(arquivo);
-            } catch {
-                console.log(`[INIT] Criando arquivo vazio: ${path.basename(arquivo)}`);
-                await fs.writeFile(arquivo, JSON.stringify([]));
+
+        // Migração: Se arquivos estão na raiz, mover para /data/Pax Dei
+        const rootFiles = await fs.readdir(DATA_DIR);
+        const gameDir = path.join(DATA_DIR, DEFAULT_GAME);
+        try {
+            await fs.access(gameDir);
+        } catch {
+            await fs.mkdir(gameDir);
+            const filesToMove = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json'];
+            for (const file of filesToMove) {
+                const oldPath = path.join(DATA_DIR, file);
+                const newPath = path.join(gameDir, file);
+                try {
+                    await fs.access(oldPath);
+                    await fs.rename(oldPath, newPath);
+                    console.log(`[INIT] Movido ${file} para ${gameDir}`);
+                } catch (err) {
+                    if (err.code !== 'ENOENT') throw err;
+                    await fs.writeFile(newPath, JSON.stringify([]));
+                    console.log(`[INIT] Criado arquivo vazio em ${gameDir}: ${file}`);
+                }
             }
         }
+
+        // Usuarios global
+        const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+        try {
+            await fs.access(usuariosPath);
+        } catch {
+            await fs.writeFile(usuariosPath, JSON.stringify([]));
+            console.log('[INIT] Criado usuarios.json na raiz');
+        }
+
     } catch (error) {
         console.error('[INIT] Erro ao inicializar arquivos:', error);
     }
@@ -108,6 +127,12 @@ async function verificarRecaptcha(token) {
     }
 }
 
+// Função auxiliar para obter caminho do arquivo baseado no game
+function getFilePath(game, filename) {
+    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, ''); // Sanitize
+    return path.join(DATA_DIR, safeGame, filename);
+}
+
 // Endpoint: Servir index.html (não protegido)
 app.get('/', (req, res) => {
     console.log('[GET /] Servindo index.html');
@@ -123,7 +148,7 @@ app.post('/login', async (req, res) => {
             return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
         }
 
-        const usuarios = await fs.readFile(usuariosFile, 'utf8').then(JSON.parse).catch(() => []);
+        const usuarios = await fs.readFile(path.join(DATA_DIR, 'usuarios.json'), 'utf8').then(JSON.parse).catch(() => []);
         const usuario = usuarios.find(u => u.email === email);
         if (!usuario || !usuario.aprovado || !(await bcrypt.compare(senha, usuario.senhaHash))) {
             return res.status(401).json({ sucesso: false, erro: 'Usuário ou senha não encontrados' });
@@ -145,13 +170,13 @@ app.post('/cadastro', async (req, res) => {
             return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
         }
 
-        let usuarios = await fs.readFile(usuariosFile, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(path.join(DATA_DIR, 'usuarios.json'), 'utf8').then(JSON.parse).catch(() => []);
         if (usuarios.some(u => u.email === email)) {
             return res.status(400).json({ sucesso: false, erro: 'Email já cadastrado' });
         }
         const senhaHash = await bcrypt.hash(senha, 10);
         usuarios.push({ nome, email, senhaHash, aprovado: false });
-        await fs.writeFile(usuariosFile, JSON.stringify(usuarios, null, 2));
+        await fs.writeFile(path.join(DATA_DIR, 'usuarios.json'), JSON.stringify(usuarios, null, 2));
 
         // Enviar email
         await transporter.sendMail({
@@ -172,13 +197,13 @@ app.post('/cadastro', async (req, res) => {
 app.put('/data/usuarios', async (req, res) => {
     const { email, aprovadoParaAcesso } = req.body;
     try {
-        let usuarios = await fs.readFile(usuariosFile, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(path.join(DATA_DIR, 'usuarios.json'), 'utf8').then(JSON.parse).catch(() => []);
         const index = usuarios.findIndex(u => u.email === email);
         if (index === -1) {
             return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
         }
         usuarios[index].aprovado = aprovadoParaAcesso;
-        await fs.writeFile(usuariosFile, JSON.stringify(usuarios, null, 2));
+        await fs.writeFile(path.join(DATA_DIR, 'usuarios.json'), JSON.stringify(usuarios, null, 2));
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[PUT /data/usuarios] Erro:', error);
@@ -195,14 +220,14 @@ app.put('/data/usuarios/troca-de-senha', async (req, res) => {
     }
     const { email, novaSenha } = req.body; // Assumindo novaSenha; ajuste se necessário
     try {
-        let usuarios = await fs.readFile(usuariosFile, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(path.join(DATA_DIR, 'usuarios.json'), 'utf8').then(JSON.parse).catch(() => []);
         const index = usuarios.findIndex(u => u.email === email);
         if (index === -1) {
             return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
         }
         const senhaHash = await bcrypt.hash(novaSenha, 10);
         usuarios[index].senhaHash = senhaHash;
-        await fs.writeFile(usuariosFile, JSON.stringify(usuarios, null, 2));
+        await fs.writeFile(path.join(DATA_DIR, 'usuarios.json'), JSON.stringify(usuarios, null, 2));
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[PUT /data/usuarios/troca-de-senha] Erro:', error);
@@ -210,11 +235,66 @@ app.put('/data/usuarios/troca-de-senha', async (req, res) => {
     }
 });
 
-// Endpoints protegidos
+// Endpoint para listar jogos
+app.get('/games', isAuthenticated, async (req, res) => {
+    try {
+        const files = await fs.readdir(DATA_DIR, { withFileTypes: true });
+        const games = files.filter(f => f.isDirectory()).map(f => f.name).sort();
+        res.json(games);
+    } catch (error) {
+        console.error('[GET /games] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao listar jogos' });
+    }
+});
+
+// Endpoint para criar novo jogo
+app.post('/games', isAuthenticated, async (req, res) => {
+    const { name } = req.body;
+    if (!name || !/^[a-zA-Z0-9 ]+$/.test(name)) {
+        return res.status(400).json({ sucesso: false, erro: 'Nome do jogo inválido' });
+    }
+    const gameDir = path.join(DATA_DIR, name);
+    try {
+        await fs.access(gameDir);
+        return res.status(400).json({ sucesso: false, erro: 'Jogo já existe' });
+    } catch {
+        await fs.mkdir(gameDir);
+        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json'];
+        for (const file of files) {
+            await fs.writeFile(path.join(gameDir, file), JSON.stringify([]));
+        }
+        res.json({ sucesso: true });
+    }
+});
+
+// Endpoint para deletar jogo (protegido por headers)
+app.delete('/games/:game', async (req, res) => {
+    const key = req.headers['atboficial-mmo-crafter'];
+    const token = req.headers['aisdbfaidfbhyadhiyfad'];
+    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyfad') {
+        return res.status(403).json({ sucesso: false, erro: 'Acesso negado' });
+    }
+    const game = req.params.game;
+    if (!game || game === 'usuarios.json') {
+        return res.status(400).json({ sucesso: false, erro: 'Nome do jogo inválido' });
+    }
+    const gameDir = path.join(DATA_DIR, game);
+    try {
+        await fs.rm(gameDir, { recursive: true, force: true });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[DELETE /games] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao deletar jogo' });
+    }
+});
+
+// Endpoints protegidos com suporte a game
 app.get('/receitas', isAuthenticated, async (req, res) => {
     console.log('[GET /receitas] Requisição recebida');
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'receitas.json');
     try {
-        let data = await fs.readFile(receitasFile, 'utf8').then(JSON.parse).catch(() => []);
+        let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit } = req.query;
 
         if (search) {
@@ -241,11 +321,13 @@ app.get('/receitas', isAuthenticated, async (req, res) => {
 
 app.post('/receitas', isAuthenticated, async (req, res) => {
     console.log('[POST /receitas] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'receitas.json');
     try {
         const novaReceita = req.body;
         if (Array.isArray(novaReceita)) {
             // Atualizar toda a lista de receitas (usado no arquivamento)
-            await fs.writeFile(receitasFile, JSON.stringify(novaReceita, null, 2));
+            await fs.writeFile(file, JSON.stringify(novaReceita, null, 2));
             console.log('[POST /receitas] Lista de receitas atualizada');
             res.json({ sucesso: true });
             return;
@@ -258,14 +340,14 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
 
         let receitas = [];
         try {
-            const data = await fs.readFile(receitasFile, 'utf8');
+            const data = await fs.readFile(file, 'utf8');
             receitas = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
 
         receitas.push(novaReceita);
-        await fs.writeFile(receitasFile, JSON.stringify(receitas, null, 2));
+        await fs.writeFile(file, JSON.stringify(receitas, null, 2));
         console.log('[POST /receitas] Receita adicionada:', novaReceita.nome);
         res.json({ sucesso: true });
     } catch (error) {
@@ -276,6 +358,8 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
 
 app.post('/receitas/editar', isAuthenticated, async (req, res) => {
     console.log('[POST /receitas/editar] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'receitas.json');
     try {
         const { nomeOriginal, nome, componentes } = req.body;
         if (!nomeOriginal || !nome || !componentes) {
@@ -285,7 +369,7 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
 
         let receitas = [];
         try {
-            const data = await fs.readFile(receitasFile, 'utf8');
+            const data = await fs.readFile(file, 'utf8');
             receitas = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
@@ -303,7 +387,7 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
         }
 
         receitas[index] = { nome, componentes };
-        await fs.writeFile(receitasFile, JSON.stringify(receitas, null, 2));
+        await fs.writeFile(file, JSON.stringify(receitas, null, 2));
         console.log('[POST /receitas/editar] Receita editada:', nomeOriginal, '->', nome);
         res.json({ sucesso: true });
     } catch (error) {
@@ -314,8 +398,10 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
 
 app.get('/componentes', isAuthenticated, async (req, res) => {
     console.log('[GET /componentes] Requisição recebida');
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'componentes.json');
     try {
-        let data = await fs.readFile(componentesFile, 'utf8').then(JSON.parse).catch(() => []);
+        let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit } = req.query;
 
         if (search) {
@@ -342,6 +428,9 @@ app.get('/componentes', isAuthenticated, async (req, res) => {
 
 app.post('/componentes', isAuthenticated, async (req, res) => {
     console.log('[POST /componentes] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'componentes.json');
+    const estoqueFileGame = getFilePath(game, 'estoque.json');
     try {
         const novoComponente = req.body;
         if (!novoComponente.nome) {
@@ -351,7 +440,7 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
 
         let componentes = [];
         try {
-            const data = await fs.readFile(componentesFile, 'utf8');
+            const data = await fs.readFile(file, 'utf8');
             componentes = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
@@ -363,13 +452,13 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
         }
 
         componentes.push(novoComponente);
-        await fs.writeFile(componentesFile, JSON.stringify(componentes, null, 2));
+        await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes] Componente adicionado:', novoComponente.nome);
 
         // Adicionar automaticamente ao estoque com quantidade 0 se não existir
         let estoque = [];
         try {
-            const data = await fs.readFile(estoqueFile, 'utf8');
+            const data = await fs.readFile(estoqueFileGame, 'utf8');
             estoque = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
@@ -378,7 +467,7 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
         const index = estoque.findIndex(e => e.componente === novoComponente.nome);
         if (index === -1) {
             estoque.push({ componente: novoComponente.nome, quantidade: 0 });
-            await fs.writeFile(estoqueFile, JSON.stringify(estoque, null, 2));
+            await fs.writeFile(estoqueFileGame, JSON.stringify(estoque, null, 2));
             console.log('[POST /componentes] Componente adicionado ao estoque com quantidade 0:', novoComponente.nome);
         }
 
@@ -391,6 +480,10 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
 
 app.post('/componentes/editar', isAuthenticated, async (req, res) => {
     console.log('[POST /componentes/editar] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'componentes.json');
+    const estoqueFileGame = getFilePath(game, 'estoque.json');
+    const receitasFileGame = getFilePath(game, 'receitas.json');
     try {
         const { nomeOriginal, nome, categoria, associados, quantidadeProduzida } = req.body;
         if (!nomeOriginal || !nome) {
@@ -400,7 +493,7 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
 
         let componentes = [];
         try {
-            const data = await fs.readFile(componentesFile, 'utf8');
+            const data = await fs.readFile(file, 'utf8');
             componentes = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
@@ -418,7 +511,7 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
         }
 
         componentes[index] = { nome, categoria, associados, quantidadeProduzida };
-        await fs.writeFile(componentesFile, JSON.stringify(componentes, null, 2));
+        await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes/editar] Componente editado:', nomeOriginal, '->', nome);
 
         // Se o nome mudou, propagar a mudança para estoque, receitas e outros componentes
@@ -426,7 +519,7 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
             // Atualizar estoque
             let estoque = [];
             try {
-                const data = await fs.readFile(estoqueFile, 'utf8');
+                const data = await fs.readFile(estoqueFileGame, 'utf8');
                 estoque = JSON.parse(data);
             } catch (err) {
                 if (err.code !== 'ENOENT') throw err;
@@ -434,14 +527,14 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
             const estoqueIndex = estoque.findIndex(e => e.componente === nomeOriginal);
             if (estoqueIndex !== -1) {
                 estoque[estoqueIndex].componente = nome;
-                await fs.writeFile(estoqueFile, JSON.stringify(estoque, null, 2));
+                await fs.writeFile(estoqueFileGame, JSON.stringify(estoque, null, 2));
                 console.log('[POST /componentes/editar] Nome atualizado no estoque:', nomeOriginal, '->', nome);
             }
 
             // Atualizar receitas
             let receitas = [];
             try {
-                const data = await fs.readFile(receitasFile, 'utf8');
+                const data = await fs.readFile(receitasFileGame, 'utf8');
                 receitas = JSON.parse(data);
             } catch (err) {
                 if (err.code !== 'ENOENT') throw err;
@@ -458,7 +551,7 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
                 }
             });
             if (receitasAtualizadas) {
-                await fs.writeFile(receitasFile, JSON.stringify(receitas, null, 2));
+                await fs.writeFile(receitasFileGame, JSON.stringify(receitas, null, 2));
                 console.log('[POST /componentes/editar] Nome atualizado nas receitas:', nomeOriginal, '->', nome);
             }
 
@@ -475,7 +568,7 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
                 }
             });
             if (componentesAtualizados) {
-                await fs.writeFile(componentesFile, JSON.stringify(componentes, null, 2));
+                await fs.writeFile(file, JSON.stringify(componentes, null, 2));
                 console.log('[POST /componentes/editar] Nome atualizado nos associados de outros componentes:', nomeOriginal, '->', nome);
             }
         }
@@ -489,6 +582,11 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
 
 app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
     console.log('[POST /componentes/excluir] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'componentes.json');
+    const receitasFileGame = getFilePath(game, 'receitas.json');
+    const arquivadosFileGame = getFilePath(game, 'arquivados.json');
+    const estoqueFileGame = getFilePath(game, 'estoque.json');
     try {
         const { nome } = req.body;
         if (!nome) {
@@ -498,7 +596,7 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
 
         let componentes = [];
         try {
-            const data = await fs.readFile(componentesFile, 'utf8');
+            const data = await fs.readFile(file, 'utf8');
             componentes = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
@@ -513,7 +611,7 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
         // Remover referências em receitas
         let receitas = [];
         try {
-            const data = await fs.readFile(receitasFile, 'utf8');
+            const data = await fs.readFile(receitasFileGame, 'utf8');
             receitas = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
@@ -529,14 +627,14 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
             }
         });
         if (receitasAtualizadas) {
-            await fs.writeFile(receitasFile, JSON.stringify(receitas, null, 2));
+            await fs.writeFile(receitasFileGame, JSON.stringify(receitas, null, 2));
             console.log('[POST /componentes/excluir] Referências removidas nas receitas para:', nome);
         }
 
         // Remover referências em arquivados
         let arquivados = [];
         try {
-            const data = await fs.readFile(arquivadosFile, 'utf8');
+            const data = await fs.readFile(arquivadosFileGame, 'utf8');
             arquivados = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
@@ -552,7 +650,7 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
             }
         });
         if (arquivadosAtualizados) {
-            await fs.writeFile(arquivadosFile, JSON.stringify(arquivados, null, 2));
+            await fs.writeFile(arquivadosFileGame, JSON.stringify(arquivados, null, 2));
             console.log('[POST /componentes/excluir] Referências removidas nos arquivados para:', nome);
         }
 
@@ -568,19 +666,19 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
             }
         });
         if (componentesAtualizados) {
-            await fs.writeFile(componentesFile, JSON.stringify(componentes, null, 2));
+            await fs.writeFile(file, JSON.stringify(componentes, null, 2));
             console.log('[POST /componentes/excluir] Referências removidas nos associados de outros componentes para:', nome);
         }
 
         // Remover o componente
         componentes.splice(index, 1);
-        await fs.writeFile(componentesFile, JSON.stringify(componentes, null, 2));
+        await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes/excluir] Componente excluído:', nome);
 
         // Remover do estoque
         let estoque = [];
         try {
-            const data = await fs.readFile(estoqueFile, 'utf8');
+            const data = await fs.readFile(estoqueFileGame, 'utf8');
             estoque = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
@@ -588,7 +686,7 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
         const estoqueIndex = estoque.findIndex(e => e.componente === nome);
         if (estoqueIndex !== -1) {
             estoque.splice(estoqueIndex, 1);
-            await fs.writeFile(estoqueFile, JSON.stringify(estoque, null, 2));
+            await fs.writeFile(estoqueFileGame, JSON.stringify(estoque, null, 2));
             console.log('[POST /componentes/excluir] Componente removido do estoque:', nome);
         }
 
@@ -601,8 +699,10 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
 
 app.get('/estoque', isAuthenticated, async (req, res) => {
     console.log('[GET /estoque] Requisição recebida');
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'estoque.json');
     try {
-        let data = await fs.readFile(estoqueFile, 'utf8').then(JSON.parse).catch(() => []);
+        let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit } = req.query;
 
         if (search) {
@@ -629,6 +729,8 @@ app.get('/estoque', isAuthenticated, async (req, res) => {
 
 app.post('/estoque', isAuthenticated, async (req, res) => {
     console.log('[POST /estoque] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'estoque.json');
     try {
         const { componente, quantidade, operacao } = req.body;
         if (!componente || !quantidade || !operacao) {
@@ -638,7 +740,7 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
 
         let estoque = [];
         try {
-            const data = await fs.readFile(estoqueFile, 'utf8');
+            const data = await fs.readFile(file, 'utf8');
             estoque = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
@@ -663,7 +765,7 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
             return res.status(400).json({ sucesso: false, erro: 'Operação inválida' });
         }
 
-        await fs.writeFile(estoqueFile, JSON.stringify(estoque, null, 2));
+        await fs.writeFile(file, JSON.stringify(estoque, null, 2));
         console.log('[POST /estoque] Estoque atualizado:', componente, operacao, quantidade);
         res.json({ sucesso: true });
     } catch (error) {
@@ -674,6 +776,8 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
 
 app.delete('/data', isAuthenticated, async (req, res) => {
     console.log('[DELETE /data] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'estoque.json');
     try {
         const { componente } = req.body;
         if (!componente) {
@@ -683,7 +787,7 @@ app.delete('/data', isAuthenticated, async (req, res) => {
 
         let estoque = [];
         try {
-            const data = await fs.readFile(estoqueFile, 'utf8');
+            const data = await fs.readFile(file, 'utf8');
             estoque = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
@@ -696,7 +800,7 @@ app.delete('/data', isAuthenticated, async (req, res) => {
         }
 
         estoque.splice(index, 1);
-        await fs.writeFile(estoqueFile, JSON.stringify(estoque, null, 2));
+        await fs.writeFile(file, JSON.stringify(estoque, null, 2));
         console.log('[DELETE /data] Componente excluído do estoque:', componente);
         res.json({ sucesso: true });
     } catch (error) {
@@ -707,8 +811,10 @@ app.delete('/data', isAuthenticated, async (req, res) => {
 
 app.get('/arquivados', isAuthenticated, async (req, res) => {
     console.log('[GET /arquivados] Requisição recebida');
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'arquivados.json');
     try {
-        const data = await fs.readFile(arquivadosFile, 'utf8');
+        const data = await fs.readFile(file, 'utf8');
         res.json(JSON.parse(data));
     } catch (err) {
         console.error('[GET /arquivados] Erro:', err);
@@ -719,9 +825,11 @@ app.get('/arquivados', isAuthenticated, async (req, res) => {
 
 app.post('/arquivados', isAuthenticated, async (req, res) => {
     console.log('[POST /arquivados] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'arquivados.json');
     try {
         const arquivados = req.body;
-        await fs.writeFile(arquivadosFile, JSON.stringify(arquivados, null, 2));
+        await fs.writeFile(file, JSON.stringify(arquivados, null, 2));
         console.log('[POST /arquivados] Arquivados atualizados');
         res.json({ sucesso: true });
     } catch (error) {
@@ -732,8 +840,10 @@ app.post('/arquivados', isAuthenticated, async (req, res) => {
 
 app.get('/log', isAuthenticated, async (req, res) => {
     console.log('[GET /log] Requisição recebida');
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'log.json');
     try {
-        const data = await fs.readFile(logFile, 'utf8');
+        const data = await fs.readFile(file, 'utf8');
         res.json(JSON.parse(data));
     } catch (err) {
         console.error('[GET /log] Erro:', err);
@@ -744,18 +854,20 @@ app.get('/log', isAuthenticated, async (req, res) => {
 
 app.post('/log', isAuthenticated, async (req, res) => {
     console.log('[POST /log] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'log.json');
     try {
         const novosLogs = Array.isArray(req.body) ? req.body : [req.body];
         let logs = [];
         try {
-            const data = await fs.readFile(logFile, 'utf8');
+            const data = await fs.readFile(file, 'utf8');
             logs = JSON.parse(data);
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
 
         logs.push(...novosLogs);
-        await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
+        await fs.writeFile(file, JSON.stringify(logs, null, 2));
         console.log('[POST /log] Log atualizado com', novosLogs.length, 'entradas');
         res.json({ sucesso: true });
     } catch (error) {
