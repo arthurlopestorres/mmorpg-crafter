@@ -9,8 +9,8 @@ const conteudo = document.getElementById("conteudo");
 
 document.addEventListener("DOMContentLoaded", async () => {
     if (sessionStorage.getItem("loggedIn")) {
-        await initGames();
         initMenu();
+        await initGames();
         const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
         carregarSecao(ultimaSecao);
     } else {
@@ -32,8 +32,15 @@ async function carregarGamesSelector() {
     const menu = document.querySelector(".menu");
     if (!menu) return;
 
+    // Remove existing selector and new game if any
+    const existingSelector = document.getElementById("gameSelectorLi");
+    if (existingSelector) existingSelector.remove();
+    const existingNewGame = document.getElementById("newGameLi");
+    if (existingNewGame) existingNewGame.remove();
+
     // Adicionar seletor de jogos
     const gameSelectorLi = document.createElement("li");
+    gameSelectorLi.id = "gameSelectorLi";
     gameSelectorLi.innerHTML = `
         <select id="gameSelector">
             ${games.map(g => `<option value="${g}" ${g === localStorage.getItem("currentGame") ? 'selected' : ''}>${g}</option>`).join("")}
@@ -50,6 +57,7 @@ async function carregarGamesSelector() {
 
     // Adicionar botão Novo Jogo
     const newGameLi = document.createElement("li");
+    newGameLi.id = "newGameLi";
     newGameLi.textContent = "Novo Jogo";
     newGameLi.addEventListener("click", mostrarPopupNovoJogo);
     menu.appendChild(newGameLi);
@@ -241,8 +249,8 @@ function mostrarPopupLogin() {
                 sessionStorage.setItem("loggedIn", "true");
                 popup.remove();
                 overlay.remove();
-                await initGames();
                 initMenu();
+                await initGames();
                 const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
                 carregarSecao(ultimaSecao);
             } else {
