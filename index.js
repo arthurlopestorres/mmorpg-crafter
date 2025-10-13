@@ -1,8 +1,8 @@
 // index.js
 //rodar node servidor.js (no terminal)
 
-const API = "https://mmorpg-crafter.onrender.com";
-// const API = "http://localhost:10000";
+// const API = "https://mmorpg-crafter.onrender.com";
+const API = "http://localhost:10000";
 
 const conteudo = document.getElementById("conteudo");
 
@@ -1184,9 +1184,93 @@ async function carregarEstoque(termoBusca = "", ordem = "az") {
     const listaEstoque = document.getElementById("listaEstoque");
     if (listaEstoque) {
         listaEstoque.innerHTML = estoque.map(e =>
-            `<div class = "estoque-item-container"><div class="item"><strong>${e.componente || "(Sem nome)"}</strong> - ${formatQuantity(e.quantidade)}x</div> <button class="warn" onclick="excluirEstoqueItem('${escapeJsString(e.componente)}')">Excluir</button></div>`
+            `<div class = "estoque-item-container"><div class="item"><strong>${e.componente || "(Sem nome)"}</strong> - ${formatQuantity(e.quantidade)}x</div> <button class="primary" onclick="editarEstoqueItem('${escapeJsString(e.componente)}', ${e.quantidade})">Editar</button> <button class="warn" onclick="excluirEstoqueItem('${escapeJsString(e.componente)}')">Excluir</button></div>`
         ).join("");
     }
+}
+
+async function editarEstoqueItem(componente, quantidadeAtual) {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupEditarEstoque";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.innerHTML = `
+        <h2>Editar Estoque: ${componente}</h2>
+        <form id="formEditarEstoque">
+            <input type="number" id="novaQuantidade" min="0" step="any" value="${formatQuantity(quantidadeAtual)}" required>
+            <button type="submit">Salvar</button>
+            <button type="button" id="btnCancelarEditar">Cancelar</button>
+        </form>
+    `;
+    document.body.appendChild(popup);
+
+    document.getElementById("formEditarEstoque").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const novaQtd = Number(document.getElementById("novaQuantidade").value);
+        if (isNaN(novaQtd) || novaQtd < 0) {
+            mostrarErro("Quantidade inválida");
+            return;
+        }
+        const diff = novaQtd - quantidadeAtual;
+        if (diff === 0) {
+            popup.remove();
+            overlay.remove();
+            return;
+        }
+        const operacao = diff > 0 ? "adicionar" : "debitar";
+        const qtd = Math.abs(diff);
+        try {
+            const response = await fetch(`${API}/estoque`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ componente, quantidade: qtd, operacao }),
+                credentials: 'include'
+            });
+            const data = await response.json();
+            if (!data.sucesso) {
+                mostrarErro(data.erro || "Erro ao atualizar estoque");
+                return;
+            }
+            // Registrar no log
+            const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
+            const logEntry = {
+                dataHora,
+                componente,
+                quantidade: qtd,
+                operacao,
+                origem: "Edição manual"
+            };
+            const logResponse = await fetch(`${API}/log`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify([logEntry]),
+                credentials: 'include'
+            });
+            const logData = await logResponse.json();
+            if (!logData.sucesso) {
+                mostrarErro("Erro ao registrar log.");
+                return;
+            }
+            popup.remove();
+            overlay.remove();
+            // Atualizar listas
+            await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
+            await carregarLog(document.getElementById("buscaLogComponente")?.value || "", document.getElementById("filtroLogData")?.value || "");
+        } catch (error) {
+            mostrarErro("Erro ao atualizar estoque: " + error.message);
+        }
+    });
+
+    document.getElementById("btnCancelarEditar").addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+    });
 }
 
 async function excluirEstoqueItem(nome) {
