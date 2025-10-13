@@ -46,10 +46,12 @@ function minimizarOmenu() {
     if (listaDeClasseDoMenu.length < 1) {
         menuLateral.classList.add('menulateralMinimizado')
         botaoDeMinimizar.style = 'left: 56px!important;'
+        botaoDeMinimizar.innerHTML = 'Maximizar Menu'
         itensDoMenu.forEach(item => item.style = "display: none!important")
     } else {
         menuLateral.classList.remove('menulateralMinimizado')
         botaoDeMinimizar.style = 'left: 316px!important;'
+        botaoDeMinimizar.innerHTML = 'Minimizar Menu'
         itensDoMenu.forEach(item => item.style = "display: block")
     }
 }
