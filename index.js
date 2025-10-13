@@ -8,6 +8,11 @@ const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTI
 const conteudo = document.getElementById("conteudo");
 
 document.addEventListener("DOMContentLoaded", async () => {
+    // Inicializar o modo escuro/claro baseado no localStorage
+    const savedMode = localStorage.getItem("themeMode") || "bright";
+    document.body.classList.add(savedMode + "-mode");
+    updateToggleButtonText(savedMode);
+
     if (sessionStorage.getItem("loggedIn")) {
         initMenu();
         await initGames();
@@ -1730,3 +1735,25 @@ function mostrarErro(msg) {
         if (overlay) overlay.remove();
     });
 }
+
+// Função para atualizar o texto do botão de toggle
+function updateToggleButtonText(mode) {
+    const toggleButton = document.getElementById("themeToggle");
+    if (toggleButton) {
+        toggleButton.textContent = mode === "bright" ? "Mudar para Dark Mode" : "Mudar para Bright Mode";
+    }
+}
+
+// Event listener para o botão de toggle (adicionado após DOMContentLoaded)
+document.addEventListener("DOMContentLoaded", () => {
+    const toggleButton = document.getElementById("themeToggle");
+    toggleButton.addEventListener("click", () => {
+        const currentMode = document.body.classList.contains("bright-mode") ? "bright" : "dark";
+        const newMode = currentMode === "bright" ? "dark" : "bright";
+
+        document.body.classList.remove(currentMode + "-mode");
+        document.body.classList.add(newMode + "-mode");
+        localStorage.setItem("themeMode", newMode);
+        updateToggleButtonText(newMode);
+    });
+});

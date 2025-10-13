@@ -947,3 +947,187 @@ aside>* {
     padding: 8px 0px 8px 0px;
     font-size: 12px;
 }
+
+/* Dark Mode Styles */
+body.dark-mode {
+    background-color: #1a1a1a;
+    color: white;
+}
+
+body.dark-mode .item {
+    background: #333;
+    color: white;
+}
+
+body.dark-mode .modal-content {
+    background: #333;
+    color: white;
+}
+
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode p,
+body.dark-mode #conteudo h1 {
+    color: white;
+}
+
+body.dark-mode .detalhes {
+    background: #444;
+}
+
+body.dark-mode .estoque-item-container {
+    background: #333;
+}
+
+body.dark-mode #popupLogin,
+body.dark-mode #popupCadastro,
+body.dark-mode #popupNovoJogo,
+body.dark-mode #popupEditarEstoque {
+    background-color: #333;
+}
+
+body.dark-mode #popupLogin h2,
+body.dark-mode #popupCadastro h2,
+body.dark-mode #popupNovoJogo h2,
+body.dark-mode #popupEditarEstoque h2 {
+    color: white;
+}
+
+body.dark-mode .home.lista-de-recomendacoes a {
+    background: #333;
+    color: white;
+}
+
+body.dark-mode .home.lista-de-recomendacoes a:hover {
+    background: #555;
+    color: white;
+}
+
+body.dark-mode .filtros input[type="text"],
+body.dark-mode .filtros select {
+    background: #444;
+    color: white;
+    border-color: #555;
+}
+
+body.dark-mode .comps-lista {
+    color: #ccc;
+}
+
+body.dark-mode .categoria {
+    color: #ccc;
+}
+
+body.dark-mode .comp-nec,
+body.dark-mode .comp-disp,
+body.dark-mode .comp-falta {
+    color: #ccc;
+}
+
+body.dark-mode .receita-header--titulo {
+    color: white;
+}
+
+body.dark-mode #themeToggle {
+    background: #444;
+    color: white;
+}
+
+body.dark-mode #themeToggle:hover {
+    background: #555;
+}
+
+/* Bright Mode Styles (default) */
+body.bright-mode {
+    background-color: #f4f7fa;
+    color: #333;
+}
+
+body.bright-mode .item {
+    background: white;
+    color: #333;
+}
+
+body.bright-mode .modal-content {
+    background: white;
+    color: #333;
+}
+
+body.bright-mode .detalhes {
+    background: #f9fafb;
+}
+
+body.bright-mode .estoque-item-container {
+    background: white;
+}
+
+body.bright-mode #popupLogin,
+body.bright-mode #popupCadastro,
+body.bright-mode #popupNovoJogo,
+body.bright-mode #popupEditarEstoque {
+    background-color: white;
+}
+
+body.bright-mode #popupLogin h2,
+body.bright-mode #popupCadastro h2,
+body.bright-mode #popupNovoJogo h2,
+body.bright-mode #popupEditarEstoque h2 {
+    color: black;
+}
+
+body.bright-mode .home.lista-de-recomendacoes a {
+    background: white;
+    color: rgb(34, 34, 34);
+}
+
+body.bright-mode .home.lista-de-recomendacoes a:hover {
+    background: rgb(34, 34, 34);
+    color: white;
+}
+
+body.bright-mode .filtros input[type="text"],
+body.bright-mode .filtros select {
+    background: white;
+    color: #333;
+    border-color: #d1d5db;
+}
+
+body.bright-mode .comps-lista {
+    color: #6b7280;
+}
+
+body.bright-mode .categoria {
+    color: #6b7280;
+}
+
+body.bright-mode .comp-nec,
+body.bright-mode .comp-disp,
+body.bright-mode .comp-falta {
+    color: #6b7280;
+}
+
+body.bright-mode .receita-header--titulo {
+    color: #1a2634;
+}
+
+body.bright-mode #themeToggle {
+    background: #f4f7fa;
+    color: #333;
+}
+
+body.bright-mode #themeToggle:hover {
+    background: #e5e7eb;
+}
+
+/* Toggle Button Styles */
+#themeToggle {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 1000;
+    font-weight: bold;
+}
