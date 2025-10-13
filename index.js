@@ -1,8 +1,8 @@
 // index.js
 //rodar node servidor.js (no terminal)
 
-// const API = "https://mmorpg-crafter.onrender.com";
-const API = "http://localhost:10000";
+const API = "https://mmorpg-crafter.onrender.com";
+// const API = "http://localhost:10000";
 
 const conteudo = document.getElementById("conteudo");
 
