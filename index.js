@@ -90,7 +90,7 @@ function mostrarPopupLogin() {
         <form id="formLogin">
             <input type="email" id="emailLogin" placeholder="Email" required>
             <input type="password" id="senhaLogin" placeholder="Senha" required>
-            <div class="g-recaptcha" data-sitekey="${RECAPTCHA_SITE_KEY}"></div>
+            <div id="recaptcha-login" class="g-recaptcha"></div>
             <button type="submit">Entrar</button>
             <button type="button" id="btnCadastrar">Cadastrar-se</button>
             <p id="erroLogin" style="color: red; display: none;">Usuário ou senha não encontrados</p>
@@ -107,9 +107,22 @@ function mostrarPopupLogin() {
         document.head.appendChild(script);
     }
 
+    // Renderizar reCAPTCHA explicitamente
+    let recaptchaWidgetLogin;
+    const renderRecaptchaLogin = () => {
+        if (window.grecaptcha && document.getElementById('recaptcha-login')) {
+            recaptchaWidgetLogin = grecaptcha.render('recaptcha-login', {
+                'sitekey': RECAPTCHA_SITE_KEY
+            });
+        } else {
+            setTimeout(renderRecaptchaLogin, 100);
+        }
+    };
+    renderRecaptchaLogin();
+
     document.getElementById("formLogin").addEventListener("submit", async (e) => {
         e.preventDefault();
-        const token = grecaptcha.getResponse();
+        const token = grecaptcha.getResponse(recaptchaWidgetLogin);
         if (!token) {
             document.getElementById("erroLogin").textContent = "Por favor, valide o reCAPTCHA.";
             document.getElementById("erroLogin").style.display = "block";
@@ -137,14 +150,14 @@ function mostrarPopupLogin() {
                 document.getElementById("erroLogin").style.display = "block";
                 document.getElementById("emailLogin").style.border = "1px solid red";
                 document.getElementById("senhaLogin").style.border = "1px solid red";
-                grecaptcha.reset(); // Reset reCAPTCHA em caso de erro
+                grecaptcha.reset(recaptchaWidgetLogin); // Reset reCAPTCHA em caso de erro
             }
         } catch (error) {
             document.getElementById("erroLogin").textContent = "Erro ao fazer login";
             document.getElementById("erroLogin").style.display = "block";
             document.getElementById("emailLogin").style.border = "1px solid red";
             document.getElementById("senhaLogin").style.border = "1px solid red";
-            grecaptcha.reset();
+            grecaptcha.reset(recaptchaWidgetLogin);
         }
     });
 
@@ -173,7 +186,7 @@ function mostrarPopupCadastro() {
             <input type="email" id="emailCadastro" placeholder="Email" required>
             <input type="password" id="senhaCadastro" placeholder="Senha" required>
             <input type="password" id="confirmaSenha" placeholder="Confirme sua senha" required>
-            <div class="g-recaptcha" data-sitekey="${RECAPTCHA_SITE_KEY}"></div>
+            <div id="recaptcha-cadastro" class="g-recaptcha"></div>
             <button type="submit">Enviar solicitação de acesso</button>
             <button type="button" id="btnVoltarLogin">Voltar para Login</button>
             <p id="erroCadastro" style="color: red; display: none;"></p>
@@ -194,9 +207,22 @@ function mostrarPopupCadastro() {
         document.head.appendChild(script);
     }
 
+    // Renderizar reCAPTCHA explicitamente
+    let recaptchaWidgetCadastro;
+    const renderRecaptchaCadastro = () => {
+        if (window.grecaptcha && document.getElementById('recaptcha-cadastro')) {
+            recaptchaWidgetCadastro = grecaptcha.render('recaptcha-cadastro', {
+                'sitekey': RECAPTCHA_SITE_KEY
+            });
+        } else {
+            setTimeout(renderRecaptchaCadastro, 100);
+        }
+    };
+    renderRecaptchaCadastro();
+
     document.getElementById("formCadastro").addEventListener("submit", async (e) => {
         e.preventDefault();
-        const token = grecaptcha.getResponse();
+        const token = grecaptcha.getResponse(recaptchaWidgetCadastro);
         if (!token) {
             document.getElementById("erroCadastro").textContent = "Por favor, valide o reCAPTCHA.";
             document.getElementById("erroCadastro").style.display = "block";
@@ -211,7 +237,7 @@ function mostrarPopupCadastro() {
             document.getElementById("erroCadastro").style.display = "block";
             document.getElementById("senhaCadastro").style.border = "1px solid red";
             document.getElementById("confirmaSenha").style.border = "1px solid red";
-            grecaptcha.reset();
+            grecaptcha.reset(recaptchaWidgetCadastro);
             return;
         }
         try {
@@ -235,13 +261,13 @@ function mostrarPopupCadastro() {
                 document.getElementById("erroCadastro").textContent = data.erro || "Erro ao cadastrar";
                 document.getElementById("erroCadastro").style.display = "block";
                 document.getElementById("emailCadastro").style.border = "1px solid red";
-                grecaptcha.reset();
+                grecaptcha.reset(recaptchaWidgetCadastro);
             }
         } catch (error) {
             document.getElementById("erroCadastro").textContent = "Erro ao cadastrar";
             document.getElementById("erroCadastro").style.display = "block";
             document.getElementById("emailCadastro").style.border = "1px solid red";
-            grecaptcha.reset();
+            grecaptcha.reset(recaptchaWidgetCadastro);
         }
     });
 
