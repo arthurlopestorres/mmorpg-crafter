@@ -5,6 +5,7 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const session = require('express-session');
+const axios = require('axios'); // Adicionado para verificação reCAPTCHA
 require('dotenv').config();
 const app = express();
 
@@ -30,7 +31,7 @@ app.use(session({
 }));
 
 // Configuração do Nodemailer
-const transporter = nodemailer.createTransport({
+const transporter = nodemailer.createTransporter({
     service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
@@ -87,6 +88,26 @@ const isAuthenticated = (req, res, next) => {
     }
 };
 
+// Função para verificar reCAPTCHA (usada em login e cadastro)
+async function verificarRecaptcha(token) {
+    if (!process.env.RECAPTCHA_SECRET) {
+        console.error('[reCAPTCHA] Secret key não configurada no .env');
+        return false;
+    }
+    try {
+        const response = await axios.post('https://www.google.com/recaptcha/api/siteverify', null, {
+            params: {
+                secret: process.env.RECAPTCHA_SECRET,
+                response: token
+            }
+        });
+        return response.data.success;
+    } catch (error) {
+        console.error('[reCAPTCHA] Erro na verificação:', error.message);
+        return false;
+    }
+}
+
 // Endpoint: Servir index.html (não protegido)
 app.get('/', (req, res) => {
     console.log('[GET /] Servindo index.html');
@@ -95,8 +116,13 @@ app.get('/', (req, res) => {
 
 // Endpoint: Login (não protegido)
 app.post('/login', async (req, res) => {
-    const { email, senha } = req.body;
+    const { email, senha, recaptchaToken } = req.body;
     try {
+        // Verificar reCAPTCHA
+        if (!await verificarRecaptcha(recaptchaToken)) {
+            return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
+        }
+
         const usuarios = await fs.readFile(usuariosFile, 'utf8').then(JSON.parse).catch(() => []);
         const usuario = usuarios.find(u => u.email === email);
         if (!usuario || !usuario.aprovado || !(await bcrypt.compare(senha, usuario.senhaHash))) {
@@ -112,8 +138,13 @@ app.post('/login', async (req, res) => {
 
 // Endpoint: Cadastro (não protegido)
 app.post('/cadastro', async (req, res) => {
-    const { nome, email, senha } = req.body;
+    const { nome, email, senha, recaptchaToken } = req.body;
     try {
+        // Verificar reCAPTCHA
+        if (!await verificarRecaptcha(recaptchaToken)) {
+            return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
+        }
+
         let usuarios = await fs.readFile(usuariosFile, 'utf8').then(JSON.parse).catch(() => []);
         if (usuarios.some(u => u.email === email)) {
             return res.status(400).json({ sucesso: false, erro: 'Email já cadastrado' });

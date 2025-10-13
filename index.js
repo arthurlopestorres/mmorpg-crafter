@@ -3,6 +3,7 @@
 
 const API = "https://mmorpg-crafter.onrender.com";
 // const API = "http://localhost:10000";
+const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
 
 const conteudo = document.getElementById("conteudo");
 
@@ -89,6 +90,7 @@ function mostrarPopupLogin() {
         <form id="formLogin">
             <input type="email" id="emailLogin" placeholder="Email" required>
             <input type="password" id="senhaLogin" placeholder="Senha" required>
+            <div class="g-recaptcha" data-sitekey="${RECAPTCHA_SITE_KEY}"></div>
             <button type="submit">Entrar</button>
             <button type="button" id="btnCadastrar">Cadastrar-se</button>
             <p id="erroLogin" style="color: red; display: none;">Usuário ou senha não encontrados</p>
@@ -96,15 +98,30 @@ function mostrarPopupLogin() {
     `;
     document.body.appendChild(popup);
 
+    // Carregar reCAPTCHA script se não carregado
+    if (!window.grecaptcha) {
+        const script = document.createElement('script');
+        script.src = 'https://www.google.com/recaptcha/api.js';
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    }
+
     document.getElementById("formLogin").addEventListener("submit", async (e) => {
         e.preventDefault();
+        const token = grecaptcha.getResponse();
+        if (!token) {
+            document.getElementById("erroLogin").textContent = "Por favor, valide o reCAPTCHA.";
+            document.getElementById("erroLogin").style.display = "block";
+            return;
+        }
         const email = document.getElementById("emailLogin").value;
         const senha = document.getElementById("senhaLogin").value;
         try {
             const response = await fetch(`${API}/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, senha }),
+                body: JSON.stringify({ email, senha, recaptchaToken: token }),
                 credentials: 'include'
             });
             const data = await response.json();
@@ -120,12 +137,14 @@ function mostrarPopupLogin() {
                 document.getElementById("erroLogin").style.display = "block";
                 document.getElementById("emailLogin").style.border = "1px solid red";
                 document.getElementById("senhaLogin").style.border = "1px solid red";
+                grecaptcha.reset(); // Reset reCAPTCHA em caso de erro
             }
         } catch (error) {
             document.getElementById("erroLogin").textContent = "Erro ao fazer login";
             document.getElementById("erroLogin").style.display = "block";
             document.getElementById("emailLogin").style.border = "1px solid red";
             document.getElementById("senhaLogin").style.border = "1px solid red";
+            grecaptcha.reset();
         }
     });
 
@@ -154,6 +173,7 @@ function mostrarPopupCadastro() {
             <input type="email" id="emailCadastro" placeholder="Email" required>
             <input type="password" id="senhaCadastro" placeholder="Senha" required>
             <input type="password" id="confirmaSenha" placeholder="Confirme sua senha" required>
+            <div class="g-recaptcha" data-sitekey="${RECAPTCHA_SITE_KEY}"></div>
             <button type="submit">Enviar solicitação de acesso</button>
             <button type="button" id="btnVoltarLogin">Voltar para Login</button>
             <p id="erroCadastro" style="color: red; display: none;"></p>
@@ -165,8 +185,23 @@ function mostrarPopupCadastro() {
     `;
     document.body.appendChild(popup);
 
+    // Carregar reCAPTCHA script se não carregado
+    if (!window.grecaptcha) {
+        const script = document.createElement('script');
+        script.src = 'https://www.google.com/recaptcha/api.js';
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    }
+
     document.getElementById("formCadastro").addEventListener("submit", async (e) => {
         e.preventDefault();
+        const token = grecaptcha.getResponse();
+        if (!token) {
+            document.getElementById("erroCadastro").textContent = "Por favor, valide o reCAPTCHA.";
+            document.getElementById("erroCadastro").style.display = "block";
+            return;
+        }
         const nome = document.getElementById("nomeCadastro").value;
         const email = document.getElementById("emailCadastro").value;
         const senha = document.getElementById("senhaCadastro").value;
@@ -176,13 +211,14 @@ function mostrarPopupCadastro() {
             document.getElementById("erroCadastro").style.display = "block";
             document.getElementById("senhaCadastro").style.border = "1px solid red";
             document.getElementById("confirmaSenha").style.border = "1px solid red";
+            grecaptcha.reset();
             return;
         }
         try {
             const response = await fetch(`${API}/cadastro`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ nome, email, senha }),
+                body: JSON.stringify({ nome, email, senha, recaptchaToken: token }),
                 credentials: 'include'
             });
             const data = await response.json();
@@ -199,11 +235,13 @@ function mostrarPopupCadastro() {
                 document.getElementById("erroCadastro").textContent = data.erro || "Erro ao cadastrar";
                 document.getElementById("erroCadastro").style.display = "block";
                 document.getElementById("emailCadastro").style.border = "1px solid red";
+                grecaptcha.reset();
             }
         } catch (error) {
             document.getElementById("erroCadastro").textContent = "Erro ao cadastrar";
             document.getElementById("erroCadastro").style.display = "block";
             document.getElementById("emailCadastro").style.border = "1px solid red";
+            grecaptcha.reset();
         }
     });
 
