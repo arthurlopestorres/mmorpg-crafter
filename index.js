@@ -301,9 +301,9 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az") {
         return `
         <div class="item" data-receita="${r.nome}">
           <div class="receita-header">
-            <div class = "receita-header--container1"><strong class= "receita-header--titulo">${r.nome}</strong>
+            <div class = "receita-header--container1"><div style="margin-right: 15px;"><strong class= "receita-header--titulo">${r.nome}</strong>
             ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
-            <input type="number" class="qtd-desejada" min="0.001" step="any" value="1" data-receita="${r.nome}">
+            <input type="number" class="qtd-desejada" min="0.001" step="any" value="1" data-receita="${r.nome}"></div>
             <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button></div><div>
             <button class="btn-concluir" data-receita="${r.nome}" disabled>Concluir</button>
             <button class="btn-editar" data-nome="${r.nome}">Editar</button>

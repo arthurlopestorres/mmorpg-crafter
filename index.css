@@ -275,7 +275,7 @@ button.warn:hover {
 }
 
 button.btn-arquivar {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
     color: white;
     border: none;
     padding: 10px 16px;
@@ -286,7 +286,7 @@ button.btn-arquivar {
 }
 
 button.btn-arquivar:hover {
-    background: linear-gradient(135deg, #1a2634, #1a2634);
+    background: linear-gradient(135deg, #460202, #470202);
     transform: translateY(-1px);
 }
 
@@ -328,7 +328,7 @@ button.btn-arquivar:hover {
 .receita-header--titulo {
     display: block;
     margin: 0px 5px 3px 0px;
-    padding: 10px 0px 13px 0px;
+    padding: 10px 0px 0px 0px;
     font-size: 1.1rem;
     color: #1a2634;
 }
@@ -365,7 +365,7 @@ button.btn-arquivar:hover {
 }
 
 .btn-concluir:disabled {
-    background: #d1d5db;
+    background: #b8f7cb;
     cursor: not-allowed;
 }
 
@@ -378,7 +378,7 @@ button.btn-arquivar:hover {
 
 .comp-item {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 8px;
     font-size: 0.9rem;
     padding: 8px 0;
@@ -641,18 +641,28 @@ aside>* {
     cursor: pointer;
 }
 
+.btn-duplicar {
+    background: var(--background-botoes);
+    color: white;
+}
+
 .btn-duplicar:hover {
-    background-color: #1a2634;
+    background: var(--background-botoes-hover);
+    color: white;
+}
+
+.btn-editar {
+    background: var(--background-botoes);
     color: white;
 }
 
 .btn-editar:hover {
-    background-color: #1a2634;
+    background: var(--background-botoes-hover);
     color: white;
 }
 
 .btn-concluir:hover {
-    background-color: #1a2634;
+    background-color: #046e01;
     color: white;
 }
 
