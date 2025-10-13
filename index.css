@@ -906,3 +906,44 @@ aside>* {
     font-weight: bold;
     cursor: pointer;
 }
+
+#gameSelector option {
+    color: black;
+    font-weight: bold;
+}
+
+#popupNovoJogo h2 {
+    color: black;
+}
+
+#formNovoJogo button {
+    cursor: pointer;
+    background: var(--background-botoes);
+    color: var(--corLetra-botoes);
+    padding: 8px 0px 8px 0px;
+    font-size: 20px;
+}
+
+#formNovoJogo button:hover {
+    cursor: pointer;
+    background: var(--background-botoes-hover);
+    color: var(--corLetra-botoes);
+    padding: 8px 0px 8px 0px;
+    font-size: 20px;
+}
+
+#btnCancelarNovoJogo {
+    cursor: pointer;
+    background: red !important;
+    color: var(--corLetra-botoes);
+    padding: 8px 0px 8px 0px;
+    font-size: 12px;
+}
+
+#btnCancelarNovoJogo:hover {
+    cursor: pointer;
+    background: rgb(70, 0, 0) !important;
+    color: var(--corLetra-botoes);
+    padding: 8px 0px 8px 0px;
+    font-size: 12px;
+}
