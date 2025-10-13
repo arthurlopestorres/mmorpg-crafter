@@ -549,7 +549,7 @@ form select:focus {
     font-size: 12px;
 }
 
-.popupEditarEstoque h2 {
+#popupEditarEstoque h2 {
     color: black;
 }
 
