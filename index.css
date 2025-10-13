@@ -891,3 +891,18 @@ aside>* {
 }
 
 /* FIM POPUP DE LOGIN E CADASTRO ========================================================================================================= */
+#gameSelector {
+    padding: 10px;
+    color: white;
+    background: var(--background-botoes);
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#gameSelector:hover {
+    padding: 10px;
+    color: white;
+    background: var(--background-botoes-hover);
+    font-weight: bold;
+    cursor: pointer;
+}

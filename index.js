@@ -60,7 +60,7 @@ async function carregarGamesSelector() {
     newGameLi.id = "newGameLi";
     newGameLi.textContent = "Novo Jogo";
     newGameLi.addEventListener("click", mostrarPopupNovoJogo);
-    menu.appendChild(newGameLi);
+    menu.prepend(newGameLi);
 }
 
 function mostrarPopupNovoJogo() {
