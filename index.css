@@ -283,6 +283,7 @@ button.btn-arquivar {
     cursor: pointer;
     font-size: 0.95rem;
     transition: background 0.2s, transform 0.1s;
+    border: 2px solid black;
 }
 
 button.btn-arquivar:hover {
@@ -1130,4 +1131,8 @@ body.bright-mode #themeToggle:hover {
     cursor: pointer;
     z-index: 1000;
     font-weight: bold;
+}
+
+.btn-favoritar {
+    background: rgb(199, 199, 3);
 }

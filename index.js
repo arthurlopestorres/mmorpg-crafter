@@ -1,8 +1,8 @@
 // index.js
 //rodar node servidor.js (no terminal)
 
-const API = "https://mmorpg-crafter.onrender.com";
-// const API = "http://localhost:10000";
+// const API = "https://mmorpg-crafter.onrender.com";
+const API = "http://localhost:10000";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
 
 const conteudo = document.getElementById("conteudo");
