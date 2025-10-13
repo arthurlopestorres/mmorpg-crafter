@@ -607,3 +607,13 @@ aside>* {
 #filtroCategoriaFarmar {
     width: 400px;
 }
+
+.menulateralMinimizado {
+    width: 0px;
+    background-color: #1a2634;
+    color: #fff;
+    padding: 15px;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    opacity: 0.8;
+    overflow: hidden;
+}

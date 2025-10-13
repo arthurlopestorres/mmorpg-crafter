@@ -37,6 +37,18 @@ function initMenu() {
     });
 }
 
+function minimizarOmenu() {
+    let listaDeClasseDoMenu = this.classList;
+    if (listaDeClasseDoMenu.length < 1) {
+        this.classList.add('menulateralMinimizado')
+    } else {
+        this.classList.remove('menulateralMinimizado')
+    }
+}
+
+const menuLateral = document.querySelector('aside')
+menuLateral.addEventListener('click', minimizarOmenu)
+
 /* ------------------ Funções de Login e Cadastro ------------------ */
 function criarOverlay() {
     const overlay = document.createElement("div");
