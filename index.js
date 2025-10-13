@@ -2,7 +2,7 @@
 //sempre substituir a API abaixo de volta para https://mmorpg-crafter.onrender.com
 //para teste local: http://localhost:10000
 //rodar node servidor.js (no terminal)
-const API = "https://mmorpg-crafter.onrender.com";
+const API = "http://localhost:10000";
 
 const conteudo = document.getElementById("conteudo");
 
@@ -37,17 +37,24 @@ function initMenu() {
     });
 }
 
+const botaoDeMinimizar = document.querySelector('#botaoDeMinimizarMenu')
+
 function minimizarOmenu() {
-    let listaDeClasseDoMenu = this.classList;
+    const menuLateral = document.querySelector('aside')
+    const itensDoMenu = document.querySelectorAll('.menu li')
+    let listaDeClasseDoMenu = menuLateral.classList;
     if (listaDeClasseDoMenu.length < 1) {
-        this.classList.add('menulateralMinimizado')
+        menuLateral.classList.add('menulateralMinimizado')
+        botaoDeMinimizar.style = 'left: 56px!important;'
+        itensDoMenu.forEach(item => item.style = "display: none!important")
     } else {
-        this.classList.remove('menulateralMinimizado')
+        menuLateral.classList.remove('menulateralMinimizado')
+        botaoDeMinimizar.style = 'left: 316px!important;'
+        itensDoMenu.forEach(item => item.style = "display: block")
     }
 }
 
-const menuLateral = document.querySelector('aside')
-menuLateral.addEventListener('click', minimizarOmenu)
+botaoDeMinimizar.addEventListener('click', minimizarOmenu)
 
 /* ------------------ Funções de Login e Cadastro ------------------ */
 function criarOverlay() {

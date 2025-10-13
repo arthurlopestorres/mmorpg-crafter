@@ -77,7 +77,7 @@ aside {
 main {
     flex: 1;
     padding: 24px;
-    max-width: 1600px;
+    max-width: 1566px;
 }
 
 h2 {
@@ -527,13 +527,13 @@ aside>* {
 }
 
 #mapaIframe {
-    width: 1920px;
+    width: 1500px;
     height: 1080px;
     margin-bottom: 20px;
 }
 
 #paxDeiIframe {
-    width: 1920px;
+    width: 1500px;
     height: 1080px;
 }
 
@@ -616,4 +616,43 @@ aside>* {
     box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
     opacity: 0.8;
     overflow: hidden;
+}
+
+#botaoDeMinimizarMenu {
+    cursor: pointer;
+    position: fixed;
+    top: 9px;
+    left: 316px;
+    z-index: 10000;
+    color: white;
+    background: #1a2634;
+    padding: 7px;
+    border-radius: 7px;
+    font-weight: 500;
+}
+
+#botaoDeMinimizarMenu:hover {
+    cursor: pointer;
+    position: fixed;
+    top: 9px;
+    left: 316px;
+    z-index: 10000;
+    color: #1a2634;
+    background: white;
+    padding: 7px;
+    border-radius: 7px;
+    font-weight: 500;
+}
+
+@media (min-width: 2560px) {
+    #mapaIframe {
+        width: 1920px;
+        height: 1080px;
+        margin-bottom: 20px;
+    }
+
+    #paxDeiIframe {
+        width: 1920px;
+        height: 1080px;
+    }
 }
