@@ -549,6 +549,10 @@ form select:focus {
     font-size: 12px;
 }
 
+.popupEditarEstoque h2 {
+    color: black;
+}
+
 #limparFiltrosLog {
     background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: white;
