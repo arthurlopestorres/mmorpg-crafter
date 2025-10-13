@@ -486,7 +486,8 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az") {
             <button class="btn-concluir" data-receita="${r.nome}" disabled>Concluir</button>
             <button class="btn-editar" data-nome="${r.nome}">Editar</button>
             <button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>
-            <button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button></div>
+            <button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>
+            <button class="btn-favoritar ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desfavoritar' : 'Favoritar'}</button></div>
           </div>
           <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
         </div>`;
@@ -558,12 +559,40 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az") {
         });
     });
 
+    document.querySelectorAll(".btn-favoritar").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const nome = btn.dataset.nome;
+            const isFavorita = btn.classList.contains('favorita');
+            await toggleFavorita(nome, !isFavorita);
+        });
+    });
+
     // Verificar botões inicialmente
     document.querySelectorAll(".item").forEach(async item => {
         const receitaNome = item.dataset.receita;
         const qtd = Math.max(Number(item.querySelector(".qtd-desejada").value) || 0.001, 0.001);
         await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
     });
+}
+
+async function toggleFavorita(nome, favorita) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    try {
+        const response = await fetch(`${API}/receitas/favoritar?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nome, favorita }),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az");
+        } else {
+            mostrarErro(data.erro || "Erro ao favoritar receita");
+        }
+    } catch (error) {
+        mostrarErro("Erro ao favoritar receita: " + error.message);
+    }
 }
 
 async function arquivarReceita(receitaNome) {
@@ -1612,23 +1641,24 @@ async function montarFarmar() {
 async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", receitaFiltro = "", categoriaFiltro = "") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const receitasFavoritas = receitas.filter(r => r.favorita);
     const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
 
     const datalist = document.getElementById("receitasDatalist");
-    if (datalist) datalist.innerHTML = receitas.map(r => `<option value="${r.nome}">`).join("");
+    if (datalist) datalist.innerHTML = receitasFavoritas.map(r => `<option value="${r.nome}">`).join("");
 
     const receitaInput = document.getElementById("filtroReceitaFarmar");
     if (receitaInput) {
         receitaInput.addEventListener("input", () => {
             const termo = receitaInput.value.toLowerCase();
-            const filteredOptions = receitas.filter(r => r.nome.toLowerCase().includes(termo))
+            const filteredOptions = receitasFavoritas.filter(r => r.nome.toLowerCase().includes(termo))
                 .map(r => `<option value="${r.nome}">`);
             datalist.innerHTML = filteredOptions.join("");
         });
     }
 
-    const receitasFiltradas = receitaFiltro ? receitas.filter(r => r.nome.toLowerCase() === receitaFiltro.toLowerCase()) : receitas;
+    const receitasFiltradas = receitaFiltro ? receitasFavoritas.filter(r => r.nome.toLowerCase() === receitaFiltro.toLowerCase()) : receitasFavoritas;
 
     const bases = new Map();
 

@@ -346,7 +346,7 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
             if (err.code !== 'ENOENT') throw err;
         }
 
-        receitas.push(novaReceita);
+        receitas.push({ ...novaReceita, favorita: false });
         await fs.writeFile(file, JSON.stringify(receitas, null, 2));
         console.log('[POST /receitas] Receita adicionada:', novaReceita.nome);
         res.json({ sucesso: true });
@@ -386,13 +386,48 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
             return res.status(400).json({ sucesso: false, erro: 'Novo nome de receita já existe' });
         }
 
-        receitas[index] = { nome, componentes };
+        receitas[index] = { ...receitas[index], nome, componentes };
         await fs.writeFile(file, JSON.stringify(receitas, null, 2));
         console.log('[POST /receitas/editar] Receita editada:', nomeOriginal, '->', nome);
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /receitas/editar] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao editar receita' });
+    }
+});
+
+app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
+    console.log('[POST /receitas/favoritar] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'receitas.json');
+    try {
+        const { nome, favorita } = req.body;
+        if (!nome || favorita === undefined) {
+            console.log('[POST /receitas/favoritar] Erro: Nome ou favorita ausentes');
+            return res.status(400).json({ sucesso: false, erro: 'Nome e favorita são obrigatórios' });
+        }
+
+        let receitas = [];
+        try {
+            const data = await fs.readFile(file, 'utf8');
+            receitas = JSON.parse(data);
+        } catch (err) {
+            if (err.code !== 'ENOENT') throw err;
+        }
+
+        const index = receitas.findIndex(r => r.nome === nome);
+        if (index === -1) {
+            console.log('[POST /receitas/favoritar] Erro: Receita não encontrada:', nome);
+            return res.status(404).json({ sucesso: false, erro: 'Receita não encontrada' });
+        }
+
+        receitas[index].favorita = favorita;
+        await fs.writeFile(file, JSON.stringify(receitas, null, 2));
+        console.log('[POST /receitas/favoritar] Favorita atualizada para receita:', nome, '->', favorita);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /receitas/favoritar] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar favorita' });
     }
 });
 
