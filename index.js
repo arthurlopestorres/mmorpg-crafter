@@ -280,17 +280,20 @@ async function montarReceitas() {
 }
 
 async function carregarListaReceitas(termoBusca = "", ordem = "az") {
-    const receitas = await fetch(`${API}/receitas`, { credentials: 'include' }).then(r => r.json());
+    let url = `${API}/receitas?order=${ordem}`;
+    if (termoBusca) {
+        url += `&search=${encodeURIComponent(termoBusca)}`;
+    } else {
+        url += `&limit=10`;
+    }
+    const receitas = await fetch(url, { credentials: 'include' }).then(r => r.json());
     const componentes = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
     const estoqueList = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
     const estoque = {};
     estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
 
-    const receitasFiltradas = filtrarItens(receitas, termoBusca, "nome");
-    const receitasOrdenadas = ordenarItens(receitasFiltradas, ordem, "nome");
-
     const div = document.getElementById("listaReceitas");
-    div.innerHTML = receitasOrdenadas.filter(r => r.nome).map(r => {
+    div.innerHTML = receitas.filter(r => r.nome).map(r => {
         const id = `receita-${r.nome.replace(/\s/g, '-')}`;
         const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
         return `
@@ -887,12 +890,16 @@ async function montarComponentes() {
 }
 
 async function carregarComponentesLista(termoBusca = "", ordem = "az") {
-    const comps = await fetch(`${API}/componentes`, { credentials: 'include' }).then(r => r.json());
-    const compsFiltrados = filtrarItens(comps, termoBusca, "nome");
-    const compsOrdenados = ordenarItens(compsFiltrados, ordem, "nome");
+    let url = `${API}/componentes?order=${ordem}`;
+    if (termoBusca) {
+        url += `&search=${encodeURIComponent(termoBusca)}`;
+    } else {
+        url += `&limit=10`;
+    }
+    const comps = await fetch(url, { credentials: 'include' }).then(r => r.json());
 
     const div = document.getElementById("lista-componentes");
-    div.innerHTML = compsOrdenados.map(c => {
+    div.innerHTML = comps.map(c => {
         const assoc = (c.associados || []).map(a => `${formatQuantity(a.quantidade)} x ${a.nome}`).join(", ");
         return `
       <div class="item">
@@ -1164,13 +1171,17 @@ async function montarEstoque() {
 }
 
 async function carregarEstoque(termoBusca = "", ordem = "az") {
-    const estoque = await fetch(`${API}/estoque`, { credentials: 'include' }).then(r => r.json());
-    const estoqueFiltrado = filtrarItens(estoque, termoBusca, "componente");
-    const estoqueOrdenado = ordenarItens(estoqueFiltrado, ordem, "componente");
+    let url = `${API}/estoque?order=${ordem}`;
+    if (termoBusca) {
+        url += `&search=${encodeURIComponent(termoBusca)}`;
+    } else {
+        url += `&limit=10`;
+    }
+    const estoque = await fetch(url, { credentials: 'include' }).then(r => r.json());
 
     const listaEstoque = document.getElementById("listaEstoque");
     if (listaEstoque) {
-        listaEstoque.innerHTML = estoqueOrdenado.map(e =>
+        listaEstoque.innerHTML = estoque.map(e =>
             `<div class="item"><strong>${e.componente || "(Sem nome)"}</strong> - ${formatQuantity(e.quantidade)}x</div>`
         ).join("");
     }

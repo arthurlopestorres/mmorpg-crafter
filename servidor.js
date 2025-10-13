@@ -183,8 +183,24 @@ app.put('/data/usuarios/troca-de-senha', async (req, res) => {
 app.get('/receitas', isAuthenticated, async (req, res) => {
     console.log('[GET /receitas] Requisição recebida');
     try {
-        const data = await fs.readFile(receitasFile, 'utf8');
-        res.json(JSON.parse(data));
+        let data = await fs.readFile(receitasFile, 'utf8').then(JSON.parse).catch(() => []);
+        const { search, order, limit } = req.query;
+
+        if (search) {
+            data = data.filter(r => r.nome.toLowerCase().includes(search.toLowerCase()));
+        }
+
+        if (order === 'az') {
+            data.sort((a, b) => a.nome.localeCompare(b.nome));
+        } else if (order === 'za') {
+            data.sort((a, b) => b.nome.localeCompare(a.nome));
+        }
+
+        if (limit) {
+            data = data.slice(0, parseInt(limit));
+        }
+
+        res.json(data);
     } catch (err) {
         console.error('[GET /receitas] Erro:', err);
         if (err.code === 'ENOENT') res.json([]);
@@ -268,8 +284,24 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
 app.get('/componentes', isAuthenticated, async (req, res) => {
     console.log('[GET /componentes] Requisição recebida');
     try {
-        const data = await fs.readFile(componentesFile, 'utf8');
-        res.json(JSON.parse(data));
+        let data = await fs.readFile(componentesFile, 'utf8').then(JSON.parse).catch(() => []);
+        const { search, order, limit } = req.query;
+
+        if (search) {
+            data = data.filter(c => c.nome.toLowerCase().includes(search.toLowerCase()));
+        }
+
+        if (order === 'az') {
+            data.sort((a, b) => a.nome.localeCompare(b.nome));
+        } else if (order === 'za') {
+            data.sort((a, b) => b.nome.localeCompare(a.nome));
+        }
+
+        if (limit) {
+            data = data.slice(0, parseInt(limit));
+        }
+
+        res.json(data);
     } catch (err) {
         console.error('[GET /componentes] Erro:', err);
         if (err.code === 'ENOENT') res.json([]);
@@ -539,8 +571,24 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
 app.get('/estoque', isAuthenticated, async (req, res) => {
     console.log('[GET /estoque] Requisição recebida');
     try {
-        const data = await fs.readFile(estoqueFile, 'utf8');
-        res.json(JSON.parse(data));
+        let data = await fs.readFile(estoqueFile, 'utf8').then(JSON.parse).catch(() => []);
+        const { search, order, limit } = req.query;
+
+        if (search) {
+            data = data.filter(e => e.componente.toLowerCase().includes(search.toLowerCase()));
+        }
+
+        if (order === 'az') {
+            data.sort((a, b) => a.componente.localeCompare(b.componente));
+        } else if (order === 'za') {
+            data.sort((a, b) => b.componente.localeCompare(a.componente));
+        }
+
+        if (limit) {
+            data = data.slice(0, parseInt(limit));
+        }
+
+        res.json(data);
     } catch (err) {
         console.error('[GET /estoque] Erro:', err);
         if (err.code === 'ENOENT') res.json([]);
