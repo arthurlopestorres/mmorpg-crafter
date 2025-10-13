@@ -1,647 +1,1510 @@
-/* resets */
-.home.lista-de-recomendacoes li {
-    margin: 0;
-    padding: 0;
-    border: 0;
-    font-size: 100%;
-    font: inherit;
-    vertical-align: baseline;
-    display: block;
-    line-height: 1;
-    list-style: none;
-    quotes: none;
-    content: '';
-    content: none;
-    border-collapse: collapse;
-    border-spacing: 0;
-}
-
-.home.lista-de-recomendacoes a {
-    margin: 0;
-    padding: 0;
-    border: 0;
-    font-size: 100%;
-    font: inherit;
-    vertical-align: baseline;
-    line-height: 1;
-    list-style: none;
-    quotes: none;
-    content: '';
-    content: none;
-    border-collapse: collapse;
-    border-spacing: 0;
-    text-decoration: none;
-}
-
-/* fim de resets */
-
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    margin: 0;
-    background-color: #f4f7fa;
-    color: #333;
-}
-
-.container {
-    display: flex;
-    min-height: 100vh;
-}
-
-aside {
-    width: 250px;
-    background-color: #1a2634;
-    color: #fff;
-    padding: 20px;
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
-    opacity: 0.8;
-}
-
-.menu {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.menu li {
-    padding: 12px 16px;
-    cursor: pointer;
-    border-radius: 6px;
-    margin-bottom: 8px;
-    transition: background-color 0.2s;
-}
-
-.menu li:hover {
-    background-color: #2c3e50;
-}
-
-main {
-    flex: 1;
-    padding: 24px;
-    max-width: 1566px;
-}
-
-h2 {
-    font-size: 1.8rem;
-    margin-bottom: 16px;
-    color: #1a2634;
-}
-
-.filtros {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-}
-
-.filtros input[type="text"],
-.filtros select {
-    padding: 10px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 0.95rem;
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.filtros input[type="text"]:focus,
-.filtros select:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.filtros input[type="text"] {
-    flex: 1;
-    max-width: 300px;
-}
-
-.filtros select {
-    width: 150px;
-}
-
-button.primary {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.95rem;
-    transition: background 0.2s, transform 0.1s;
-}
-
-button.primary:hover {
-    background: linear-gradient(135deg, #2563eb, #1e40af);
-    transform: translateY(-1px);
-}
-
-button.secondary {
-    background: #e5e7eb;
-    color: #374151;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.95rem;
-    transition: background 0.2s;
-}
-
-button.secondary:hover {
-    background: #d1d5db;
-}
-
-button.warn {
-    background: linear-gradient(135deg, #ef4444, #b91c1c);
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.95rem;
-    transition: background 0.2s;
-}
-
-button.warn:hover {
-    background: linear-gradient(135deg, #b91c1c, #991b1b);
-}
-
-button.btn-arquivar {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.95rem;
-    transition: background 0.2s, transform 0.1s;
-}
-
-button.btn-arquivar:hover {
-    background: linear-gradient(135deg, #1a2634, #1a2634);
-    transform: translateY(-1px);
-}
-
-.lista {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.item {
-    background: white;
-    padding: 16px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.receita-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    justify-content: space-around;
-}
-
-.receita-header strong {
-    font-size: 1.1rem;
-    color: #1a2634;
-}
-
-.comps-lista {
-    display: flex;
-    flex-wrap: nowrap;
-    font-size: 0.85rem;
-    color: #6b7280;
-    padding: 10px 0px 10px 0px;
-    max-width: 436px;
-    max-height: 13px;
-    overflow: hidden;
-    margin-bottom: 3px;
-}
-
-.qtd-desejada {
-    width: 80px;
-    padding: 6px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 0.95rem;
-}
-
-.toggle-detalhes {
-    background: none;
-    border: none;
-    font-size: 1rem;
-    cursor: pointer;
-    color: #6b7280;
-}
-
-.toggle-detalhes:hover {
-    color: #3b82f6;
-}
-
-.btn-concluir:disabled {
-    background: #d1d5db;
-    cursor: not-allowed;
-}
-
-.detalhes {
-    margin-top: 12px;
-    padding: 12px;
-    background: #f9fafb;
-    border-radius: 6px;
-}
-
-.comp-item {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
-    gap: 8px;
-    font-size: 0.9rem;
-    padding: 8px 0;
-}
-
-.comp-nome {
-    font-weight: 500;
-}
-
-.comp-nec,
-.comp-disp,
-.comp-falta {
-    color: #6b7280;
-}
-
-.categoria {
-    color: #6b7280;
-}
-
-.acoes {
-    display: flex;
-    gap: 8px;
-}
-
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-}
-
-.modal-content {
-    background: white;
-    padding: 24px;
-    border-radius: 8px;
-    max-width: 500px;
-    width: 90%;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.close {
-    float: right;
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: #6b7280;
-}
-
-.close:hover {
-    color: #ef4444;
-}
-
-form {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-form input,
-form select {
-    padding: 10px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 0.95rem;
-}
-
-form input:focus,
-form select:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.associado-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-.associado-row select,
-.associado-row input {
-    flex: 1;
-}
-
-.associado-row button {
-    background: #ef4444;
-    color: white;
-    border: none;
-    padding: 8px;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-.associado-row button:hover {
-    background: #b91c1c;
-}
-
-.form-actions {
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-}
-
-#formEstoque {
-    padding-bottom: 10px;
-    margin-bottom: 10px;
-    border-bottom: 2px #ccc solid;
-}
-
-#listaEstoque {
-    max-height: 500px;
-    overflow: scroll;
-    padding: 0px 10px 10px 0px;
-}
-
-#limparFiltrosLog {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    color: white;
-}
-
-#lista-componentes {
-    max-height: 720px;
-    overflow: scroll;
-    padding: 0px 10px 10px 0px;
-}
-
-/* Estilos para linhas de componentes no resumo de detalhes */
-.comp-verde {
-    color: #2ecc71;
-    /* Verde */
-    font-weight: bold;
-    /* Negrito */
-}
-
-.comp-amarelo {
-    color: #f1c40f;
-    /* Amarelo */
-    font-weight: bold;
-    /* Negrito */
-}
-
-.comp-vermelho {
-    color: #e74c3c;
-    /* Vermelho */
-    font-weight: normal;
-    /* Sem negrito */
-}
-
-/* Estilo para o dropdown de receitas no O que farmar? */
-.receitas-dropdown {
-    margin-top: 8px;
-    padding: 6px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 0.95rem;
-    width: 100%;
-}
-
-.receitas-dropdown:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-body {
-    background: url(/imagens/tela-inicial.jpg) no-repeat;
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    position: relative;
-}
-
-body::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    /* Ajuste o último valor (0.5) para mais ou menos escurecimento */
-    z-index: 1;
-}
-
-body>* {
-    position: relative;
-    z-index: 2;
-}
-
-#conteudo h1,
-p,
+/* RESET INICIO ========================================================================================================================*/
+html,
+body,
+div,
+span,
+applet,
+object,
+iframe,
+h1,
 h2,
-h3 {
-    color: white;
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+a,
+abbr,
+acronym,
+address,
+big,
+cite,
+code,
+del,
+dfn,
+em,
+img,
+ins,
+kbd,
+q,
+s,
+samp,
+small,
+strike,
+strong,
+sub,
+sup,
+tt,
+var,
+b,
+u,
+i,
+center,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+label,
+legend,
+table,
+caption,
+tbody,
+tfoot,
+thead,
+tr,
+th,
+td,
+article,
+aside,
+canvas,
+details,
+embed,
+figure,
+figcaption,
+footer,
+header,
+hgroup,
+menu,
+nav,
+output,
+ruby,
+section,
+summary,
+time,
+mark,
+audio,
+video {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font-size: 100%;
+    font: inherit;
+    vertical-align: baseline;
 }
 
-aside>* {
-    opacity: 1;
+/* HTML5 display-role reset for older browsers */
+article,
+aside,
+details,
+figcaption,
+figure,
+footer,
+header,
+hgroup,
+menu,
+nav,
+section {
+    display: block;
 }
 
-.receita-header button {
-    font-size: 20px;
-    padding: 10px;
-    border-radius: 7px;
-    cursor: pointer;
+body {
+    line-height: 1;
 }
 
-.btn-duplicar:hover {
-    background-color: #1a2634;
-    color: white;
+ol,
+ul {
+    list-style: none;
 }
 
-.btn-editar:hover {
-    background-color: #1a2634;
-    color: white;
+blockquote,
+q {
+    quotes: none;
 }
 
-.btn-concluir:hover {
-    background-color: #1a2634;
-    color: white;
+blockquote:before,
+blockquote:after,
+q:before,
+q:after {
+    content: '';
+    content: none;
 }
 
-.home.lista-de-recomendacoes {
-    display: flex;
-    padding: 0px;
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
 }
 
-.home.lista-de-recomendacoes li {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    vertical-align: middle;
-    max-width: 400px;
-    margin: 0px 6px 0px 0px;
+/* RESET FIM ========================================================================================================================*/
+/* VARIAVEIS INICIO ========================================================================================================================*/
+
+:root {
+    --background-botoes: linear-gradient(135deg, #3b82f6, #2563eb);
+    --background-botoes-hover: linear-gradient(135deg, #2563eb, #1e40af);
+    --corLetra-botoes: white;
 }
 
-.home.lista-de-recomendacoes a {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 40px;
-    line-height: 38px;
-    padding: 6px 8px 9px 8px;
-    border-radius: 7px;
-    background: white;
-    color: rgb(34, 34, 34);
+/* VARIAVEIS FIM ========================================================================================================================*/
+
+@media (min-width: 360px) {
+
+    body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        margin: 0;
+        background-color: #f4f7fa;
+        color: #333;
+    }
+
+    .container {
+        display: flex;
+        min-height: 100vh;
+    }
+
+    aside {
+        width: 250px;
+        background-color: #1a2634;
+        color: #fff;
+        padding: 20px;
+        box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        opacity: 0.8;
+    }
+
+    .menu {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .menu li {
+        padding: 12px 16px;
+        cursor: pointer;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        transition: background-color 0.2s;
+    }
+
+    .menu li:hover {
+        background-color: #2c3e50;
+    }
+
+
+
+    main {
+        flex: 1;
+        padding: 50px 24px 24px 24px;
+    }
+
+    h2 {
+        font-size: 1.8rem;
+        margin-bottom: 16px;
+        color: #1a2634;
+    }
+
+    .filtros {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+        align-items: center;
+        justify-content: left;
+        flex-wrap: wrap;
+    }
+
+    .filtros input[type="text"],
+    .filtros select {
+        padding: 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .filtros input[type="text"]:focus,
+    .filtros select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .filtros input[type="text"] {
+        flex: 1;
+        max-width: 300px;
+    }
+
+    .filtros select {
+        width: 150px;
+    }
+
+    button.primary {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: background 0.2s, transform 0.1s;
+    }
+
+    button.primary:hover {
+        background: linear-gradient(135deg, #2563eb, #1e40af);
+        transform: translateY(-1px);
+    }
+
+    button.secondary {
+        background: #e5e7eb;
+        color: #374151;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: background 0.2s;
+    }
+
+    button.secondary:hover {
+        background: #d1d5db;
+    }
+
+    button.warn {
+        background: linear-gradient(135deg, #ef4444, #b91c1c);
+        color: white;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: background 0.2s;
+    }
+
+    button.warn:hover {
+        background: linear-gradient(135deg, #b91c1c, #991b1b);
+    }
+
+    button.btn-arquivar {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: background 0.2s, transform 0.1s;
+    }
+
+    button.btn-arquivar:hover {
+        background: linear-gradient(135deg, #1a2634, #1a2634);
+        transform: translateY(-1px);
+    }
+
+    .lista {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .item {
+        background: white;
+        padding: 16px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .receita-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        justify-content: space-around;
+    }
+
+    .receita-header strong {
+        font-size: 1.1rem;
+        color: #1a2634;
+    }
+
+    .comps-lista {
+        display: flex;
+        flex-wrap: nowrap;
+        font-size: 0.85rem;
+        color: #6b7280;
+        padding: 10px 0px 10px 0px;
+        max-width: 436px;
+        max-height: 13px;
+        overflow: hidden;
+        margin-bottom: 3px;
+    }
+
+    .qtd-desejada {
+        width: 80px;
+        padding: 6px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.95rem;
+    }
+
+    .toggle-detalhes {
+        background: none;
+        border: none;
+        font-size: 1rem;
+        cursor: pointer;
+        color: #6b7280;
+    }
+
+    .toggle-detalhes:hover {
+        color: #3b82f6;
+    }
+
+    .btn-concluir:disabled {
+        background: #d1d5db;
+        cursor: not-allowed;
+    }
+
+    .detalhes {
+        margin-top: 12px;
+        padding: 12px;
+        background: #f9fafb;
+        border-radius: 6px;
+    }
+
+    .comp-item {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr 1fr;
+        gap: 8px;
+        font-size: 0.9rem;
+        padding: 8px 0;
+    }
+
+    .comp-nome {
+        font-weight: 500;
+    }
+
+    .comp-nec,
+    .comp-disp,
+    .comp-falta {
+        color: #6b7280;
+    }
+
+    .categoria {
+        color: #6b7280;
+    }
+
+    .acoes {
+        display: flex;
+        gap: 8px;
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+    }
+
+    .modal-content {
+        background: white;
+        padding: 24px;
+        border-radius: 8px;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .close {
+        float: right;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #6b7280;
+    }
+
+    .close:hover {
+        color: #ef4444;
+    }
+
+    form {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    form input,
+    form select {
+        padding: 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.95rem;
+    }
+
+    form input:focus,
+    form select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .associado-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .associado-row select,
+    .associado-row input {
+        flex: 1;
+    }
+
+    .associado-row button {
+        background: #ef4444;
+        color: white;
+        border: none;
+        padding: 8px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .associado-row button:hover {
+        background: #b91c1c;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+    }
+
+    #formEstoque {
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+        border-bottom: 2px #ccc solid;
+    }
+
+    #listaEstoque {
+        max-height: 500px;
+        overflow: scroll;
+        padding: 0px 10px 10px 0px;
+    }
+
+    .estoque--log-de-movimentacoes {
+        font-size: 20px;
+        margin-bottom: 10px;
+    }
+
+    #limparFiltrosLog {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+    }
+
+    #lista-componentes {
+        max-height: 720px;
+        overflow: scroll;
+        padding: 0px 10px 10px 0px;
+    }
+
+    /* Estilos para linhas de componentes no resumo de detalhes */
+    .comp-verde {
+        color: #2ecc71;
+        /* Verde */
+        font-weight: bold;
+        /* Negrito */
+    }
+
+    .comp-amarelo {
+        color: #f1c40f;
+        /* Amarelo */
+        font-weight: bold;
+        /* Negrito */
+    }
+
+    .comp-vermelho {
+        color: #e74c3c;
+        /* Vermelho */
+        font-weight: normal;
+        /* Sem negrito */
+    }
+
+    /* Estilo para o dropdown de receitas no O que farmar? */
+    .receitas-dropdown {
+        margin-top: 8px;
+        padding: 6px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        width: 100%;
+    }
+
+    .receitas-dropdown:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    body {
+        background: url(/imagens/tela-inicial.jpg) no-repeat;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        position: relative;
+    }
+
+    body::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        /* Ajuste o último valor (0.5) para mais ou menos escurecimento */
+        z-index: 1;
+    }
+
+    body>* {
+        position: relative;
+        z-index: 2;
+    }
+
+    #conteudo h1,
+    p,
+    h2,
+    h3 {
+        color: white;
+    }
+
+    aside>* {
+        opacity: 1;
+    }
+
+    .receita-header button {
+        font-size: 20px;
+        padding: 10px;
+        border-radius: 7px;
+        cursor: pointer;
+    }
+
+    .btn-duplicar:hover {
+        background-color: #1a2634;
+        color: white;
+    }
+
+    .btn-editar:hover {
+        background-color: #1a2634;
+        color: white;
+    }
+
+    .btn-concluir:hover {
+        background-color: #1a2634;
+        color: white;
+    }
+
+    .home.lista-de-recomendacoes {
+        display: flex;
+        padding: 0px;
+    }
+
+    .home.lista-de-recomendacoes li {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        vertical-align: middle;
+        max-width: 400px;
+        margin: 0px 6px 0px 0px;
+    }
+
+    .home.lista-de-recomendacoes a {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+        line-height: 38px;
+        padding: 6px 8px 9px 8px;
+        border-radius: 7px;
+        background: white;
+        color: rgb(34, 34, 34);
+        margin: 20px 0px 30px 0px;
+    }
+
+    .home.lista-de-recomendacoes a:hover {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+        line-height: 38px;
+        padding: 6px 8px 9px 8px;
+        border-radius: 7px;
+        background: rgb(34, 34, 34);
+        color: white;
+    }
+
+    .home--titulo-principal {
+        font-size: 20px;
+        font-weight: 500;
+        margin-bottom: 10px;
+    }
+
+    .home--paragrafo {
+        margin-bottom: 4px;
+    }
+
+
+    #mapaIframe {
+        width: 1500px;
+        height: 1080px;
+        margin-bottom: 20px;
+    }
+
+    #paxDeiIframe {
+        width: 1500px;
+        height: 1080px;
+    }
+
+
+
+    #formLogin button {
+        background: #1a2634;
+        color: white;
+    }
+
+    #formLogin button:hover {
+        background: white;
+        color: #1a2634;
+    }
+
+
+
+    #mensagemErro {
+        color: red;
+    }
+
+    #listaFarmar span {
+        font-size: 16px;
+        color: white
+    }
+
+    #filtroCategoriaFarmar {
+        width: 400px;
+    }
+
+    .menulateralMinimizado {
+        width: 0px;
+        background-color: #1a2634;
+        color: #fff;
+        padding: 15px;
+        box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        opacity: 0.8;
+        overflow: hidden;
+    }
+
+    #botaoDeMinimizarMenu {
+        cursor: pointer;
+        position: fixed;
+        top: 9px;
+        left: 316px;
+        z-index: 10000;
+        color: var(--corLetra-botoes);
+        background: var(--background-botoes);
+        padding: 7px;
+        border-radius: 7px;
+        font-weight: 500;
+    }
+
+    #botaoDeMinimizarMenu:hover {
+        cursor: pointer;
+        position: fixed;
+        top: 9px;
+        left: 316px;
+        z-index: 10000;
+        color: var(--background-botoes-hover);
+        background: var(--corLetra-botoes);
+        padding: 7px;
+        border-radius: 7px;
+        font-weight: 500;
+    }
+
+    .botaoNoMenuMinimizado {
+        left: 56px !important;
+    }
+
+    #overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+    }
+
+    /* POPUP DE LOGIN E CADASTRO ========================================================================================================= */
+    #popupLogin,
+    #popupCadastro {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        padding: 20px;
+        transform: translate(-50%, -50%);
+        background-color: white;
+        border-radius: 5px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+    }
+
+    #popupLogin form,
+    #popupCadastro form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #popupLogin input,
+    #popupCadastro input {
+        padding: 8px;
+        font-size: 16px;
+    }
+
+    #popupLogin button,
+    #popupCadastro button {
+        padding: 10px;
+        cursor: pointer;
+    }
+
+    #erroLogin {
+        color: red;
+        margin-top: 10px;
+    }
+
+    #popupLogin h2 {
+        color: black;
+        margin-top: 0px;
+    }
+
+    #mensagemCadastro {
+        color: green;
+        margin-top: 10px;
+    }
+
+    #popupCadastro h2 {
+        color: black;
+        margin-top: 0px;
+    }
+
+    #popupCadastro {
+        display: flex;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: white;
+        padding: 20px;
+        z-index: 1000;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    #popupCadastro button {
+        background: #1a2634;
+        color: white;
+    }
+
+    #popupCadastro button:hover {
+        background: white;
+        color: #1a2634;
+    }
+
+    /* FIM POPUP DE LOGIN E CADASTRO ========================================================================================================= */
 }
 
-.home.lista-de-recomendacoes a:hover {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 40px;
-    line-height: 38px;
-    padding: 6px 8px 9px 8px;
-    border-radius: 7px;
-    background: rgb(34, 34, 34);
-    color: white;
-}
+@media (min-width: 1920px) {
 
-#mapaIframe {
-    width: 1500px;
-    height: 1080px;
-    margin-bottom: 20px;
-}
+    body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        margin: 0;
+        background-color: #f4f7fa;
+        color: #333;
+    }
 
-#paxDeiIframe {
-    width: 1500px;
-    height: 1080px;
-}
+    .container {
+        display: flex;
+        min-height: 100vh;
+    }
 
-#popupLogin h2 {
-    color: black;
-    margin-top: 0px;
-}
+    aside {
+        width: 250px;
+        background-color: #1a2634;
+        color: #fff;
+        padding: 20px;
+        box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        opacity: 0.8;
+    }
 
-#popupLogin {
-    display: flex;
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: white;
-    padding: 20px;
-    z-index: 1000;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-}
+    .menu {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
 
-#formLogin button {
-    background: #1a2634;
-    color: white;
-}
+    .menu li {
+        padding: 12px 16px;
+        cursor: pointer;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        transition: background-color 0.2s;
+    }
 
-#formLogin button:hover {
-    background: white;
-    color: #1a2634;
-}
+    .menu li:hover {
+        background-color: #2c3e50;
+    }
 
-#popupCadastro h2 {
-    color: black;
-    margin-top: 0px;
-}
 
-#popupCadastro {
-    display: flex;
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: white;
-    padding: 20px;
-    z-index: 1000;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-}
 
-#popupCadastro button {
-    background: #1a2634;
-    color: white;
-}
+    main {
+        flex: 1;
+        padding: 50px 24px 24px 24px;
+    }
 
-#popupCadastro button:hover {
-    background: white;
-    color: #1a2634;
-}
+    h2 {
+        font-size: 1.8rem;
+        margin-bottom: 16px;
+        color: #1a2634;
+    }
 
-#mensagemErro {
-    color: red;
-}
+    .filtros {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+        align-items: center;
+        justify-content: left;
+        flex-wrap: wrap;
+    }
 
-#listaFarmar span {
-    font-size: 16px;
-    color: white
-}
+    .filtros input[type="text"],
+    .filtros select {
+        padding: 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
 
-#filtroCategoriaFarmar {
-    width: 400px;
-}
+    .filtros input[type="text"]:focus,
+    .filtros select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
 
-.menulateralMinimizado {
-    width: 0px;
-    background-color: #1a2634;
-    color: #fff;
-    padding: 15px;
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
-    opacity: 0.8;
-    overflow: hidden;
-}
+    .filtros input[type="text"] {
+        flex: 1;
+        max-width: 300px;
+    }
 
-#botaoDeMinimizarMenu {
-    cursor: pointer;
-    position: fixed;
-    top: 9px;
-    left: 316px;
-    z-index: 10000;
-    color: white;
-    background: #1a2634;
-    padding: 7px;
-    border-radius: 7px;
-    font-weight: 500;
-}
+    .filtros select {
+        width: 150px;
+    }
 
-#botaoDeMinimizarMenu:hover {
-    cursor: pointer;
-    position: fixed;
-    top: 9px;
-    left: 316px;
-    z-index: 10000;
-    color: #1a2634;
-    background: white;
-    padding: 7px;
-    border-radius: 7px;
-    font-weight: 500;
+    button.primary {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: background 0.2s, transform 0.1s;
+    }
+
+    button.primary:hover {
+        background: linear-gradient(135deg, #2563eb, #1e40af);
+        transform: translateY(-1px);
+    }
+
+    button.secondary {
+        background: #e5e7eb;
+        color: #374151;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: background 0.2s;
+    }
+
+    button.secondary:hover {
+        background: #d1d5db;
+    }
+
+    button.warn {
+        background: linear-gradient(135deg, #ef4444, #b91c1c);
+        color: white;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: background 0.2s;
+    }
+
+    button.warn:hover {
+        background: linear-gradient(135deg, #b91c1c, #991b1b);
+    }
+
+    button.btn-arquivar {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: background 0.2s, transform 0.1s;
+    }
+
+    button.btn-arquivar:hover {
+        background: linear-gradient(135deg, #1a2634, #1a2634);
+        transform: translateY(-1px);
+    }
+
+    .lista {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .item {
+        background: white;
+        padding: 16px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .receita-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        justify-content: space-around;
+    }
+
+    .receita-header strong {
+        font-size: 1.1rem;
+        color: #1a2634;
+    }
+
+    .comps-lista {
+        display: flex;
+        flex-wrap: nowrap;
+        font-size: 0.85rem;
+        color: #6b7280;
+        padding: 10px 0px 10px 0px;
+        max-width: 436px;
+        max-height: 13px;
+        overflow: hidden;
+        margin-bottom: 3px;
+    }
+
+    .qtd-desejada {
+        width: 80px;
+        padding: 6px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.95rem;
+    }
+
+    .toggle-detalhes {
+        background: none;
+        border: none;
+        font-size: 1rem;
+        cursor: pointer;
+        color: #6b7280;
+    }
+
+    .toggle-detalhes:hover {
+        color: #3b82f6;
+    }
+
+    .btn-concluir:disabled {
+        background: #d1d5db;
+        cursor: not-allowed;
+    }
+
+    .detalhes {
+        margin-top: 12px;
+        padding: 12px;
+        background: #f9fafb;
+        border-radius: 6px;
+    }
+
+    .comp-item {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr 1fr;
+        gap: 8px;
+        font-size: 0.9rem;
+        padding: 8px 0;
+    }
+
+    .comp-nome {
+        font-weight: 500;
+    }
+
+    .comp-nec,
+    .comp-disp,
+    .comp-falta {
+        color: #6b7280;
+    }
+
+    .categoria {
+        color: #6b7280;
+    }
+
+    .acoes {
+        display: flex;
+        gap: 8px;
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+    }
+
+    .modal-content {
+        background: white;
+        padding: 24px;
+        border-radius: 8px;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .close {
+        float: right;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #6b7280;
+    }
+
+    .close:hover {
+        color: #ef4444;
+    }
+
+    form {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    form input,
+    form select {
+        padding: 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.95rem;
+    }
+
+    form input:focus,
+    form select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .associado-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .associado-row select,
+    .associado-row input {
+        flex: 1;
+    }
+
+    .associado-row button {
+        background: #ef4444;
+        color: white;
+        border: none;
+        padding: 8px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .associado-row button:hover {
+        background: #b91c1c;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+    }
+
+    #formEstoque {
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+        border-bottom: 2px #ccc solid;
+    }
+
+    #listaEstoque {
+        max-height: 500px;
+        overflow: scroll;
+        padding: 0px 10px 10px 0px;
+    }
+
+    .estoque--log-de-movimentacoes {
+        font-size: 20px;
+        margin-bottom: 10px;
+    }
+
+    #limparFiltrosLog {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+    }
+
+    #lista-componentes {
+        max-height: 720px;
+        overflow: scroll;
+        padding: 0px 10px 10px 0px;
+    }
+
+    /* Estilos para linhas de componentes no resumo de detalhes */
+    .comp-verde {
+        color: #2ecc71;
+        /* Verde */
+        font-weight: bold;
+        /* Negrito */
+    }
+
+    .comp-amarelo {
+        color: #f1c40f;
+        /* Amarelo */
+        font-weight: bold;
+        /* Negrito */
+    }
+
+    .comp-vermelho {
+        color: #e74c3c;
+        /* Vermelho */
+        font-weight: normal;
+        /* Sem negrito */
+    }
+
+    /* Estilo para o dropdown de receitas no O que farmar? */
+    .receitas-dropdown {
+        margin-top: 8px;
+        padding: 6px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        width: 100%;
+    }
+
+    .receitas-dropdown:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    body {
+        background: url(/imagens/tela-inicial.jpg) no-repeat;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        position: relative;
+    }
+
+    body::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        /* Ajuste o último valor (0.5) para mais ou menos escurecimento */
+        z-index: 1;
+    }
+
+    body>* {
+        position: relative;
+        z-index: 2;
+    }
+
+    #conteudo h1,
+    p,
+    h2,
+    h3 {
+        color: white;
+    }
+
+    aside>* {
+        opacity: 1;
+    }
+
+    .receita-header button {
+        font-size: 20px;
+        padding: 10px;
+        border-radius: 7px;
+        cursor: pointer;
+    }
+
+    .btn-duplicar:hover {
+        background-color: #1a2634;
+        color: white;
+    }
+
+    .btn-editar:hover {
+        background-color: #1a2634;
+        color: white;
+    }
+
+    .btn-concluir:hover {
+        background-color: #1a2634;
+        color: white;
+    }
+
+    .home.lista-de-recomendacoes {
+        display: flex;
+        padding: 0px;
+    }
+
+    .home.lista-de-recomendacoes li {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        vertical-align: middle;
+        max-width: 400px;
+        margin: 0px 6px 0px 0px;
+    }
+
+    .home.lista-de-recomendacoes a {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+        line-height: 38px;
+        padding: 6px 8px 9px 8px;
+        border-radius: 7px;
+        background: white;
+        color: rgb(34, 34, 34);
+        margin: 20px 0px 30px 0px;
+    }
+
+    .home.lista-de-recomendacoes a:hover {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+        line-height: 38px;
+        padding: 6px 8px 9px 8px;
+        border-radius: 7px;
+        background: rgb(34, 34, 34);
+        color: white;
+    }
+
+    .home--titulo-principal {
+        font-size: 20px;
+        font-weight: 500;
+        margin-bottom: 10px;
+    }
+
+    .home--paragrafo {
+        margin-bottom: 4px;
+    }
+
+
+    #mapaIframe {
+        width: 1500px;
+        height: 1080px;
+        margin-bottom: 20px;
+    }
+
+    #paxDeiIframe {
+        width: 1500px;
+        height: 1080px;
+    }
+
+
+
+    #formLogin button {
+        background: #1a2634;
+        color: white;
+    }
+
+    #formLogin button:hover {
+        background: white;
+        color: #1a2634;
+    }
+
+
+
+    #mensagemErro {
+        color: red;
+    }
+
+    #listaFarmar span {
+        font-size: 16px;
+        color: white
+    }
+
+    #filtroCategoriaFarmar {
+        width: 400px;
+    }
+
+    .menulateralMinimizado {
+        width: 0px;
+        background-color: #1a2634;
+        color: #fff;
+        padding: 15px;
+        box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        opacity: 0.8;
+        overflow: hidden;
+    }
+
+    #botaoDeMinimizarMenu {
+        cursor: pointer;
+        position: fixed;
+        top: 9px;
+        left: 316px;
+        z-index: 10000;
+        color: var(--corLetra-botoes);
+        background: var(--background-botoes);
+        padding: 7px;
+        border-radius: 7px;
+        font-weight: 500;
+    }
+
+    #botaoDeMinimizarMenu:hover {
+        cursor: pointer;
+        position: fixed;
+        top: 9px;
+        left: 316px;
+        z-index: 10000;
+        color: var(--background-botoes-hover);
+        background: var(--corLetra-botoes);
+        padding: 7px;
+        border-radius: 7px;
+        font-weight: 500;
+    }
+
+    .botaoNoMenuMinimizado {
+        left: 56px !important;
+    }
+
+    #overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+    }
+
+    /* POPUP DE LOGIN E CADASTRO ========================================================================================================= */
+    #popupLogin,
+    #popupCadastro {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        padding: 20px;
+        transform: translate(-50%, -50%);
+        background-color: white;
+        border-radius: 5px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+    }
+
+    #popupLogin form,
+    #popupCadastro form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #popupLogin input,
+    #popupCadastro input {
+        padding: 8px;
+        font-size: 16px;
+    }
+
+    #popupLogin button,
+    #popupCadastro button {
+        padding: 10px;
+        cursor: pointer;
+    }
+
+    #erroLogin {
+        color: red;
+        margin-top: 10px;
+    }
+
+    #popupLogin h2 {
+        color: black;
+        margin-top: 0px;
+    }
+
+    #mensagemCadastro {
+        color: green;
+        margin-top: 10px;
+    }
+
+    #popupCadastro h2 {
+        color: black;
+        margin-top: 0px;
+    }
+
+    #popupCadastro {
+        display: flex;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: white;
+        padding: 20px;
+        z-index: 1000;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    #popupCadastro button {
+        background: #1a2634;
+        color: white;
+    }
+
+    #popupCadastro button:hover {
+        background: white;
+        color: #1a2634;
+    }
+
+    /* FIM POPUP DE LOGIN E CADASTRO ========================================================================================================= */
 }
 
 @media (min-width: 2560px) {

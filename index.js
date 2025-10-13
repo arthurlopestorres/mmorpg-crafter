@@ -1,7 +1,8 @@
-// index.js
-//sempre substituir a API abaixo de volta para https://mmorpg-crafter.onrender.com
-//para teste local: http://localhost:10000
 //rodar node servidor.js (no terminal)
+
+// ambiente de homolog:
+// const API = "http://localhost:10000";
+// ambiente prod:
 const API = "https://mmorpg-crafter.onrender.com";
 
 const conteudo = document.getElementById("conteudo");
@@ -45,11 +46,13 @@ function minimizarOmenu() {
     let listaDeClasseDoMenu = menuLateral.classList;
     if (listaDeClasseDoMenu.length < 1) {
         menuLateral.classList.add('menulateralMinimizado')
-        botaoDeMinimizar.style = 'left: 56px!important;'
+        botaoDeMinimizar.classList.add('botaoNoMenuMinimizado')
+        botaoDeMinimizar.innerHTML = 'Maximizar Menu'
         itensDoMenu.forEach(item => item.style = "display: none!important")
     } else {
         menuLateral.classList.remove('menulateralMinimizado')
-        botaoDeMinimizar.style = 'left: 316px!important;'
+        botaoDeMinimizar.classList.remove('botaoNoMenuMinimizado')
+        botaoDeMinimizar.innerHTML = 'Minimizar Menu'
         itensDoMenu.forEach(item => item.style = "display: block")
     }
 }
@@ -228,9 +231,9 @@ async function carregarSecao(secao) {
     if (secao === "estoque") return montarEstoque();
     if (secao === "arquivados") return montarArquivados();
     if (secao === "farmar") return montarFarmar();
-    conteudo.innerHTML = `<h1>Bem-vindo!</h1>
-<p>Essa aplicação tem como finalidade servir como calculadora e gestão de estoque para qualquer jogo de RPG (aqueles que envolvem craft e coleta de itens)!</p>
-<p>No momento, estamos jogando somente o jogo Pax Dei, por isso, seguem alguns links úteis para o jogo:</p>
+    conteudo.innerHTML = `<h1 class="home--titulo-principal">Bem-vindo!</h1>
+<p class="home--paragrafo">Essa aplicação tem como finalidade servir como calculadora e gestão de estoque para qualquer jogo de RPG (aqueles que envolvem craft e coleta de itens)!</p>
+<p class="home--paragrafo">No momento, estamos jogando somente o jogo Pax Dei, por isso, seguem alguns links úteis para o jogo:</p>
 <ul class="home lista-de-recomendacoes">
     <li><div><a href="https://paxdei.gaming.tools">PAX DEI DATABASE</a></div></li>
     <li><div><a href="https://paxdei.th.gl">MAPA INTERATIVO</a></div></li>
@@ -1069,7 +1072,7 @@ async function montarEstoque() {
         <div id="listaEstoque" class="lista"></div>
       </div>
       <div style="flex:1">
-        <h3>Log de Movimentações</h3>
+        <h3 class="estoque--log-de-movimentacoes">Log de Movimentações</h3>
         <div class="filtros">
             <input type="text" id="buscaLogComponente" list="logComponentesDatalist" placeholder="Digite componente para buscar...">
             <datalist id="logComponentesDatalist"></datalist>
