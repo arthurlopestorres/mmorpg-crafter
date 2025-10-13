@@ -1,3 +1,4 @@
+// index.js
 //rodar node servidor.js (no terminal)
 
 const API = "https://mmorpg-crafter.onrender.com";
@@ -300,14 +301,14 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az") {
         return `
         <div class="item" data-receita="${r.nome}">
           <div class="receita-header">
-            <strong>${r.nome}</strong>
+            <div class = "receita-header--container1"><strong class= "receita-header--titulo">${r.nome}</strong>
             ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
             <input type="number" class="qtd-desejada" min="0.001" step="any" value="1" data-receita="${r.nome}">
-            <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>
+            <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button></div><div>
             <button class="btn-concluir" data-receita="${r.nome}" disabled>Concluir</button>
             <button class="btn-editar" data-nome="${r.nome}">Editar</button>
             <button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>
-            <button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>
+            <button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button></div>
           </div>
           <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
         </div>`;
@@ -1183,9 +1184,25 @@ async function carregarEstoque(termoBusca = "", ordem = "az") {
     const listaEstoque = document.getElementById("listaEstoque");
     if (listaEstoque) {
         listaEstoque.innerHTML = estoque.map(e =>
-            `<div class="item"><strong>${e.componente || "(Sem nome)"}</strong> - ${formatQuantity(e.quantidade)}x</div>`
+            `<div class = "estoque-item-container"><div class="item"><strong>${e.componente || "(Sem nome)"}</strong> - ${formatQuantity(e.quantidade)}x</div> <button class="warn" onclick="excluirEstoqueItem('${escapeJsString(e.componente)}')">Excluir</button></div>`
         ).join("");
     }
+}
+
+async function excluirEstoqueItem(nome) {
+    if (!confirm(`Confirmar exclusão do item "${nome}" do estoque? Isso também excluirá o componente e afetará receitas e outros módulos.`)) return;
+    const res = await fetch(`${API}/componentes/excluir`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome }),
+        credentials: 'include'
+    });
+    const data = await res.json();
+    if (!data.sucesso) return mostrarErro(data.erro || "Erro ao excluir item do estoque");
+    await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
+    await carregarComponentesLista();
+    await carregarListaReceitas();
+    await carregarListaFarmar();
 }
 
 async function carregarLog(componenteFiltro = "", dataFiltro = "") {
@@ -1236,8 +1253,36 @@ async function carregarArquivados() {
                 <strong>${r.nome}</strong>
                 ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
               </div>
+              <button class="warn" onclick="excluirArquivado('${escapeJsString(r.nome)}')">Excluir</button>
             </div>`;
         }).join("");
+    }
+}
+
+async function excluirArquivado(nome) {
+    if (!confirm(`Confirmar exclusão da receita arquivada "${nome}"?`)) return;
+    try {
+        const arquivados = await fetch(`${API}/arquivados`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
+        const index = arquivados.findIndex(r => r.nome === nome);
+        if (index === -1) {
+            mostrarErro("Receita arquivada não encontrada.");
+            return;
+        }
+        arquivados.splice(index, 1);
+        const res = await fetch(`${API}/arquivados`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(arquivados),
+            credentials: 'include'
+        });
+        const data = await res.json();
+        if (!data.sucesso) {
+            mostrarErro(data.erro || "Erro ao excluir receita arquivada");
+            return;
+        }
+        await carregarArquivados();
+    } catch (error) {
+        mostrarErro("Erro ao excluir receita arquivada: " + error.message);
     }
 }
 
