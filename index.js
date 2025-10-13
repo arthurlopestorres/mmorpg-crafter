@@ -229,7 +229,7 @@ async function carregarSecao(secao) {
     if (secao === "estoque") return montarEstoque();
     if (secao === "arquivados") return montarArquivados();
     if (secao === "farmar") return montarFarmar();
-    conteudo.innerHTML = `<h1>Bem-vindo!</h1>
+    conteudo.innerHTML = `<h1 class="home--titulo-principal">Bem-vindo!</h1>
 <p>Essa aplicação tem como finalidade servir como calculadora e gestão de estoque para qualquer jogo de RPG (aqueles que envolvem craft e coleta de itens)!</p>
 <p>No momento, estamos jogando somente o jogo Pax Dei, por isso, seguem alguns links úteis para o jogo:</p>
 <ul class="home lista-de-recomendacoes">
@@ -1070,7 +1070,7 @@ async function montarEstoque() {
         <div id="listaEstoque" class="lista"></div>
       </div>
       <div style="flex:1">
-        <h3>Log de Movimentações</h3>
+        <h3 class="estoque--log-de-movimentacoes">Log de Movimentações</h3>
         <div class="filtros">
             <input type="text" id="buscaLogComponente" list="logComponentesDatalist" placeholder="Digite componente para buscar...">
             <datalist id="logComponentesDatalist"></datalist>
