@@ -711,6 +711,7 @@ table {
         padding: 7px;
         border-radius: 7px;
         font-weight: 500;
+        z-index: 998;
     }
 
     #botaoDeMinimizarMenu:hover {
@@ -724,6 +725,7 @@ table {
         padding: 7px;
         border-radius: 7px;
         font-weight: 500;
+        z-index: 998;
     }
 
     .botaoNoMenuMinimizado {
@@ -1394,6 +1396,7 @@ table {
         padding: 7px;
         border-radius: 7px;
         font-weight: 500;
+        z-index: 998;
     }
 
     #botaoDeMinimizarMenu:hover {
@@ -1407,6 +1410,7 @@ table {
         padding: 7px;
         border-radius: 7px;
         font-weight: 500;
+        z-index: 998;
     }
 
     .botaoNoMenuMinimizado {
