@@ -1,8 +1,8 @@
 // index.js
 //rodar node servidor.js (no terminal)
 
-const API = "https://mmorpg-crafter.onrender.com";
-// const API = "http://localhost:10000";
+// const API = "https://mmorpg-crafter.onrender.com";
+const API = "http://localhost:10000";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
 
 const conteudo = document.getElementById("conteudo");
@@ -447,6 +447,7 @@ async function montarReceitas() {
             <option value="az">Alfabética A-Z</option>
             <option value="za">Alfabética Z-A</option>
         </select>
+        <label><input type="checkbox" id="filtroFavoritas"> Somente Favoritas</label>
         <button id="btnNovaReceita" class="primary">+ Nova Receita</button>
     </div>
     <div id="listaReceitas" class="lista"></div>
@@ -454,17 +455,47 @@ async function montarReceitas() {
     document.getElementById("btnNovaReceita").addEventListener("click", () => abrirPopupReceita(null));
     const buscaInput = document.getElementById("buscaReceitas");
     const ordemSelect = document.getElementById("ordemReceitas");
-    buscaInput.addEventListener("input", () => carregarListaReceitas(buscaInput.value, ordemSelect.value));
-    ordemSelect.addEventListener("change", () => carregarListaReceitas(buscaInput.value, ordemSelect.value));
-    await carregarListaReceitas();
+    const filtroFavoritas = document.getElementById("filtroFavoritas");
+
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const savedFilters = JSON.parse(localStorage.getItem(`receitasFilters_${currentGame}`)) || {};
+    buscaInput.value = savedFilters.termoBusca || "";
+    ordemSelect.value = savedFilters.ordem || "az";
+    filtroFavoritas.checked = savedFilters.onlyFavorites || false;
+
+    const saveFilters = () => {
+        localStorage.setItem(`receitasFilters_${currentGame}`, JSON.stringify({
+            termoBusca: buscaInput.value,
+            ordem: ordemSelect.value,
+            onlyFavorites: filtroFavoritas.checked
+        }));
+    };
+
+    buscaInput.addEventListener("input", () => {
+        carregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
+        saveFilters();
+    });
+    ordemSelect.addEventListener("change", () => {
+        carregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
+        saveFilters();
+    });
+    filtroFavoritas.addEventListener("change", () => {
+        carregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
+        saveFilters();
+    });
+    await carregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
 }
 
-async function carregarListaReceitas(termoBusca = "", ordem = "az") {
+async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorites = false) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     let url = `${API}/receitas?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
     if (termoBusca) {
         url += `&search=${encodeURIComponent(termoBusca)}`;
-    } else {
+    }
+    if (onlyFavorites) {
+        url += `&favoritas=true`;
+    }
+    if (!termoBusca && !onlyFavorites) {
         url += `&limit=10`;
     }
     let receitas = await fetch(url, { credentials: 'include' }).then(r => r.json());
@@ -477,6 +508,10 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az") {
         receitas = receitas.filter(r => r.nome.toLowerCase().includes(termoBusca.toLowerCase()));
     }
 
+    if (onlyFavorites) {
+        receitas = receitas.filter(r => r.favorita);
+    }
+
     receitas = receitas.sort((a, b) => {
         if (a.favorita !== b.favorita) return b.favorita - a.favorita; // Favoritas primeiro
         const valorA = a.nome.toLowerCase();
@@ -484,7 +519,7 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az") {
         return ordem === "az" ? valorA.localeCompare(valorB) : valorB.localeCompare(valorA);
     });
 
-    if (!termoBusca) {
+    if (!termoBusca && !onlyFavorites) {
         receitas = receitas.slice(0, 10);
     }
 
@@ -1118,9 +1153,28 @@ async function montarComponentes() {
     document.getElementById("btnNovoComponente").addEventListener("click", () => abrirPopupComponente());
     const buscaInput = document.getElementById("buscaComponentes");
     const ordemSelect = document.getElementById("ordemComponentes");
-    buscaInput.addEventListener("input", () => carregarComponentesLista(buscaInput.value, ordemSelect.value));
-    ordemSelect.addEventListener("change", () => carregarComponentesLista(buscaInput.value, ordemSelect.value));
-    await carregarComponentesLista();
+
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const savedFilters = JSON.parse(localStorage.getItem(`componentesFilters_${currentGame}`)) || {};
+    buscaInput.value = savedFilters.termoBusca || "";
+    ordemSelect.value = savedFilters.ordem || "az";
+
+    const saveFilters = () => {
+        localStorage.setItem(`componentesFilters_${currentGame}`, JSON.stringify({
+            termoBusca: buscaInput.value,
+            ordem: ordemSelect.value
+        }));
+    };
+
+    buscaInput.addEventListener("input", () => {
+        carregarComponentesLista(buscaInput.value, ordemSelect.value);
+        saveFilters();
+    });
+    ordemSelect.addEventListener("change", () => {
+        carregarComponentesLista(buscaInput.value, ordemSelect.value);
+        saveFilters();
+    });
+    await carregarComponentesLista(buscaInput.value, ordemSelect.value);
     await carregarCategoriasDatalist();
 }
 
@@ -1338,15 +1392,35 @@ async function montarEstoque() {
         datalist.innerHTML = filteredOptions.join("");
     });
 
-    const buscaInput = document.getElementById("buscaEstoque");
-    const ordemSelect = document.getElementById("ordemEstoque");
-    buscaInput.addEventListener("input", () => carregarEstoque(buscaInput.value, ordemSelect.value));
-    ordemSelect.addEventListener("change", () => carregarEstoque(buscaInput.value, ordemSelect.value));
-
-    // Filtros para o log
+    const buscaEstoque = document.getElementById("buscaEstoque");
+    const ordemEstoque = document.getElementById("ordemEstoque");
     const buscaLogComponente = document.getElementById("buscaLogComponente");
     const filtroLogData = document.getElementById("filtroLogData");
     const limparFiltrosLog = document.getElementById("limparFiltrosLog");
+
+    const savedFilters = JSON.parse(localStorage.getItem(`estoqueFilters_${currentGame}`)) || {};
+    buscaEstoque.value = savedFilters.termoBuscaEstoque || "";
+    ordemEstoque.value = savedFilters.ordemEstoque || "az";
+    buscaLogComponente.value = savedFilters.termoBuscaLog || "";
+    filtroLogData.value = savedFilters.dataLog || "";
+
+    const saveFilters = () => {
+        localStorage.setItem(`estoqueFilters_${currentGame}`, JSON.stringify({
+            termoBuscaEstoque: buscaEstoque.value,
+            ordemEstoque: ordemEstoque.value,
+            termoBuscaLog: buscaLogComponente.value,
+            dataLog: filtroLogData.value
+        }));
+    };
+
+    buscaEstoque.addEventListener("input", () => {
+        carregarEstoque(buscaEstoque.value, ordemEstoque.value);
+        saveFilters();
+    });
+    ordemEstoque.addEventListener("change", () => {
+        carregarEstoque(buscaEstoque.value, ordemEstoque.value);
+        saveFilters();
+    });
 
     // Carregar componentes únicos para o datalist do log
     const logs = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
@@ -1360,17 +1434,21 @@ async function montarEstoque() {
         const filteredOptions = componentesUnicos.filter(c => c.toLowerCase().includes(termo))
             .map(c => `<option value="${c}">`);
         logDatalist.innerHTML = filteredOptions.join("");
+        carregarLog(buscaLogComponente.value, filtroLogData.value);
+        saveFilters();
     });
 
-    // Atualizar log com filtros
-    buscaLogComponente.addEventListener("input", () => carregarLog(buscaLogComponente.value, filtroLogData.value));
-    filtroLogData.addEventListener("change", () => carregarLog(buscaLogComponente.value, filtroLogData.value));
+    filtroLogData.addEventListener("change", () => {
+        carregarLog(buscaLogComponente.value, filtroLogData.value);
+        saveFilters();
+    });
 
     // Limpar filtros
     limparFiltrosLog.addEventListener("click", () => {
         buscaLogComponente.value = "";
         filtroLogData.value = "";
         carregarLog("", "");
+        saveFilters();
     });
 
     document.getElementById("formEstoque").onsubmit = async e => {
@@ -1405,12 +1483,12 @@ async function montarEstoque() {
         const logData = await logResponse.json();
         if (!logData.sucesso) return mostrarErro("Erro ao registrar log.");
 
-        await carregarEstoque(buscaInput.value, ordemSelect.value);
+        await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
         await carregarLog(buscaLogComponente.value, filtroLogData.value);
     };
 
-    await carregarEstoque();
-    await carregarLog();
+    await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
+    await carregarLog(buscaLogComponente.value, filtroLogData.value);
 }
 
 async function carregarEstoque(termoBusca = "", ordem = "az") {
@@ -1663,6 +1741,11 @@ async function montarFarmar() {
     const ordemSelect = document.getElementById("ordemFarmar");
     const limparFiltrosFarmar = document.getElementById("limparFiltrosFarmar");
 
+    const savedFilters = JSON.parse(localStorage.getItem(`farmarFilters_${currentGame}`)) || {};
+    buscaInput.value = savedFilters.termoBusca || "";
+    ordemSelect.value = savedFilters.ordem || "pendente-desc";
+    categoriaSelect.value = savedFilters.categoria || "";
+
     // Popular a lista de receitas com checkboxes
     receitasFavoritas.forEach(receita => {
         const li = document.createElement("li");
@@ -1675,6 +1758,12 @@ async function montarFarmar() {
         listaReceitas.appendChild(li);
     });
 
+    // Aplicar seleções salvas
+    const savedSelected = savedFilters.selectedReceitas || [];
+    Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
+        cb.checked = savedSelected.includes(cb.value);
+    });
+
     const updateBadges = () => {
         const total = receitasFavoritas.length;
         const selected = listaReceitas.querySelectorAll('input[type="checkbox"]:checked').length;
@@ -1683,6 +1772,16 @@ async function montarFarmar() {
     };
 
     updateBadges();
+
+    const saveFilters = () => {
+        const selected = Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        localStorage.setItem(`farmarFilters_${currentGame}`, JSON.stringify({
+            termoBusca: buscaInput.value,
+            ordem: ordemSelect.value,
+            categoria: categoriaSelect.value,
+            selectedReceitas: selected
+        }));
+    };
 
     // Toggle dropdown ao clicar no input de busca
     searchReceita.addEventListener("focus", () => {
@@ -1709,11 +1808,21 @@ async function montarFarmar() {
     listaReceitas.addEventListener("change", () => {
         updateBadges();
         carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+        saveFilters();
     });
 
-    buscaInput.addEventListener("input", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value));
-    categoriaSelect.addEventListener("change", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value));
-    ordemSelect.addEventListener("change", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value));
+    buscaInput.addEventListener("input", () => {
+        carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+        saveFilters();
+    });
+    categoriaSelect.addEventListener("change", () => {
+        carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+        saveFilters();
+    });
+    ordemSelect.addEventListener("change", () => {
+        carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+        saveFilters();
+    });
 
     limparFiltrosFarmar.addEventListener("click", () => {
         buscaInput.value = "";
@@ -1723,9 +1832,10 @@ async function montarFarmar() {
         categoriaSelect.value = "";
         ordemSelect.value = "pendente-desc";
         carregarListaFarmar("", "pendente-desc", '', "");
+        saveFilters();
     });
 
-    await carregarListaFarmar();
+    await carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
 }
 
 async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", receitaFiltro = "", categoriaFiltro = "") {
@@ -1791,8 +1901,11 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
             let color = 'darkred';
             if (percentage >= 100) color = 'darkgreen';
             else if (percentage >= 50) color = 'darkgoldenrod';
+            const id = `farmar-${m.nome.replace(/\s/g, '-')}`;
+            const component = componentes.find(c => c.nome === m.nome);
+            const hasSubs = component && component.associados && component.associados.length > 0;
             return `
-            <div class="item" style="background-color: ${color}; color: white;">
+            <div class="item" style="background-color: ${color}; color: white;" data-componente="${m.nome}">
                 <div class="comp-item">
                     <span class="comp-nome">${m.nome}</span>
                     <span class="comp-nec">Nec: ${formatQuantity(m.nec)}</span>
@@ -1803,10 +1916,87 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                     <option>Receitas (${m.receitas.length})</option>
                     ${m.receitas.sort().map(r => `<option>${r}</option>`).join("")}
                 </select>
+                ${hasSubs ? `<button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>` : ''}
+                <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
+                ${hasSubs ? `<button class="btn-fabricar" data-componente="${m.nome}" disabled>Fabricar</button>` : ''}
             </div>
         `}).join("");
+
+        // Adicionar event listeners para toggles em farmar
+        document.querySelectorAll("#listaFarmar .toggle-detalhes").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const targetId = btn.dataset.target;
+                const detalhes = document.getElementById(targetId);
+                if (!detalhes) return;
+                const isVisible = detalhes.style.display !== "none";
+                detalhes.style.display = isVisible ? "none" : "block";
+                btn.textContent = isVisible ? "▼" : "▲";
+                if (!isVisible) {
+                    const itemElement = btn.closest(".item");
+                    const componenteNome = itemElement.dataset.componente;
+                    const m = listaMaterias.find(mat => mat.nome === componenteNome);
+                    if (m) {
+                        detalhes.innerHTML = `<ul>${getComponentChain(m.nome, m.nec, componentes, estoqueMap)}</ul>`;
+                    }
+                }
+            });
+        });
+
+        // Verificar botões fabricar inicialmente
+        document.querySelectorAll("#listaFarmar .item").forEach(async item => {
+            const componenteNome = item.dataset.componente;
+            const m = listaMaterias.find(mat => mat.nome === componenteNome);
+            const component = componentes.find(c => c.nome === componenteNome);
+            if (component && component.associados && component.associados.length > 0) {
+                let canFabricate = m.pendente > 0;
+                for (const assoc of component.associados) {
+                    const subDisp = estoqueMap[assoc.nome] || 0;
+                    if (subDisp < assoc.quantidade) {
+                        canFabricate = false;
+                        break;
+                    }
+                }
+                const btn = item.querySelector(".btn-fabricar");
+                if (btn) btn.disabled = !canFabricate;
+            }
+        });
+
+        // Adicionar event listeners para botões fabricar
+        document.querySelectorAll("#listaFarmar .btn-fabricar").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const componenteNome = btn.dataset.componente;
+                await fabricarComponente(componenteNome);
+            });
+        });
     } else {
         console.log("[FARMAR] Skip updating farmar list as div not found.");
+    }
+}
+
+async function fabricarComponente(nome) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    try {
+        const response = await fetch(`${API}/fabricar?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ componente: nome }),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            // Atualizar listas
+            await carregarListaFarmar(
+                document.getElementById("buscaFarmar")?.value || "",
+                document.getElementById("ordemFarmar")?.value || "pendente-desc",
+                document.getElementById("filtroReceitaFarmar")?.value || ""
+            );
+            await carregarEstoque();
+            await carregarLog();
+        } else {
+            mostrarErro(data.erro || "Erro ao fabricar componente");
+        }
+    } catch (error) {
+        mostrarErro("Erro ao fabricar componente: " + error.message);
     }
 }
 

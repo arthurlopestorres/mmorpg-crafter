@@ -1286,3 +1286,21 @@ body.dark-mode #listaReceitasFarmar li:hover {
 #ordemFarmar {
     width: 200px;
 }
+
+#listaFarmar .item .toggle-detalhes {
+    margin-top: 10px;
+}
+
+#listaFarmar .item .btn-fabricar {
+    background: black;
+    color: white;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+#listaFarmar .item .btn-fabricar:hover {
+    background: white;
+    color: black;
+    cursor: pointer;
+    margin-top: 10px;
+}
