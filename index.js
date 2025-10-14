@@ -138,7 +138,7 @@ function initMenu() {
         { section: "componentes", text: "Componentes" },
         { section: "estoque", text: "Estoque de componentes" },
         { section: "receitas", text: "Receitas" },
-        { section: "farmar", text: "O que Farmar?" },
+        { section: "farmar", text: "Favoritos" },
         { section: "arquivados", text: "Arquivados" },
     ];
     sections.forEach(sec => {
@@ -466,18 +466,33 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az") {
     } else {
         url += `&limit=10`;
     }
-    const receitas = await fetch(url, { credentials: 'include' }).then(r => r.json());
+    let receitas = await fetch(url, { credentials: 'include' }).then(r => r.json());
     const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const estoque = {};
     estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
+
+    if (termoBusca) {
+        receitas = receitas.filter(r => r.nome.toLowerCase().includes(termoBusca.toLowerCase()));
+    }
+
+    receitas = receitas.sort((a, b) => {
+        if (a.favorita !== b.favorita) return b.favorita - a.favorita; // Favoritas primeiro
+        const valorA = a.nome.toLowerCase();
+        const valorB = b.nome.toLowerCase();
+        return ordem === "az" ? valorA.localeCompare(valorB) : valorB.localeCompare(valorA);
+    });
+
+    if (!termoBusca) {
+        receitas = receitas.slice(0, 10);
+    }
 
     const div = document.getElementById("listaReceitas");
     div.innerHTML = receitas.filter(r => r.nome).map(r => {
         const id = `receita-${r.nome.replace(/\s/g, '-')}`;
         const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
         return `
-        <div class="item" data-receita="${r.nome}">
+        <div class="item ${r.favorita ? 'favorita' : ''}" data-receita="${r.nome}">
           <div class="receita-header">
             <div class = "receita-header--container1"><div style="margin-right: 15px;"><strong class= "receita-header--titulo">${r.nome}</strong>
             ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
@@ -1606,14 +1621,22 @@ async function excluirArquivado(nome) {
 async function montarFarmar() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const receitasFavoritas = receitas.filter(r => r.favorita);
     const categorias = [...new Set(componentes.map(c => c.categoria).filter(Boolean))].sort();
 
     conteudo.innerHTML = `
-    <h2>O que farmar?</h2>
+    <h2>Favoritos</h2>
     <div class="filtros">
         <input type="text" id="buscaFarmar" placeholder="Buscar por matéria prima...">
-        <input type="text" id="filtroReceitaFarmar" list="receitasDatalist" placeholder="Filtrar por receita...">
-        <datalist id="receitasDatalist"></datalist>
+        <div class="multi-select-wrapper">
+            <div id="filtroReceitaFarmar" class="dropdown-checkbox">
+                <input type="text" id="searchReceitaFarmar" placeholder="Filtrar receitas...">
+                <ul id="listaReceitasFarmar"></ul>
+            </div>
+            <span id="selectedBadge" class="badge green">0</span>
+            <span id="unselectedBadge" class="badge red">${receitasFavoritas.length}</span>
+        </div>
         <select id="filtroCategoriaFarmar">
             <option value="">Todas as categorias</option>
             ${categorias.map(cat => `<option value="${cat}">${cat}</option>`).join("")}
@@ -1624,17 +1647,83 @@ async function montarFarmar() {
             <option value="az">Alfabética A-Z</option>
             <option value="za">Alfabética Z-A</option>
         </select>
+        <button id="limparFiltrosFarmar" class="secondary">Limpar Filtros</button>
     </div>
     <div id="listaFarmar" class="lista"></div>
     `;
+
     const buscaInput = document.getElementById("buscaFarmar");
-    const receitaInput = document.getElementById("filtroReceitaFarmar");
+    const filtroReceitaContainer = document.getElementById("filtroReceitaFarmar");
+    const searchReceita = document.getElementById("searchReceitaFarmar");
+    const listaReceitas = document.getElementById("listaReceitasFarmar");
+    const selectedBadge = document.getElementById("selectedBadge");
+    const unselectedBadge = document.getElementById("unselectedBadge");
     const categoriaSelect = document.getElementById("filtroCategoriaFarmar");
     const ordemSelect = document.getElementById("ordemFarmar");
-    buscaInput.addEventListener("input", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, receitaInput.value, categoriaSelect.value));
-    receitaInput.addEventListener("input", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, receitaInput.value, categoriaSelect.value));
-    categoriaSelect.addEventListener("change", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, receitaInput.value, categoriaSelect.value));
-    ordemSelect.addEventListener("change", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, receitaInput.value, categoriaSelect.value));
+    const limparFiltrosFarmar = document.getElementById("limparFiltrosFarmar");
+
+    // Popular a lista de receitas com checkboxes
+    receitasFavoritas.forEach(receita => {
+        const li = document.createElement("li");
+        li.innerHTML = `
+            <label>
+                <input type="checkbox" value="${receita.nome}">
+                ${receita.nome}
+            </label>
+        `;
+        listaReceitas.appendChild(li);
+    });
+
+    const updateBadges = () => {
+        const total = receitasFavoritas.length;
+        const selected = listaReceitas.querySelectorAll('input[type="checkbox"]:checked').length;
+        selectedBadge.textContent = selected;
+        unselectedBadge.textContent = total - selected;
+    };
+
+    updateBadges();
+
+    // Toggle dropdown ao clicar no input de busca
+    searchReceita.addEventListener("focus", () => {
+        listaReceitas.style.display = "block";
+    });
+
+    // Fechar dropdown ao clicar fora
+    document.addEventListener("click", (e) => {
+        if (!filtroReceitaContainer.contains(e.target)) {
+            listaReceitas.style.display = "none";
+        }
+    });
+
+    // Filtrar itens ao digitar
+    searchReceita.addEventListener("input", () => {
+        const termo = searchReceita.value.toLowerCase();
+        Array.from(listaReceitas.children).forEach(li => {
+            const text = li.textContent.toLowerCase();
+            li.style.display = text.includes(termo) ? "block" : "none";
+        });
+    });
+
+    // Atualizar ao mudar checkboxes
+    listaReceitas.addEventListener("change", () => {
+        updateBadges();
+        carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+    });
+
+    buscaInput.addEventListener("input", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value));
+    categoriaSelect.addEventListener("change", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value));
+    ordemSelect.addEventListener("change", () => carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value));
+
+    limparFiltrosFarmar.addEventListener("click", () => {
+        buscaInput.value = "";
+        searchReceita.value = "";
+        Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]')).forEach(cb => cb.checked = false);
+        updateBadges();
+        categoriaSelect.value = "";
+        ordemSelect.value = "pendente-desc";
+        carregarListaFarmar("", "pendente-desc", '', "");
+    });
+
     await carregarListaFarmar();
 }
 
@@ -1645,20 +1734,9 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
     const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
 
-    const datalist = document.getElementById("receitasDatalist");
-    if (datalist) datalist.innerHTML = receitasFavoritas.map(r => `<option value="${r.nome}">`).join("");
+    const selectedReceitas = Array.from(document.querySelectorAll('#listaReceitasFarmar input[type="checkbox"]:checked')).map(cb => cb.value);
 
-    const receitaInput = document.getElementById("filtroReceitaFarmar");
-    if (receitaInput) {
-        receitaInput.addEventListener("input", () => {
-            const termo = receitaInput.value.toLowerCase();
-            const filteredOptions = receitasFavoritas.filter(r => r.nome.toLowerCase().includes(termo))
-                .map(r => `<option value="${r.nome}">`);
-            datalist.innerHTML = filteredOptions.join("");
-        });
-    }
-
-    const receitasFiltradas = receitaFiltro ? receitasFavoritas.filter(r => r.nome.toLowerCase() === receitaFiltro.toLowerCase()) : receitasFavoritas;
+    const receitasFiltradas = selectedReceitas.length > 0 ? receitasFavoritas.filter(r => selectedReceitas.includes(r.nome)) : receitasFavoritas;
 
     const bases = new Map();
 
