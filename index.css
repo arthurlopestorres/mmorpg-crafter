@@ -1142,6 +1142,14 @@ body.bright-mode #themeToggle:hover {
     color: black;
 }
 
+.item.favorita .receita-header--titulo {
+    color: black !important;
+}
+
+body.dark-mode .item.favorita .receita-header--titulo {
+    color: black !important;
+}
+
 .multi-select-wrapper {
     position: relative;
     display: inline-block;
@@ -1150,8 +1158,8 @@ body.bright-mode #themeToggle:hover {
 
 .badge {
     position: absolute;
-    width: 20px;
-    height: 20px;
+    width: 25px;
+    height: 25px;
     border-radius: 50%;
     color: black;
     font-size: 12px;
@@ -1169,13 +1177,17 @@ body.bright-mode #themeToggle:hover {
 }
 
 #selectedBadge {
-    right: 25px;
+    right: 35px;
     top: 5px;
+    font-size: 16px;
+    font-weight: bold;
 }
 
 #unselectedBadge {
     right: 5px;
     top: 5px;
+    font-size: 16px;
+    font-weight: bold;
 }
 
 #filtroReceitaFarmar {

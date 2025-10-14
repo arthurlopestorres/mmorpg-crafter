@@ -10,6 +10,7 @@ const conteudo = document.getElementById("conteudo");
 document.addEventListener("DOMContentLoaded", async () => {
     // Inicializar o modo escuro/claro baseado no localStorage
     const savedMode = localStorage.getItem("themeMode") || "bright";
+    document.body.classList.remove("bright-mode", "dark-mode");
     document.body.classList.add(savedMode + "-mode");
     updateToggleButtonText(savedMode);
 
