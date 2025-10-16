@@ -1918,7 +1918,7 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                 </select>
                 ${hasSubs ? `<button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>` : ''}
                 <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
-                ${hasSubs ? `<button class="btn-fabricar" data-componente="${m.nome}" disabled>Fabricar</button>` : ''}
+                ${hasSubs ? `<button class="btn-fabricar" data-componente="${m.nome}" data-pendente="${m.pendente}" data-qtdprod="${component.quantidadeProduzida || 1}" disabled>Fabricar Tudo</button>` : ''}
             </div>
         `}).join("");
 
@@ -1948,12 +1948,17 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
             const m = listaMaterias.find(mat => mat.nome === componenteNome);
             const component = componentes.find(c => c.nome === componenteNome);
             if (component && component.associados && component.associados.length > 0) {
-                let canFabricate = m.pendente > 0;
-                for (const assoc of component.associados) {
-                    const subDisp = estoqueMap[assoc.nome] || 0;
-                    if (subDisp < assoc.quantidade) {
-                        canFabricate = false;
-                        break;
+                let qtdProd = component.quantidadeProduzida || 1;
+                let pendente = m.pendente;
+                let numCrafts = Math.ceil(pendente / qtdProd);
+                let canFabricate = pendente > 0;
+                if (canFabricate) {
+                    for (const assoc of component.associados) {
+                        const subDisp = estoqueMap[assoc.nome] || 0;
+                        if (subDisp < assoc.quantidade * numCrafts) {
+                            canFabricate = false;
+                            break;
+                        }
                     }
                 }
                 const btn = item.querySelector(".btn-fabricar");
@@ -1965,7 +1970,11 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
         document.querySelectorAll("#listaFarmar .btn-fabricar").forEach(btn => {
             btn.addEventListener("click", async () => {
                 const componenteNome = btn.dataset.componente;
-                await fabricarComponente(componenteNome);
+                const pendente = parseFloat(btn.dataset.pendente);
+                const qtdProd = parseFloat(btn.dataset.qtdprod);
+                const numCrafts = Math.ceil(pendente / qtdProd);
+                await fabricarComponente(componenteNome, numCrafts);
+                btn.disabled = true;
             });
         });
     } else {
@@ -1973,13 +1982,13 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
     }
 }
 
-async function fabricarComponente(nome) {
+async function fabricarComponente(nome, numCrafts = 1) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
         const response = await fetch(`${API}/fabricar?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ componente: nome }),
+            body: JSON.stringify({ componente: nome, numCrafts }),
             credentials: 'include'
         });
         const data = await response.json();

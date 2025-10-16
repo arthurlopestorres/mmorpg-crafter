@@ -903,7 +903,7 @@ app.post('/log', isAuthenticated, async (req, res) => {
 app.post('/fabricar', isAuthenticated, async (req, res) => {
     console.log('[POST /fabricar] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const { componente } = req.body;
+    const { componente, numCrafts = 1 } = req.body;
     if (!componente) {
         console.log('[POST /fabricar] Erro: Componente ausente');
         return res.status(400).json({ sucesso: false, erro: 'Componente é obrigatório' });
@@ -924,7 +924,7 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
         // Verificar estoque dos subcomponentes diretos
         for (const assoc of comp.associados) {
             const eIndex = estoque.findIndex(e => e.componente === assoc.nome);
-            if (eIndex === -1 || estoque[eIndex].quantidade < assoc.quantidade) {
+            if (eIndex === -1 || estoque[eIndex].quantidade < assoc.quantidade * numCrafts) {
                 console.log('[POST /fabricar] Erro: Estoque insuficiente para', assoc.nome);
                 return res.status(400).json({ sucesso: false, erro: `Estoque insuficiente para ${assoc.nome}` });
             }
@@ -935,11 +935,11 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
         let newLogs = [];
         for (const assoc of comp.associados) {
             const eIndex = estoque.findIndex(e => e.componente === assoc.nome);
-            estoque[eIndex].quantidade -= assoc.quantidade;
+            estoque[eIndex].quantidade -= assoc.quantidade * numCrafts;
             newLogs.push({
                 dataHora,
                 componente: assoc.nome,
-                quantidade: assoc.quantidade,
+                quantidade: assoc.quantidade * numCrafts,
                 operacao: "debitar",
                 origem: `Fabricação de ${componente}`
             });
@@ -949,14 +949,14 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
         const qtdProd = comp.quantidadeProduzida || 1;
         const cIndex = estoque.findIndex(e => e.componente === componente);
         if (cIndex === -1) {
-            estoque.push({ componente, quantidade: qtdProd });
+            estoque.push({ componente, quantidade: qtdProd * numCrafts });
         } else {
-            estoque[cIndex].quantidade += qtdProd;
+            estoque[cIndex].quantidade += qtdProd * numCrafts;
         }
         newLogs.push({
             dataHora,
             componente,
-            quantidade: qtdProd,
+            quantidade: qtdProd * numCrafts,
             operacao: "adicionar",
             origem: `Fabricação de ${componente}`
         });
