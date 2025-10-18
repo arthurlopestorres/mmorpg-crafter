@@ -7,6 +7,14 @@ const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTI
 
 const conteudo = document.getElementById("conteudo");
 
+function debounce(func, delay) {
+    let timeout;
+    return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func(...args), delay);
+    };
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     // Inicializar o modo escuro/claro baseado no localStorage
     const savedMode = localStorage.getItem("themeMode") || "bright";
@@ -415,8 +423,8 @@ async function carregarSecao(secao) {
     <li><div><a href="https://paxdei.gaming.tools">PAX DEI DATABASE</a></div></li>
     <li><div><a href="https://paxdei.th.gl">MAPA INTERATIVO</a></div></li>
 </ul>
-<iframe id="mapaIframe" src="https://paxdei.th.gl/" title="Pax Dei Interactive Map"></iframe>
-<iframe id="paxDeiIframe" src="https://paxdei.gaming.tools/" title="Pax Dei DataBase"></iframe>`;
+<iframe id="mapaIframe" src="https://paxdei.th.gl/" title="Pax Dei Interactive Map" loading="lazy"></iframe>
+<iframe id="paxDeiIframe" src="https://paxdei.gaming.tools/" title="Pax Dei DataBase" loading="lazy"></iframe>`;
 }
 
 /* ------------------ Funções Auxiliares de Filtro e Ordenação ------------------ */
@@ -471,16 +479,18 @@ async function montarReceitas() {
         }));
     };
 
+    const debouncedCarregarListaReceitas = debounce(carregarListaReceitas, 300);
+
     buscaInput.addEventListener("input", () => {
-        carregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
+        debouncedCarregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
         saveFilters();
     });
     ordemSelect.addEventListener("change", () => {
-        carregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
+        debouncedCarregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
         saveFilters();
     });
     filtroFavoritas.addEventListener("change", () => {
-        carregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
+        debouncedCarregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
         saveFilters();
     });
     await carregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
@@ -1166,12 +1176,14 @@ async function montarComponentes() {
         }));
     };
 
+    const debouncedCarregarComponentesLista = debounce(carregarComponentesLista, 300);
+
     buscaInput.addEventListener("input", () => {
-        carregarComponentesLista(buscaInput.value, ordemSelect.value);
+        debouncedCarregarComponentesLista(buscaInput.value, ordemSelect.value);
         saveFilters();
     });
     ordemSelect.addEventListener("change", () => {
-        carregarComponentesLista(buscaInput.value, ordemSelect.value);
+        debouncedCarregarComponentesLista(buscaInput.value, ordemSelect.value);
         saveFilters();
     });
     await carregarComponentesLista(buscaInput.value, ordemSelect.value);
@@ -1413,12 +1425,15 @@ async function montarEstoque() {
         }));
     };
 
+    const debouncedCarregarEstoque = debounce(carregarEstoque, 300);
+    const debouncedCarregarLog = debounce(carregarLog, 300);
+
     buscaEstoque.addEventListener("input", () => {
-        carregarEstoque(buscaEstoque.value, ordemEstoque.value);
+        debouncedCarregarEstoque(buscaEstoque.value, ordemEstoque.value);
         saveFilters();
     });
     ordemEstoque.addEventListener("change", () => {
-        carregarEstoque(buscaEstoque.value, ordemEstoque.value);
+        debouncedCarregarEstoque(buscaEstoque.value, ordemEstoque.value);
         saveFilters();
     });
 
@@ -1434,12 +1449,12 @@ async function montarEstoque() {
         const filteredOptions = componentesUnicos.filter(c => c.toLowerCase().includes(termo))
             .map(c => `<option value="${c}">`);
         logDatalist.innerHTML = filteredOptions.join("");
-        carregarLog(buscaLogComponente.value, filtroLogData.value);
+        debouncedCarregarLog(buscaLogComponente.value, filtroLogData.value);
         saveFilters();
     });
 
     filtroLogData.addEventListener("change", () => {
-        carregarLog(buscaLogComponente.value, filtroLogData.value);
+        debouncedCarregarLog(buscaLogComponente.value, filtroLogData.value);
         saveFilters();
     });
 
@@ -1811,16 +1826,18 @@ async function montarFarmar() {
         saveFilters();
     });
 
+    const debouncedCarregarListaFarmar = debounce(carregarListaFarmar, 300);
+
     buscaInput.addEventListener("input", () => {
-        carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+        debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
         saveFilters();
     });
     categoriaSelect.addEventListener("change", () => {
-        carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+        debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
         saveFilters();
     });
     ordemSelect.addEventListener("change", () => {
-        carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+        debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
         saveFilters();
     });
 
