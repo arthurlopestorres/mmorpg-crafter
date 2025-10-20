@@ -1309,3 +1309,17 @@ body.dark-mode #listaReceitasFarmar li:hover {
     width: 100%;
     margin-bottom: 20px;
 }
+
+#btnInserirNovaReceita {
+    margin-bottom: 20px;
+}
+
+.btn-excluir-roadmap {
+    background-color: red;
+    color: white;
+}
+
+.btn-excluir-roadmap:hover {
+    background-color: white;
+    color: red;
+}

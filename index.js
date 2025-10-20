@@ -1,8 +1,8 @@
 // index.js
 //rodar node servidor.js (no terminal)
 
-const API = "https://mmorpg-crafter.onrender.com";
-// const API = "http://localhost:10000";
+// const API = "https://mmorpg-crafter.onrender.com";
+const API = "http://localhost:10000";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
 
 const conteudo = document.getElementById("conteudo");
@@ -148,6 +148,7 @@ function initMenu() {
         { section: "estoque", text: "Estoque de componentes" },
         { section: "receitas", text: "Receitas" },
         { section: "farmar", text: "Favoritos" },
+        { section: "roadmap", text: "Roadmap" },
         { section: "arquivados", text: "Arquivados" },
     ];
     sections.forEach(sec => {
@@ -416,6 +417,7 @@ async function carregarSecao(secao) {
     if (secao === "estoque") return montarEstoque();
     if (secao === "arquivados") return montarArquivados();
     if (secao === "farmar") return montarFarmar();
+    if (secao === "roadmap") return montarRoadmap();
     conteudo.innerHTML = `<h1 class="home--titulo-principal">Bem-vindo!</h1>
 <p>Essa aplicação tem como finalidade servir como calculadora e gestão de estoque para qualquer jogo de RPG (aqueles que envolvem craft e coleta de itens)!</p>
 <p>No momento, estamos jogando somente o jogo Pax Dei, por isso, seguem alguns links úteis para o jogo:</p>
@@ -1177,6 +1179,9 @@ async function montarComponentes() {
             <option value="az">Alfabética A-Z</option>
             <option value="za">Alfabética Z-A</option>
         </select>
+        <select id="filtroCategoriaComponentes">
+            <option value="">Todas as categorias</option>
+        </select>
         <button id="btnNovoComponente" class="primary">+ Novo Componente</button>
     </div>
     <div id="lista-componentes" class="lista"></div>
@@ -1184,34 +1189,52 @@ async function montarComponentes() {
     document.getElementById("btnNovoComponente").addEventListener("click", () => abrirPopupComponente());
     const buscaInput = document.getElementById("buscaComponentes");
     const ordemSelect = document.getElementById("ordemComponentes");
+    const categoriaSelect = document.getElementById("filtroCategoriaComponentes");
 
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const savedFilters = JSON.parse(localStorage.getItem(`componentesFilters_${currentGame}`)) || {};
     buscaInput.value = savedFilters.termoBusca || "";
     ordemSelect.value = savedFilters.ordem || "az";
+    categoriaSelect.value = savedFilters.categoria || "";
 
     const saveFilters = () => {
         localStorage.setItem(`componentesFilters_${currentGame}`, JSON.stringify({
             termoBusca: buscaInput.value,
-            ordem: ordemSelect.value
+            ordem: ordemSelect.value,
+            categoria: categoriaSelect.value
         }));
     };
 
     const debouncedCarregarComponentesLista = debounce(carregarComponentesLista, 300);
 
     buscaInput.addEventListener("input", () => {
-        debouncedCarregarComponentesLista(buscaInput.value, ordemSelect.value);
+        debouncedCarregarComponentesLista(buscaInput.value, ordemSelect.value, categoriaSelect.value);
         saveFilters();
     });
     ordemSelect.addEventListener("change", () => {
-        debouncedCarregarComponentesLista(buscaInput.value, ordemSelect.value);
+        debouncedCarregarComponentesLista(buscaInput.value, ordemSelect.value, categoriaSelect.value);
         saveFilters();
     });
-    await carregarComponentesLista(buscaInput.value, ordemSelect.value);
+    categoriaSelect.addEventListener("change", () => {
+        debouncedCarregarComponentesLista(buscaInput.value, ordemSelect.value, categoriaSelect.value);
+        saveFilters();
+    });
+    await carregarComponentesLista(buscaInput.value, ordemSelect.value, categoriaSelect.value);
     await carregarCategoriasDatalist();
+    await carregarCategoriasSelect();
 }
 
-async function carregarComponentesLista(termoBusca = "", ordem = "az") {
+async function carregarCategoriasSelect() {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const comps = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const categorias = [...new Set(comps.map(c => c.categoria).filter(Boolean))].sort();
+    const select = document.getElementById("filtroCategoriaComponentes");
+    if (select) {
+        select.innerHTML = '<option value="">Todas as categorias</option>' + categorias.map(cat => `<option value="${cat}">${cat}</option>`).join("");
+    }
+}
+
+async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria = "") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     let url = `${API}/componentes?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
     if (termoBusca) {
@@ -1219,7 +1242,11 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az") {
     } else {
         url += `&limit=10`;
     }
-    const comps = await fetch(url, { credentials: 'include' }).then(r => r.json());
+    let comps = await fetch(url, { credentials: 'include' }).then(r => r.json());
+
+    if (categoria) {
+        comps = comps.filter(c => c.categoria === categoria);
+    }
 
     const div = document.getElementById("lista-componentes");
     div.innerHTML = comps.map(c => {
@@ -2008,15 +2035,15 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
         // Verificar botões fabricar inicialmente
         document.querySelectorAll("#listaFarmar .item").forEach(async item => {
             const componenteNome = item.dataset.componente;
-            const m = listaMaterias.find(mat => mat.nome === componenteNome);
-            const component = componentes.find(c => c.nome === componenteNome);
-            if (component && component.associados && component.associados.length > 0) {
-                let qtdProd = component.quantidadeProduzida || 1;
-                let pendente = m.pendente;
+            const componente = componentes.find(c => c.nome === componenteNome);
+            if (componente && componente.associados && componente.associados.length > 0) {
+                let qtdProd = componente.quantidadeProduzida || 1;
+                const m = listaMaterias.find(mat => mat.nome === componenteNome);
+                let pendente = m ? m.pendente : 0;
                 let numCrafts = Math.ceil(pendente / qtdProd);
                 let canFabricate = pendente > 0;
                 if (canFabricate) {
-                    for (const assoc of component.associados) {
+                    for (const assoc of componente.associados) {
                         const subDisp = estoqueMap[assoc.nome] || 0;
                         if (subDisp < assoc.quantidade * numCrafts) {
                             canFabricate = false;
@@ -2070,6 +2097,271 @@ async function fabricarComponente(nome, numCrafts = 1) {
     } catch (error) {
         mostrarErro("Erro ao fabricar componente: " + error.message);
     }
+}
+
+/* ------------------ ROADMAP ------------------ */
+async function montarRoadmap() {
+    conteudo.innerHTML = `
+    <h2>Roadmap</h2>
+    <div class="filtros">
+        <label><input type="checkbox" id="filtroProntasRoadmap"> Visualizar somente receitas prontas</label>
+    </div>
+    <button id="btnInserirNovaReceita" class="primary">Inserir nova receita</button>
+    <div id="listaRoadmap" class="lista" style="flex-direction: column;"></div>
+    `;
+
+    document.getElementById("btnInserirNovaReceita").addEventListener("click", mostrarPopupAdicionarReceitaRoadmap);
+
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const savedFilters = JSON.parse(localStorage.getItem(`roadmapFilters_${currentGame}`)) || {};
+    const filtroProntas = document.getElementById("filtroProntasRoadmap");
+    filtroProntas.checked = savedFilters.onlyCompleted || false;
+
+    const saveFilters = () => {
+        localStorage.setItem(`roadmapFilters_${currentGame}`, JSON.stringify({
+            onlyCompleted: filtroProntas.checked
+        }));
+    };
+
+    filtroProntas.addEventListener("change", () => {
+        carregarListaRoadmap(filtroProntas.checked);
+        saveFilters();
+    });
+
+    await carregarListaRoadmap(filtroProntas.checked);
+}
+
+async function carregarListaRoadmap(onlyCompleted = false) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const quantitiesKey = `recipeQuantities_${currentGame}`;
+    let quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
+    const roadmap = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
+    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const estoque = {};
+    estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
+
+    const div = document.getElementById("listaRoadmap");
+    div.innerHTML = roadmap.map((item, index) => {
+        if (onlyCompleted && !item.completed) return '';
+        const receita = receitas.find(r => r.nome === item.name);
+        if (!receita) return '';
+        const id = `roadmap-${item.name.replace(/\s/g, '-')}-${index}`;
+        const comps = (receita.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
+        const savedQtd = quantities[item.name] || 1;
+        return `
+        <div class="item" style="${item.completed ? 'background-color: green;' : ''}" data-receita="${item.name}" data-index="${index}">
+          <div class="receita-header">
+            <div class="receita-header--container1">
+              <div style="margin-right: 15px;">
+                <strong class="receita-header--titulo">${item.name}</strong>
+                ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
+                <input type="number" class="qtd-desejada" min="0.001" step="any" value="${savedQtd}" data-receita="${item.name}">
+              </div>
+              <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>
+            </div>
+            <div>
+              <label><input type="checkbox" class="checkbox-completed" ${item.completed ? 'checked' : ''}> Pronto</label>
+              <button class="btn-move-up">↑</button>
+              <button class="btn-move-down">↓</button>
+              <button class="btn-excluir-roadmap">Excluir</button>
+            </div>
+          </div>
+          <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
+        </div>`;
+    }).join("");
+
+    document.querySelectorAll("#listaRoadmap .toggle-detalhes").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const targetId = btn.dataset.target;
+            const detalhes = document.getElementById(targetId);
+            const isVisible = detalhes.style.display !== "none";
+            detalhes.style.display = isVisible ? "none" : "block";
+            btn.textContent = isVisible ? "▼" : "▲";
+            if (!isVisible) {
+                const itemElement = btn.closest(".item");
+                const receitaNome = itemElement.dataset.receita;
+                const qtd = Math.max(Number(itemElement.querySelector(".qtd-desejada").value) || 0.001, 0.001);
+                await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
+            }
+        });
+    });
+
+    document.querySelectorAll("#listaRoadmap .qtd-desejada").forEach(input => {
+        input.addEventListener("input", async () => {
+            const itemElement = input.closest(".item");
+            const receitaNome = itemElement.dataset.receita;
+            const qtd = Math.max(Number(input.value) || 0.001, 0.001);
+            quantities[receitaNome] = qtd;
+            localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
+            const detalhes = itemElement.querySelector(".detalhes");
+            if (detalhes && detalhes.style.display !== "none") {
+                await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
+            }
+        });
+    });
+
+    document.querySelectorAll("#listaRoadmap .checkbox-completed").forEach(cb => {
+        cb.addEventListener("change", async () => {
+            const itemElement = cb.closest(".item");
+            const index = parseInt(itemElement.dataset.index);
+            const completed = cb.checked;
+            await atualizarRoadmapItem(index, { completed });
+            itemElement.style.backgroundColor = completed ? 'green' : '';
+        });
+    });
+
+    document.querySelectorAll("#listaRoadmap .btn-move-up").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const itemElement = btn.closest(".item");
+            const index = parseInt(itemElement.dataset.index);
+            if (index > 0) {
+                await reordenarRoadmap(index, index - 1);
+            }
+        });
+    });
+
+    document.querySelectorAll("#listaRoadmap .btn-move-down").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const itemElement = btn.closest(".item");
+            const index = parseInt(itemElement.dataset.index);
+            await reordenarRoadmap(index, index + 1);
+        });
+    });
+
+    document.querySelectorAll("#listaRoadmap .btn-excluir-roadmap").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const itemElement = btn.closest(".item");
+            const index = parseInt(itemElement.dataset.index);
+            await excluirRoadmapItem(index);
+        });
+    });
+}
+
+async function excluirRoadmapItem(index) {
+    if (!confirm("Confirmar exclusão da receita do Roadmap?")) return;
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    try {
+        const roadmap = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+        roadmap.splice(index, 1);
+        const response = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(roadmap),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
+        } else {
+            mostrarErro(data.erro || "Erro ao excluir do roadmap");
+        }
+    } catch (error) {
+        mostrarErro("Erro ao excluir do roadmap: " + error.message);
+    }
+}
+
+async function atualizarRoadmapItem(index, updates) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const roadmap = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    if (roadmap[index]) {
+        Object.assign(roadmap[index], updates);
+        await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(roadmap),
+            credentials: 'include'
+        });
+        await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
+    }
+}
+
+async function reordenarRoadmap(fromIndex, toIndex) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const roadmap = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    if (toIndex >= 0 && toIndex < roadmap.length) {
+        const [moved] = roadmap.splice(fromIndex, 1);
+        roadmap.splice(toIndex, 0, moved);
+        await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(roadmap),
+            credentials: 'include'
+        });
+        await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
+    }
+}
+
+function mostrarPopupAdicionarReceitaRoadmap() {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupAdicionarRoadmap";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.innerHTML = `
+        <h2>Adicionar Receita ao Roadmap</h2>
+        <form id="formAdicionarRoadmap">
+            <input type="text" id="searchReceitaRoadmap" list="receitasDatalistRoadmap" placeholder="Digite para buscar receita..." required>
+            <datalist id="receitasDatalistRoadmap"></datalist>
+            <select id="posicaoRoadmap">
+                <option value="end">Adicionar no final</option>
+                <option value="start">Adicionar no início</option>
+            </select>
+            <button type="submit">Adicionar</button>
+            <button type="button" id="btnCancelarAdicionarRoadmap">Cancelar</button>
+        </form>
+    `;
+    document.body.appendChild(popup);
+
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).then(receitas => {
+        const datalist = document.getElementById("receitasDatalistRoadmap");
+        datalist.innerHTML = receitas.map(r => `<option value="${r.nome}">`).join("");
+
+        const input = document.getElementById("searchReceitaRoadmap");
+        input.addEventListener("input", () => {
+            const termo = input.value.toLowerCase();
+            const filtered = receitas.filter(r => r.nome.toLowerCase().includes(termo));
+            datalist.innerHTML = filtered.map(r => `<option value="${r.nome}">`).join("");
+        });
+    });
+
+    document.getElementById("formAdicionarRoadmap").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const nome = document.getElementById("searchReceitaRoadmap").value.trim();
+        const posicao = document.getElementById("posicaoRoadmap").value;
+        if (!nome) {
+            mostrarErro("Selecione uma receita");
+            return;
+        }
+        const roadmap = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
+        const newItem = { name: nome, completed: false };
+        if (posicao === "start") {
+            roadmap.unshift(newItem);
+        } else {
+            roadmap.push(newItem);
+        }
+        await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(roadmap),
+            credentials: 'include'
+        });
+        popup.remove();
+        overlay.remove();
+        await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
+    });
+
+    document.getElementById("btnCancelarAdicionarRoadmap").addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+    });
 }
 
 /* ------------------ UTIL ------------------ */

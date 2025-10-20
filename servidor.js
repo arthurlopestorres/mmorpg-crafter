@@ -61,7 +61,7 @@ async function inicializarArquivos() {
             await fs.access(gameDir);
         } catch {
             await fs.mkdir(gameDir);
-            const filesToMove = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json'];
+            const filesToMove = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json'];
             for (const file of filesToMove) {
                 const oldPath = path.join(DATA_DIR, file);
                 const newPath = path.join(gameDir, file);
@@ -212,10 +212,10 @@ app.put('/data/usuarios', async (req, res) => {
 });
 
 // Endpoint: Troca de senha (protegido por headers)
-app.put('/data/usuarios/troca-de-senha', async (req, res) => {
+app.put('/data/usuarios', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
-    const token = req.headers['aisdbfaidfbhyadhiyfad'];
-    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyfad') {
+    const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
+    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyadhadhiyfad') {
         return res.status(403).json({ sucesso: false, erro: 'Acesso negado' });
     }
     const { email, novaSenha } = req.body; // Assumindo novaSenha; ajuste se necessário
@@ -259,7 +259,7 @@ app.post('/games', isAuthenticated, async (req, res) => {
         return res.status(400).json({ sucesso: false, erro: 'Jogo já existe' });
     } catch {
         await fs.mkdir(gameDir);
-        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json'];
+        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json'];
         for (const file of files) {
             await fs.writeFile(path.join(gameDir, file), JSON.stringify([]));
         }
@@ -270,8 +270,8 @@ app.post('/games', isAuthenticated, async (req, res) => {
 // Endpoint para deletar jogo (protegido por headers)
 app.delete('/games/:game', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
-    const token = req.headers['aisdbfaidfbhyadhiyfad'];
-    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyfad') {
+    const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
+    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyadhadhiyfad') {
         return res.status(403).json({ sucesso: false, erro: 'Acesso negado' });
     }
     const game = req.params.game;
@@ -1002,7 +1002,32 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
     }
 });
 
-// Endpoint: Verificar status do servidor (não protegido)
+// Endpoint para roadmap
+app.get('/roadmap', isAuthenticated, async (req, res) => {
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'roadmap.json');
+    try {
+        const data = await fs.readFile(file, 'utf8');
+        res.json(JSON.parse(data));
+    } catch (err) {
+        if (err.code === 'ENOENT') res.json([]);
+        else res.status(500).json({ sucesso: false, erro: 'Erro ao ler roadmap' });
+    }
+});
+
+app.post('/roadmap', isAuthenticated, async (req, res) => {
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'roadmap.json');
+    try {
+        const roadmap = req.body;
+        await fs.writeFile(file, JSON.stringify(roadmap, null, 2));
+        res.json({ sucesso: true });
+    } catch (error) {
+        res.status(500).json({ sucesso: false, erro: 'Erro ao salvar roadmap' });
+    }
+});
+
+// Endpoint para verificar status do servidor (não protegido)
 app.get('/health', (req, res) => {
     console.log('[GET /health] Verificação de status do servidor');
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
