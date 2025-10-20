@@ -1,8 +1,8 @@
 // index.js
 //rodar node servidor.js (no terminal)
 
-const API = "https://mmorpg-crafter.onrender.com";
-// const API = "http://localhost:10000";
+// const API = "https://mmorpg-crafter.onrender.com";
+const API = "http://localhost:10000";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
 
 const conteudo = document.getElementById("conteudo");
@@ -750,6 +750,7 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque) {
     });
 
     let html = "<ul>";
+    let counter = 1;
     for (const comp of receita.componentes) {
         const quantidadeNecessaria = comp.quantidade * qtd;
         const disp = estoque[comp.nome] !== undefined ? estoque[comp.nome] : 0;
@@ -766,15 +767,16 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque) {
 
         html += `
         <li class="${classeLinha}">
-          ${comp.nome} (Nec: ${formatQuantity(quantidadeNecessaria)}, Disp: ${formatQuantity(disp)}, Falta: ${formatQuantity(falta)})
-          ${getComponentChain(comp.nome, quantidadeNecessaria, componentesData, estoque)}
+          <span class="prefix">${counter}-</span> ${comp.nome} (Nec: ${formatQuantity(quantidadeNecessaria)}, Disp: ${formatQuantity(disp)}, Falta: ${formatQuantity(falta)})
+          ${getComponentChain(comp.nome, quantidadeNecessaria, componentesData, estoque, `${counter}.`)}
         </li>`;
+        counter++;
     }
     html += "</ul>";
     detalhes.innerHTML = html;
 }
 
-function getComponentChain(componentName, quantityNeeded, componentesData, estoque) {
+function getComponentChain(componentName, quantityNeeded, componentesData, estoque, prefix = "") {
     const component = componentesData.find(c => c.nome === componentName);
     const disp = estoque[componentName] !== undefined ? estoque[componentName] : 0;
 
@@ -786,6 +788,7 @@ function getComponentChain(componentName, quantityNeeded, componentesData, estoq
     let html = "<ul>";
     const qtdProd = component.quantidadeProduzida || 1;
     const numCrafts = Math.ceil((quantityNeeded - disp) / qtdProd);
+    let subCounter = 1;
     component.associados.forEach(a => {
         const subNec = a.quantidade * numCrafts;
         const subDisp = estoque[a.nome] !== undefined ? estoque[a.nome] : 0;
@@ -802,9 +805,10 @@ function getComponentChain(componentName, quantityNeeded, componentesData, estoq
 
         html += `
         <li class="${classeLinha}">
-          ${a.nome} (Nec: ${formatQuantity(subNec)}, Disp: ${formatQuantity(subDisp)}, Falta: ${formatQuantity(subFalta)})
-          ${getComponentChain(a.nome, subNec, componentesData, estoque)}
+          <span class="prefix">${prefix}${subCounter}-</span> ${a.nome} (Nec: ${formatQuantity(subNec)}, Disp: ${formatQuantity(subDisp)}, Falta: ${formatQuantity(subFalta)})
+          ${getComponentChain(a.nome, subNec, componentesData, estoque, `${prefix}${subCounter}.`)}
         </li>`;
+        subCounter++;
     });
     html += "</ul>";
     return html;
@@ -1373,6 +1377,7 @@ async function montarEstoque() {
           <input id="inputQuantidadeEstoque" type="number" min="0.001" step="any" value="0.001" />
           <button class="primary" type="submit">Confirmar</button>
         </form>
+        <button id="btnZerarEstoque" class="warn">Zerar todo o estoque</button>
         <div id="listaEstoque" class="lista"></div>
       </div>
       <div style="flex:1">
@@ -1501,6 +1506,27 @@ async function montarEstoque() {
         await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
         await carregarLog(buscaLogComponente.value, filtroLogData.value);
     };
+
+    document.getElementById("btnZerarEstoque").addEventListener("click", async () => {
+        if (confirm("Tem certeza que deseja zerar todo o estoque? Essa ação não pode ser desfeita.")) {
+            try {
+                const response = await fetch(`${API}/estoque/zerar?game=${encodeURIComponent(currentGame)}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                if (data.sucesso) {
+                    await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
+                    await carregarLog(buscaLogComponente.value, filtroLogData.value);
+                } else {
+                    mostrarErro(data.erro || "Erro ao zerar estoque");
+                }
+            } catch (error) {
+                mostrarErro("Erro ao zerar estoque: " + error.message);
+            }
+        }
+    });
 
     await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
     await carregarLog(buscaLogComponente.value, filtroLogData.value);

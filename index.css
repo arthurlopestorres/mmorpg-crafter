@@ -316,7 +316,7 @@ button.btn-arquivar:hover {
 }
 
 .receita-header .qtd-desejada {
-    display: none;
+    /* display: none; */
 }
 
 .receita-header--container1 {
@@ -1303,4 +1303,9 @@ body.dark-mode #listaReceitasFarmar li:hover {
     color: black;
     cursor: pointer;
     margin-top: 10px;
+}
+
+#btnZerarEstoque {
+    width: 100%;
+    margin-bottom: 20px;
 }

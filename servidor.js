@@ -800,6 +800,32 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
     }
 });
 
+app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
+    console.log('[POST /estoque/zerar] Requisição recebida');
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'estoque.json');
+    try {
+        let estoque = [];
+        try {
+            estoque = JSON.parse(await fs.readFile(file, 'utf8'));
+        } catch (err) {
+            if (err.code !== 'ENOENT') throw err;
+        }
+
+        // Zerar todas as quantidades
+        estoque.forEach(e => {
+            e.quantidade = 0;
+        });
+
+        await fs.writeFile(file, JSON.stringify(estoque, null, 2));
+        console.log('[POST /estoque/zerar] Estoque zerado');
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /estoque/zerar] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao zerar estoque' });
+    }
+});
+
 app.delete('/data', isAuthenticated, async (req, res) => {
     console.log('[DELETE /data] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
