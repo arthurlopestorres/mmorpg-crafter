@@ -1,8 +1,8 @@
 // index.js
 //rodar node servidor.js (no terminal)
 
-// const API = "https://mmorpg-crafter.onrender.com";
-const API = "http://localhost:10000";
+const API = "https://mmorpg-crafter.onrender.com";
+// const API = "http://localhost:10000";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
 
 const conteudo = document.getElementById("conteudo");
@@ -498,6 +498,8 @@ async function montarReceitas() {
 
 async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorites = false) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const quantitiesKey = `recipeQuantities_${currentGame}`;
+    let quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
     let url = `${API}/receitas?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
     if (termoBusca) {
         url += `&search=${encodeURIComponent(termoBusca)}`;
@@ -537,12 +539,13 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
     div.innerHTML = receitas.filter(r => r.nome).map(r => {
         const id = `receita-${r.nome.replace(/\s/g, '-')}`;
         const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
+        const savedQtd = quantities[r.nome] || 1;
         return `
         <div class="item ${r.favorita ? 'favorita' : ''}" data-receita="${r.nome}">
           <div class="receita-header">
             <div class = "receita-header--container1"><div style="margin-right: 15px;"><strong class= "receita-header--titulo">${r.nome}</strong>
             ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
-            <input type="number" class="qtd-desejada" min="0.001" step="any" value="1" data-receita="${r.nome}"></div>
+            <input type="number" class="qtd-desejada" min="0.001" step="any" value="${savedQtd}" data-receita="${r.nome}"></div>
             <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button></div><div>
             <button class="btn-concluir" data-receita="${r.nome}" disabled>Concluir</button>
             <button class="btn-editar" data-nome="${r.nome}">Editar</button>
@@ -580,6 +583,8 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
             const receitaElement = input.closest(".item");
             const receitaNome = receitaElement.dataset.receita;
             const qtd = Math.max(Number(input.value) || 0.001, 0.001);
+            quantities[receitaNome] = qtd;
+            localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
             const detalhes = receitaElement.querySelector(".detalhes");
             if (detalhes && detalhes.style.display !== "none") {
                 await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
@@ -664,6 +669,8 @@ async function arquivarReceita(receitaNome) {
     }
 
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const quantitiesKey = `recipeQuantities_${currentGame}`;
+    let quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
 
     try {
         // Carregar receitas atuais
@@ -711,6 +718,10 @@ async function arquivarReceita(receitaNome) {
             mostrarErro("Erro ao arquivar receita: " + (arquivadosData.erro || "Falha desconhecida"));
             return;
         }
+
+        // Remover quantidade salva no localStorage
+        delete quantities[receitaNome];
+        localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
 
         // Atualizar UI
         console.log(`[ARQUIVAR] Atualizando interface do usuário para receita: ${receitaNome}`);
@@ -880,6 +891,8 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
     console.log(`[CONCLUIR] Iniciando conclusão da receita: ${receitaNome}, quantidade: ${qtd}`);
 
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const quantitiesKey = `recipeQuantities_${currentGame}`;
+    let quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
 
     const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     console.log("[CONCLUIR] Receitas recebidas do servidor:", receitas);
@@ -988,6 +1001,10 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             mostrarErro("Erro ao arquivar receita.");
             return;
         }
+
+        // Remover quantidade salva no localStorage
+        delete quantities[receitaNome];
+        localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
 
         // Atualizar UI
         console.log("[CONCLUIR] Atualizando interface do usuário");
@@ -1883,6 +1900,8 @@ async function montarFarmar() {
 
 async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", receitaFiltro = "", categoriaFiltro = "") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const quantitiesKey = `recipeQuantities_${currentGame}`;
+    const quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
     const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const receitasFavoritas = receitas.filter(r => r.favorita);
     const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
@@ -1900,9 +1919,10 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
 
     for (const receita of receitasFiltradas) {
         if (!receita.nome) continue;
+        const recipeQuantity = quantities[receita.nome] || 1;
         let req = {};
         receita.componentes.forEach(comp => {
-            const qtdNec = comp.quantidade * 1; // Assumindo qtd desejada = 1 por receita
+            const qtdNec = comp.quantidade * recipeQuantity;
             mergeReq(req, calculateComponentRequirements(comp.nome, qtdNec, componentes, estoqueMap));
         });
         for (const [baseNome, baseQtd] of Object.entries(req)) {
