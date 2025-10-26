@@ -147,7 +147,7 @@ function initMenu() {
         { section: "componentes", text: "Componentes" },
         { section: "estoque", text: "Estoque de componentes" },
         { section: "receitas", text: "Receitas" },
-        { section: "farmar", text: "Favoritos" },
+        { section: "farmar", text: "O que Farmar?" },
         { section: "roadmap", text: "Roadmap" },
         { section: "arquivados", text: "Arquivados" },
     ];
@@ -553,7 +553,7 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
             <button class="btn-editar" data-nome="${r.nome}">Editar</button>
             <button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>
             <button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>
-            <button class="btn-favoritar ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desfavoritar' : 'Favoritar'}</button></div>
+            <button class="btn-favoritar ${r.favorita ? 'Farmando' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desistir' : 'Farmar'}</button></div>
           </div>
           <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
         </div>`;
@@ -656,10 +656,10 @@ async function toggleFavorita(nome, favorita) {
         if (data.sucesso) {
             await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az");
         } else {
-            mostrarErro(data.erro || "Erro ao favoritar receita");
+            mostrarErro(data.erro || "Erro ao Farmar receita");
         }
     } catch (error) {
-        mostrarErro("Erro ao favoritar receita: " + error.message);
+        mostrarErro("Erro ao farmar receita: " + error.message);
     }
 }
 
@@ -1790,7 +1790,7 @@ async function montarFarmar() {
     const categorias = [...new Set(componentes.map(c => c.categoria).filter(Boolean))].sort();
 
     conteudo.innerHTML = `
-    <h2>Favoritos</h2>
+    <h2>O que Farmar?</h2>
     <div class="filtros">
         <input type="text" id="buscaFarmar" placeholder="Buscar por matéria prima...">
         <div class="multi-select-wrapper">
