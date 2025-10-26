@@ -4,28 +4,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciador de Receitas</title>
+    <title>MMORPG Crafter - Gerenciador de Receitas</title>
     <link rel="stylesheet" href="index.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700&display=swap"
+        rel="stylesheet">
 </head>
 
 <body class="bright-mode">
-    <button id="themeToggle">Mudar para Dark Mode</button>
-    <div id="botaoDeMinimizarMenu">Minimizar Menu</div>
+    <button id="themeToggle">
+        <span class="theme-icon">🌙</span>
+        <span class="theme-text">Modo Escuro</span>
+    </button>
+    <div id="botaoDeMinimizarMenu">
+        <span class="menu-icon">◀</span>
+        <span class="menu-text">Minimizar</span>
+    </div>
     <div class="container">
         <aside>
+            <div class="sidebar-header">
+                <h1 class="app-title">MMORPG Crafter</h1>
+                <p class="app-subtitle">Gerenciador de Receitas</p>
+            </div>
             <ul class="menu">
-                <li data-section="home">Home</li>
-                <li data-section="receitas">Receitas</li>
-                <li data-section="componentes">Componentes</li>
-                <li data-section="estoque">Estoque de Componentes</li>
-                <li data-section="arquivados">Arquivados</li>
-                <li data-section="farmar">Favoritos</li>
+                <li data-section="home">
+                    <span class="menu-item-icon">🏠</span>
+                    <span class="menu-item-text">Home</span>
+                </li>
+                <li data-section="receitas">
+                    <span class="menu-item-icon">📜</span>
+                    <span class="menu-item-text">Receitas</span>
+                </li>
+                <li data-section="componentes">
+                    <span class="menu-item-icon">🧩</span>
+                    <span class="menu-item-text">Componentes</span>
+                </li>
+                <li data-section="estoque">
+                    <span class="menu-item-icon">📦</span>
+                    <span class="menu-item-text">Estoque de Componentes</span>
+                </li>
+                <li data-section="arquivados">
+                    <span class="menu-item-icon">📁</span>
+                    <span class="menu-item-text">Arquivados</span>
+                </li>
+                <li data-section="farmar">
+                    <span class="menu-item-icon">⭐</span>
+                    <span class="menu-item-text">Favoritos</span>
+                </li>
             </ul>
         </aside>
         <main id="conteudo"></main>
     </div>
 
-    <!-- Modal de erro -->
     <div id="modalErro" class="modal">
         <div class="modal-content">
             <span id="fecharModal" class="close">&times;</span>
@@ -33,12 +65,14 @@
         </div>
     </div>
 
-    <!-- Popup de Receita -->
     <div id="popupReceita" class="modal">
         <div class="modal-content">
             <h2 id="tituloPopupReceita">Nova Receita</h2>
             <form id="formReceita">
-                <input type="text" id="receitaNome" placeholder="Nome da receita" required>
+                <div class="form-group">
+                    <label for="receitaNome">Nome da Receita</label>
+                    <input type="text" id="receitaNome" placeholder="Digite o nome da receita" required>
+                </div>
                 <input type="hidden" id="inputNomeOriginalReceita">
                 <div id="receitaAssociadosContainer"></div>
                 <button type="button" id="btnAddReceitaAssoc" class="primary">+ Adicionar Componente</button>
@@ -50,17 +84,26 @@
         </div>
     </div>
 
-    <!-- Popup de Componente -->
     <div id="popupComponente" class="modal">
         <div class="modal-content">
             <h2 id="tituloPopup">Novo Componente</h2>
             <form id="formComponente">
-                <input type="text" id="inputNome" placeholder="Nome do componente" required>
+                <div class="form-group">
+                    <label for="inputNome">Nome do Componente</label>
+                    <input type="text" id="inputNome" placeholder="Digite o nome do componente" required>
+                </div>
                 <input type="hidden" id="inputNomeOriginal">
-                <input type="text" id="inputCategoria" placeholder="Categoria" list="categoriasDatalist">
-                <datalist id="categoriasDatalist"></datalist>
-                <input type="number" id="inputQuantidadeProduzida" min="0.001" step="any" value="0.001"
-                    placeholder="Quantidade produzida">
+                <div class="form-group">
+                    <label for="inputCategoria">Categoria</label>
+                    <input type="text" id="inputCategoria" placeholder="Selecione ou digite a categoria"
+                        list="categoriasDatalist">
+                    <datalist id="categoriasDatalist"></datalist>
+                </div>
+                <div class="form-group">
+                    <label for="inputQuantidadeProduzida">Quantidade Produzida</label>
+                    <input type="number" id="inputQuantidadeProduzida" min="0.001" step="any" value="0.001"
+                        placeholder="Quantidade produzida">
+                </div>
                 <div id="associadosContainer"></div>
                 <button type="button" id="btnAddAssociado" class="primary">+ Adicionar Material</button>
                 <div class="form-actions">
