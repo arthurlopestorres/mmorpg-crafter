@@ -743,7 +743,7 @@ async function arquivarReceita(receitaNome) {
     }
 }
 
-async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque) {
+async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, collapsible = false) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const receita = receitas.find(r => r.nome === receitaNome);
@@ -780,18 +780,44 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque) {
             classeLinha = 'comp-vermelho'; // Vermelho, sem negrito
         }
 
+        const component = componentesData.find(c => c.nome === comp.nome);
+        const hasSubs = component && component.associados && component.associados.length > 0;
+        let toggleHtml = '';
+        if (collapsible && hasSubs) {
+            toggleHtml = `<button class="toggle-sub">▼</button>`;
+        }
+
         html += `
         <li class="${classeLinha}">
+          ${toggleHtml}
           <span class="prefix">${counter}-</span> ${comp.nome} (Nec: ${formatQuantity(quantidadeNecessaria)}, Disp: ${formatQuantity(disp)}, Falta: ${formatQuantity(falta)})
-          ${getComponentChain(comp.nome, quantidadeNecessaria, componentesData, estoque, `${counter}.`)}
+          ${getComponentChain(comp.nome, quantidadeNecessaria, componentesData, estoque, `${counter}.`, collapsible)}
         </li>`;
         counter++;
     }
     html += "</ul>";
     detalhes.innerHTML = html;
+
+    if (collapsible) {
+        detalhes.querySelectorAll('.toggle-sub').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const li = btn.closest('li');
+                const ul = li.querySelector('ul');
+                if (ul) {
+                    if (ul.style.display === 'none') {
+                        ul.style.display = 'block';
+                        btn.textContent = '▼';
+                    } else {
+                        ul.style.display = 'none';
+                        btn.textContent = '▶';
+                    }
+                }
+            });
+        });
+    }
 }
 
-function getComponentChain(componentName, quantityNeeded, componentesData, estoque, prefix = "") {
+function getComponentChain(componentName, quantityNeeded, componentesData, estoque, prefix = "", collapsible = false) {
     const component = componentesData.find(c => c.nome === componentName);
     const disp = estoque[componentName] !== undefined ? estoque[componentName] : 0;
 
@@ -818,10 +844,18 @@ function getComponentChain(componentName, quantityNeeded, componentesData, estoq
             classeLinha = 'comp-vermelho'; // Vermelho, sem negrito
         }
 
+        const subComponent = componentesData.find(c => c.nome === a.nome);
+        const hasSubs = subComponent && subComponent.associados && subComponent.associados.length > 0;
+        let toggleHtml = '';
+        if (collapsible && hasSubs) {
+            toggleHtml = `<button class="toggle-sub">▼</button>`;
+        }
+
         html += `
         <li class="${classeLinha}">
+          ${toggleHtml}
           <span class="prefix">${prefix}${subCounter}-</span> ${a.nome} (Nec: ${formatQuantity(subNec)}, Disp: ${formatQuantity(subDisp)}, Falta: ${formatQuantity(subFalta)})
-          ${getComponentChain(a.nome, subNec, componentesData, estoque, `${prefix}${subCounter}.`)}
+          ${getComponentChain(a.nome, subNec, componentesData, estoque, `${prefix}${subCounter}.`, collapsible)}
         </li>`;
         subCounter++;
     });
@@ -2182,7 +2216,7 @@ async function carregarListaRoadmap(onlyCompleted = false) {
                 const itemElement = btn.closest(".item");
                 const receitaNome = itemElement.dataset.receita;
                 const qtd = Math.max(Number(itemElement.querySelector(".qtd-desejada").value) || 0.001, 0.001);
-                await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
+                await atualizarDetalhes(receitaNome, qtd, componentes, estoque, true);
             }
         });
     });
@@ -2196,7 +2230,7 @@ async function carregarListaRoadmap(onlyCompleted = false) {
             localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
             const detalhes = itemElement.querySelector(".detalhes");
             if (detalhes && detalhes.style.display !== "none") {
-                await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
+                await atualizarDetalhes(receitaNome, qtd, componentes, estoque, true);
             }
         });
     });
