@@ -61,7 +61,7 @@ async function inicializarArquivos() {
             await fs.access(gameDir);
         } catch {
             await fs.mkdir(gameDir);
-            const filesToMove = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json'];
+            const filesToMove = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json'];
             for (const file of filesToMove) {
                 const oldPath = path.join(DATA_DIR, file);
                 const newPath = path.join(gameDir, file);
@@ -259,7 +259,7 @@ app.post('/games', isAuthenticated, async (req, res) => {
         return res.status(400).json({ sucesso: false, erro: 'Jogo já existe' });
     } catch {
         await fs.mkdir(gameDir);
-        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json'];
+        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json'];
         for (const file of files) {
             await fs.writeFile(path.join(gameDir, file), JSON.stringify([]));
         }
@@ -432,6 +432,76 @@ app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
     }
 });
 
+app.get('/categorias', isAuthenticated, async (req, res) => {
+    console.log('[GET /categorias] Requisição recebida');
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'categorias.json');
+    try {
+        let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        res.json(data);
+    } catch (err) {
+        console.error('[GET /categorias] Erro:', err);
+        if (err.code === 'ENOENT') res.json([]);
+        else res.status(500).json({ sucesso: false, erro: 'Erro ao ler categorias' });
+    }
+});
+
+app.post('/categorias', isAuthenticated, async (req, res) => {
+    console.log('[POST /categorias] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const file = getFilePath(game, 'categorias.json');
+    try {
+        const { nome } = req.body;
+        if (!nome) {
+            console.log('[POST /categorias] Erro: Nome ausente');
+            return res.status(400).json({ sucesso: false, erro: 'Nome é obrigatório' });
+        }
+
+        let categorias = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        if (categorias.includes(nome)) {
+            console.log('[POST /categorias] Erro: Categoria já existe:', nome);
+            return res.status(400).json({ sucesso: false, erro: 'Categoria já existe' });
+        }
+
+        categorias.push(nome);
+        categorias.sort();
+        await fs.writeFile(file, JSON.stringify(categorias, null, 2));
+        console.log('[POST /categorias] Categoria adicionada:', nome);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /categorias] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao salvar categoria' });
+    }
+});
+
+app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
+    console.log('[POST /categorias/excluir] Requisição recebida:', req.body);
+    const game = req.query.game || DEFAULT_GAME;
+    const { nome } = req.body;
+    if (!nome) {
+        console.log('[POST /categorias/excluir] Erro: Nome ausente');
+        return res.status(400).json({ sucesso: false, erro: 'Nome é obrigatório' });
+    }
+    const catFile = getFilePath(game, 'categorias.json');
+    const compFile = getFilePath(game, 'componentes.json');
+    try {
+        let comps = await fs.readFile(compFile, 'utf8').then(JSON.parse).catch(() => []);
+        if (comps.some(c => c.categoria === nome)) {
+            console.log('[POST /categorias/excluir] Erro: Categoria em uso:', nome);
+            return res.status(400).json({ sucesso: false, erro: 'Categoria em uso' });
+        }
+
+        let categorias = await fs.readFile(catFile, 'utf8').then(JSON.parse).catch(() => []);
+        categorias = categorias.filter(c => c !== nome);
+        await fs.writeFile(catFile, JSON.stringify(categorias, null, 2));
+        console.log('[POST /categorias/excluir] Categoria excluída:', nome);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /categorias/excluir] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao excluir categoria' });
+    }
+});
+
 app.get('/componentes', isAuthenticated, async (req, res) => {
     console.log('[GET /componentes] Requisição recebida');
     const game = req.query.game || DEFAULT_GAME;
@@ -467,6 +537,7 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
     const game = req.query.game || DEFAULT_GAME;
     const file = getFilePath(game, 'componentes.json');
     const estoqueFileGame = getFilePath(game, 'estoque.json');
+    const catFile = getFilePath(game, 'categorias.json');
     try {
         const novoComponente = req.body;
         if (!novoComponente.nome) {
@@ -489,6 +560,16 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
         componentes.push(novoComponente);
         await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes] Componente adicionado:', novoComponente.nome);
+
+        // Adicionar categoria se nova
+        const categoria = novoComponente.categoria;
+        let cats = await fs.readFile(catFile, 'utf8').then(JSON.parse).catch(() => []);
+        if (categoria && !cats.includes(categoria)) {
+            cats.push(categoria);
+            cats.sort();
+            await fs.writeFile(catFile, JSON.stringify(cats, null, 2));
+            console.log('[POST /componentes] Categoria adicionada:', categoria);
+        }
 
         // Adicionar automaticamente ao estoque com quantidade 0 se não existir
         let estoque = [];
@@ -518,6 +599,7 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
     const file = getFilePath(game, 'componentes.json');
     const estoqueFileGame = getFilePath(game, 'estoque.json');
     const receitasFileGame = getFilePath(game, 'receitas.json');
+    const catFile = getFilePath(game, 'categorias.json');
     try {
         const { nomeOriginal, nome, categoria, associados, quantidadeProduzida } = req.body;
         if (!nomeOriginal || !nome) {
@@ -546,6 +628,15 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
         componentes[index] = { nome, categoria, associados, quantidadeProduzida };
         await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes/editar] Componente editado:', nomeOriginal, '->', nome);
+
+        // Adicionar categoria se nova
+        let cats = await fs.readFile(catFile, 'utf8').then(JSON.parse).catch(() => []);
+        if (categoria && !cats.includes(categoria)) {
+            cats.push(categoria);
+            cats.sort();
+            await fs.writeFile(catFile, JSON.stringify(cats, null, 2));
+            console.log('[POST /componentes/editar] Categoria adicionada:', categoria);
+        }
 
         // Se o nome mudou, propagar a mudança para estoque, receitas e outros componentes
         if (nome !== nomeOriginal) {

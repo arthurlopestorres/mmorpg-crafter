@@ -549,10 +549,6 @@ form select:focus {
     font-size: 12px;
 }
 
-#popupEditarEstoque h2 {
-    color: black;
-}
-
 #limparFiltrosLog {
     background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: white;
@@ -991,7 +987,7 @@ body.dark-mode #popupLogin h2,
 body.dark-mode #popupCadastro h2,
 body.dark-mode #popupNovoJogo h2,
 body.dark-mode #popupEditarEstoque h2 {
-    color: white;
+    color: black;
 }
 
 body.dark-mode .home.lista-de-recomendacoes a {
@@ -1322,4 +1318,84 @@ body.dark-mode #listaReceitasFarmar li:hover {
 .btn-excluir-roadmap:hover {
     background-color: white;
     color: red;
+}
+
+#popupCategoria h2 {
+    color: black;
+}
+
+#btnCriarCategorias {
+    cursor: pointer;
+    background: var(--background-botoes);
+    color: var(--corLetra-botoes);
+    padding: 5px;
+}
+
+#btnCriarCategorias:hover {
+    cursor: pointer;
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+    transform: translateY(-1px);
+    color: var(--corLetra-botoes);
+    padding: 5px;
+}
+
+#btnCancelarCategoria {
+    cursor: pointer;
+    background: darkred;
+    color: white;
+    padding: 5px;
+}
+
+#btnCancelarCategoria:hover {
+    cursor: pointer;
+    background: rgb(54, 1, 1);
+    color: white;
+    transform: translateY(-1px);
+    padding: 5px;
+}
+
+#listaArquivados .warn {
+    margin-top: 10px;
+}
+
+#receitaAssociadosContainer .associado-row {
+    margin-bottom: 5px;
+}
+
+#associadosContainer .associado-row {
+    margin-bottom: 5px;
+}
+
+#popupAdicionarRoadmap h2 {
+    color: black;
+}
+
+#btnAdicionarRoadmap {
+    cursor: pointer;
+    background: var(--background-botoes);
+    color: var(--corLetra-botoes);
+    padding: 5px;
+}
+
+#btnAdicionarRoadmap:hover {
+    cursor: pointer;
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+    transform: translateY(-1px);
+    color: var(--corLetra-botoes);
+    padding: 5px;
+}
+
+#btnCancelarAdicionarRoadmap {
+    cursor: pointer;
+    background: darkred;
+    color: white;
+    padding: 5px;
+}
+
+#btnCancelarAdicionarRoadmap:hover {
+    cursor: pointer;
+    background: rgb(54, 1, 1);
+    color: white;
+    transform: translateY(-1px);
+    padding: 5px;
 }

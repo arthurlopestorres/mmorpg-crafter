@@ -144,6 +144,7 @@ function initMenu() {
     menu.innerHTML = ''; // Limpar menu existente para reordenar
     const sections = [
         { section: "home", text: "Home" },
+        { section: "categorias", text: "Categorias" },
         { section: "componentes", text: "Componentes" },
         { section: "estoque", text: "Estoque de componentes" },
         { section: "receitas", text: "Receitas" },
@@ -418,6 +419,7 @@ async function carregarSecao(secao) {
     if (secao === "arquivados") return montarArquivados();
     if (secao === "farmar") return montarFarmar();
     if (secao === "roadmap") return montarRoadmap();
+    if (secao === "categorias") return montarCategorias();
     conteudo.innerHTML = `<h1 class="home--titulo-principal">Bem-vindo!</h1>
 <p>Essa aplicação tem como finalidade servir como calculadora e gestão de estoque para qualquer jogo de RPG (aqueles que envolvem craft e coleta de itens)!</p>
 <p>No momento, estamos jogando somente o jogo Pax Dei, por isso, seguem alguns links úteis para o jogo:</p>
@@ -1226,8 +1228,7 @@ async function montarComponentes() {
 
 async function carregarCategoriasSelect() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const comps = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const categorias = [...new Set(comps.map(c => c.categoria).filter(Boolean))].sort();
+    const categorias = await fetch(`${API}/categorias?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const select = document.getElementById("filtroCategoriaComponentes");
     if (select) {
         select.innerHTML = '<option value="">Todas as categorias</option>' + categorias.map(cat => `<option value="${cat}">${cat}</option>`).join("");
@@ -1391,8 +1392,7 @@ async function excluirComponente(nome) {
 
 async function carregarCategoriasDatalist() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const comps = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const categorias = [...new Set(comps.map(c => c.categoria).filter(Boolean))];
+    const categorias = await fetch(`${API}/categorias?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const datalist = document.getElementById("categoriasDatalist");
     if (datalist) datalist.innerHTML = categorias.map(x => `<option value="${x}">`).join("");
 }
@@ -1784,10 +1784,9 @@ async function excluirArquivado(nome) {
 /* ------------------ O QUE FARMAR? ------------------ */
 async function montarFarmar() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const categorias = await fetch(`${API}/categorias?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const receitasFavoritas = receitas.filter(r => r.favorita);
-    const categorias = [...new Set(componentes.map(c => c.categoria).filter(Boolean))].sort();
 
     conteudo.innerHTML = `
     <h2>Favoritos</h2>
@@ -2313,7 +2312,7 @@ function mostrarPopupAdicionarReceitaRoadmap() {
                 <option value="end">Adicionar no final</option>
                 <option value="start">Adicionar no início</option>
             </select>
-            <button type="submit">Adicionar</button>
+            <button type="submit" id="btnAdicionarRoadmap">Adicionar</button>
             <button type="button" id="btnCancelarAdicionarRoadmap">Cancelar</button>
         </form>
     `;
@@ -2362,6 +2361,168 @@ function mostrarPopupAdicionarReceitaRoadmap() {
         popup.remove();
         overlay.remove();
     });
+}
+
+/* ------------------ CATEGORIAS ------------------ */
+async function montarCategorias() {
+    conteudo.innerHTML = `
+    <h2>Categorias</h2>
+    <div class="filtros">
+        <input type="text" id="buscaCategorias" placeholder="Buscar por nome...">
+        <select id="ordemCategorias">
+            <option value="az">Alfabética A-Z</option>
+            <option value="za">Alfabética Z-A</option>
+        </select>
+        <button id="btnNovaCategoria" class="primary">+ Nova Categoria</button>
+    </div>
+    <div id="lista-categorias" class="lista"></div>
+    `;
+    document.getElementById("btnNovaCategoria").addEventListener("click", () => abrirPopupCategoria(null));
+    const buscaInput = document.getElementById("buscaCategorias");
+    const ordemSelect = document.getElementById("ordemCategorias");
+
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const savedFilters = JSON.parse(localStorage.getItem(`categoriasFilters_${currentGame}`)) || {};
+    buscaInput.value = savedFilters.termoBusca || "";
+    ordemSelect.value = savedFilters.ordem || "az";
+
+    const saveFilters = () => {
+        localStorage.setItem(`categoriasFilters_${currentGame}`, JSON.stringify({
+            termoBusca: buscaInput.value,
+            ordem: ordemSelect.value
+        }));
+    };
+
+    const debouncedCarregarCategoriasLista = debounce(carregarCategoriasLista, 300);
+
+    buscaInput.addEventListener("input", () => {
+        debouncedCarregarCategoriasLista(buscaInput.value, ordemSelect.value);
+        saveFilters();
+    });
+    ordemSelect.addEventListener("change", () => {
+        debouncedCarregarCategoriasLista(buscaInput.value, ordemSelect.value);
+        saveFilters();
+    });
+    await carregarCategoriasLista(buscaInput.value, ordemSelect.value);
+}
+
+async function carregarCategoriasLista(termoBusca = "", ordem = "az") {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    let categorias = await fetch(`${API}/categorias?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const comps = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    const counts = {};
+    comps.forEach(c => {
+        if (c.categoria) {
+            counts[c.categoria] = (counts[c.categoria] || 0) + 1;
+        }
+    });
+
+    if (termoBusca) {
+        categorias = categorias.filter(c => c.toLowerCase().includes(termoBusca.toLowerCase()));
+    }
+
+    if (ordem === "az") {
+        categorias.sort((a, b) => a.localeCompare(b));
+    } else if (ordem === "za") {
+        categorias.sort((a, b) => b.localeCompare(a));
+    }
+
+    const div = document.getElementById("lista-categorias");
+    div.innerHTML = categorias.map(cat => {
+        const count = counts[cat] || 0;
+        return `
+      <div class="item">
+        <div>
+          <strong>${cat}</strong> (${count} componentes)
+        </div>
+        <div class="acoes">
+          ${count === 0 ? `<button onclick="excluirCategoria('${escapeJsString(cat)}')" class="warn">Excluir</button>` : ''}
+        </div>
+      </div>`;
+    }).join("");
+}
+
+function abrirPopupCategoria() {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupCategoria";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.innerHTML = `
+        <h2>Nova Categoria</h2>
+        <form id="formCategoria">
+            <input type="text" id="categoriaNome" placeholder="Nome da Categoria" required pattern="[a-zA-Z0-9 ]+">
+            <button type="submit" id="btnCriarCategorias">Criar</button>
+            <button type="button" id="btnCancelarCategoria">Cancelar</button>
+            <p id="erroCategoria" style="color: red; display: none;"></p>
+        </form>
+    `;
+    document.body.appendChild(popup);
+
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+
+    document.getElementById("formCategoria").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const nome = document.getElementById("categoriaNome").value.trim();
+        if (!nome) {
+            document.getElementById("erroCategoria").textContent = "Nome da categoria é obrigatório";
+            document.getElementById("erroCategoria").style.display = "block";
+            return;
+        }
+        try {
+            const response = await fetch(`${API}/categorias?game=${encodeURIComponent(currentGame)}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nome }),
+                credentials: 'include'
+            });
+            const data = await response.json();
+            if (data.sucesso) {
+                popup.remove();
+                overlay.remove();
+                await carregarCategoriasLista(document.getElementById("buscaCategorias")?.value || "", document.getElementById("ordemCategorias")?.value || "az");
+                await carregarCategoriasDatalist();
+            } else {
+                document.getElementById("erroCategoria").textContent = data.erro || "Erro ao criar categoria";
+                document.getElementById("erroCategoria").style.display = "block";
+            }
+        } catch (error) {
+            document.getElementById("erroCategoria").textContent = "Erro ao criar categoria";
+            document.getElementById("erroCategoria").style.display = "block";
+        }
+    });
+
+    document.getElementById("btnCancelarCategoria").addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+    });
+}
+
+async function excluirCategoria(nome) {
+    if (!confirm(`Confirmar exclusão da categoria "${nome}"?`)) return;
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    try {
+        const response = await fetch(`${API}/categorias/excluir?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nome }),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarCategoriasLista(document.getElementById("buscaCategorias")?.value || "", document.getElementById("ordemCategorias")?.value || "az");
+            await carregarCategoriasDatalist();
+        } else {
+            mostrarErro(data.erro || "Erro ao excluir categoria");
+        }
+    } catch (error) {
+        mostrarErro("Erro ao excluir categoria: " + error.message);
+    }
 }
 
 /* ------------------ UTIL ------------------ */
