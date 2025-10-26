@@ -1399,3 +1399,9 @@ body.dark-mode #listaReceitasFarmar li:hover {
     transform: translateY(-1px);
     padding: 5px;
 }
+
+.toggle-sub {
+    cursor: pointer;
+    background: transparent;
+    border: 0px;
+}

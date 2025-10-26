@@ -784,7 +784,7 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, col
         const hasSubs = component && component.associados && component.associados.length > 0;
         let toggleHtml = '';
         if (collapsible && hasSubs) {
-            toggleHtml = `<button class="toggle-sub">▼</button>`;
+            toggleHtml = `<button class="toggle-sub">▶</button>`;
         }
 
         html += `
@@ -826,7 +826,11 @@ function getComponentChain(componentName, quantityNeeded, componentesData, estoq
 
     if (!component || !component.associados || component.associados.length === 0) return "";
 
-    let html = "<ul>";
+    let ulStyle = "";
+    if (collapsible) {
+        ulStyle = ' style="display:none;"';
+    }
+    let html = `<ul${ulStyle}>`;
     const qtdProd = component.quantidadeProduzida || 1;
     const numCrafts = Math.ceil((quantityNeeded - disp) / qtdProd);
     let subCounter = 1;
@@ -848,11 +852,13 @@ function getComponentChain(componentName, quantityNeeded, componentesData, estoq
         const hasSubs = subComponent && subComponent.associados && subComponent.associados.length > 0;
         let toggleHtml = '';
         if (collapsible && hasSubs) {
-            toggleHtml = `<button class="toggle-sub">▼</button>`;
+            toggleHtml = `<button class="toggle-sub">▶</button>`;
         }
 
+        const level = prefix.split('.').length - 1;
+        const arrowWidth = 10; // Assumindo largura da setinha como 10px
         html += `
-        <li class="${classeLinha}">
+        <li class="${classeLinha}" style="margin-left: ${level * (10 + arrowWidth)}px;">
           ${toggleHtml}
           <span class="prefix">${prefix}${subCounter}-</span> ${a.nome} (Nec: ${formatQuantity(subNec)}, Disp: ${formatQuantity(subDisp)}, Falta: ${formatQuantity(subFalta)})
           ${getComponentChain(a.nome, subNec, componentesData, estoque, `${prefix}${subCounter}.`, collapsible)}
