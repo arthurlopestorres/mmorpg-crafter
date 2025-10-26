@@ -743,7 +743,7 @@ async function arquivarReceita(receitaNome) {
     }
 }
 
-async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, collapsible = false) {
+async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, collapsible = false, hidePrefix = false) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     const receita = receitas.find(r => r.nome === receitaNome);
@@ -790,8 +790,8 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, col
         html += `
         <li class="${classeLinha}">
           ${toggleHtml}
-          <span class="prefix">${counter}-</span> ${comp.nome} (Nec: ${formatQuantity(quantidadeNecessaria)}, Disp: ${formatQuantity(disp)}, Falta: ${formatQuantity(falta)})
-          ${getComponentChain(comp.nome, quantidadeNecessaria, componentesData, estoque, `${counter}.`, collapsible)}
+          ${!hidePrefix ? `<span class="prefix">${counter}-</span> ` : ''}${comp.nome} (Nec: ${formatQuantity(quantidadeNecessaria)}, Disp: ${formatQuantity(disp)}, Falta: ${formatQuantity(falta)})
+          ${getComponentChain(comp.nome, quantidadeNecessaria, componentesData, estoque, `${counter}.`, collapsible, hidePrefix)}
         </li>`;
         counter++;
     }
@@ -817,7 +817,7 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, col
     }
 }
 
-function getComponentChain(componentName, quantityNeeded, componentesData, estoque, prefix = "", collapsible = false) {
+function getComponentChain(componentName, quantityNeeded, componentesData, estoque, prefix = "", collapsible = false, hidePrefix = false) {
     const component = componentesData.find(c => c.nome === componentName);
     const disp = estoque[componentName] !== undefined ? estoque[componentName] : 0;
 
@@ -860,8 +860,8 @@ function getComponentChain(componentName, quantityNeeded, componentesData, estoq
         html += `
         <li class="${classeLinha}" style="margin-left: ${level * (10 + arrowWidth)}px;">
           ${toggleHtml}
-          <span class="prefix">${prefix}${subCounter}-</span> ${a.nome} (Nec: ${formatQuantity(subNec)}, Disp: ${formatQuantity(subDisp)}, Falta: ${formatQuantity(subFalta)})
-          ${getComponentChain(a.nome, subNec, componentesData, estoque, `${prefix}${subCounter}.`, collapsible)}
+          ${!hidePrefix ? `<span class="prefix">${prefix}${subCounter}-</span> ` : ''}${a.nome} (Nec: ${formatQuantity(subNec)}, Disp: ${formatQuantity(subDisp)}, Falta: ${formatQuantity(subFalta)})
+          ${getComponentChain(a.nome, subNec, componentesData, estoque, `${prefix}${subCounter}.`, collapsible, hidePrefix)}
         </li>`;
         subCounter++;
     });
@@ -2222,7 +2222,7 @@ async function carregarListaRoadmap(onlyCompleted = false) {
                 const itemElement = btn.closest(".item");
                 const receitaNome = itemElement.dataset.receita;
                 const qtd = Math.max(Number(itemElement.querySelector(".qtd-desejada").value) || 0.001, 0.001);
-                await atualizarDetalhes(receitaNome, qtd, componentes, estoque, true);
+                await atualizarDetalhes(receitaNome, qtd, componentes, estoque, true, true);
             }
         });
     });
@@ -2236,7 +2236,7 @@ async function carregarListaRoadmap(onlyCompleted = false) {
             localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
             const detalhes = itemElement.querySelector(".detalhes");
             if (detalhes && detalhes.style.display !== "none") {
-                await atualizarDetalhes(receitaNome, qtd, componentes, estoque, true);
+                await atualizarDetalhes(receitaNome, qtd, componentes, estoque, true, true);
             }
         });
     });
