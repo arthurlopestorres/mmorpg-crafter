@@ -703,13 +703,12 @@ async function carregarListaTime() {
                     `).join("") || '<li>Nenhum associado</li>'}</ul>
                 </div>
                 <div class="secao">
-                    <h3>Disponíveis para Convidar</h3>
-                    <ul>${disponiveis.map(d => `
-                        <li class="time-item">
-                            ${d.email}
-                            ${d.pendingSent ? '<span class="pending-invite">Convite enviado</span>' : `<button class="btn-vincular" onclick="enviarConvidar('${d.email}')">Convidar</button>`}
-                        </li>
-                    `).join("") || '<li>Nenhum disponível</li>'}</ul>
+                    <h3>Convidar Novo Membro</h3>
+                    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
+                        <input type="text" id="inputEmailConvidar" class="input-convidar" placeholder="Digite o email para convidar">
+                        <button id="btnConvidar" class="btn-vincular">Convidar</button>
+                    </div>
+                    <div id="feedbackConvidar" style="font-weight: 500; margin-top: 8px; display: none;"></div>
                 </div>
                 <div class="secao">
                     <h3>Banidos</h3>
@@ -729,6 +728,22 @@ async function carregarListaTime() {
 
     div.innerHTML = html;
     await carregarPendencias();
+
+    // Novo event listener para o botão de convidar (apenas se founder)
+    if (isFounder) {
+        const btnConvidar = document.getElementById("btnConvidar");
+        const inputEmail = document.getElementById("inputEmailConvidar");
+        const feedbackDiv = document.getElementById("feedbackConvidar");
+
+        btnConvidar.addEventListener("click", async () => {
+            const email = inputEmail.value.trim();
+            if (!email) {
+                showFeedback(feedbackDiv, "Digite um email válido", "error");
+                return;
+            }
+            await enviarConvidar(email, btnConvidar, feedbackDiv, inputEmail);
+        });
+    }
 }
 
 async function carregarPendencias() {
@@ -753,8 +768,11 @@ async function carregarPendencias() {
     }
 }
 
-async function enviarConvidar(email) {
+async function enviarConvidar(email, btn = null, feedbackDiv = null, input = null) {
     if (!confirm(`Enviar convite para ${email}?`)) return;
+    if (btn) btn.disabled = true;
+    if (input) input.disabled = true;
+    if (feedbackDiv) feedbackDiv.style.display = "none";
     try {
         const response = await fetch(`${API}/enviar-convite`, {
             method: "POST",
@@ -764,14 +782,84 @@ async function enviarConvidar(email) {
         });
         const data = await response.json();
         if (data.sucesso) {
+            mostrarSucesso("Convite enviado ✅");
+            if (input) input.value = "";
             await carregarListaTime();
         } else {
-            alert(data.erro || 'Erro ao enviar convite');
+            showFeedback(feedbackDiv, data.erro || 'Erro ao enviar convite', "error", btn);
         }
     } catch (error) {
         console.error('[TIME] Erro ao enviar convite:', error);
-        alert('Erro ao enviar convite');
+        showFeedback(feedbackDiv, 'Erro ao enviar convite', "error", btn);
+    } finally {
+        if (btn) setTimeout(() => { btn.disabled = false; }, 3000);
+        if (input) setTimeout(() => { input.disabled = false; }, 3000);
     }
+}
+
+// Função auxiliar para mostrar feedback no botão/div
+function showFeedback(feedbackDiv, message, type, btn = null) {
+    if (feedbackDiv) {
+        feedbackDiv.textContent = message;
+        feedbackDiv.style.display = "block";
+        feedbackDiv.className = `feedback-${type}`;
+        if (type === "success") {
+            feedbackDiv.style.color = "#48bb78";
+        } else {
+            feedbackDiv.style.color = "#f56565";
+        }
+    }
+    if (btn) {
+        const originalText = btn.textContent;
+        btn.textContent = message;
+        if (type === "success") {
+            btn.style.background = "linear-gradient(135deg, #38ef7d 0%, #11998e 100%)";
+        } else {
+            btn.style.background = "linear-gradient(135deg, #fc466b 0%, #f56565 100%)";
+        }
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = "";
+        }, 3000);
+    }
+}
+
+// Nova função para mostrar popup de sucesso temporário
+function mostrarSucesso(msg) {
+    const overlay = criarOverlay();
+    const modalSucesso = document.createElement("div");
+    modalSucesso.id = "modalSucesso";
+    modalSucesso.style.position = "fixed";
+    modalSucesso.style.top = "50%";
+    modalSucesso.style.left = "50%";
+    modalSucesso.style.transform = "translate(-50%, -50%)";
+    modalSucesso.style.backgroundColor = "white";
+    modalSucesso.style.padding = "20px";
+    modalSucesso.style.zIndex = "1000";
+    modalSucesso.style.borderRadius = "5px";
+    modalSucesso.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.1)";
+    modalSucesso.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="color: #48bb78; margin: 0;">Sucesso</h3>
+            <button id="fecharModalSucesso" style="background: none; border: none; font-size: 16px; cursor: pointer;">❌</button>
+        </div>
+        <p id="mensagemSucesso" style="color: #48bb78; margin: 0;">${msg}</p>
+    `;
+    document.body.appendChild(modalSucesso);
+
+    const fecharModalSucesso = document.getElementById("fecharModalSucesso");
+    fecharModalSucesso.addEventListener("click", () => {
+        modalSucesso.remove();
+        const overlay = document.getElementById("overlay");
+        if (overlay) overlay.remove();
+    });
+
+    // Auto-remove após 1 segundo
+    setTimeout(() => {
+        modalSucesso.remove();
+        const overlay = document.getElementById("overlay");
+        if (overlay) overlay.remove();
+    }, 1000);
 }
 
 async function aceitarConvidar(from) {

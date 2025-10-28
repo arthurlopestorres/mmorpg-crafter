@@ -929,6 +929,32 @@ button.btn-arquivar:hover {
     color: var(--text-primary);
 }
 
+/* Novos estilos para input e feedback de convidar */
+.input-convidar {
+    flex: 1;
+    padding: 12px 16px;
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    font-size: 0.95rem;
+    transition: all var(--transition-fast);
+}
+
+.input-convidar:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    outline: none;
+}
+
+#feedbackConvidar.success {
+    color: #48bb78;
+    font-weight: 600;
+}
+
+#feedbackConvidar.error {
+    color: #f56565;
+    font-weight: 600;
+}
+
 /* ========================================================================
    MODALS & POPUPS
    ======================================================================== */
@@ -2012,4 +2038,8 @@ html {
 
 #formCadastro #btnVoltarLogin {
     color: #2d3748;
+}
+
+#inputEmailConvidar {
+    max-width: 500px;
 }
