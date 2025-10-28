@@ -179,6 +179,42 @@ app.post('/associate-users', async (req, res) => {
     }
 });
 
+// Endpoint para desvincular usuários (protegido por headers)
+app.post('/dissociate-users', async (req, res) => {
+    const key = req.headers['atboficial-mmo-crafter'];
+    const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
+    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyadhadhiyfad') {
+        return res.status(403).json({ sucesso: false, erro: 'Acesso negado' });
+    }
+    const { primary, secondary } = req.body;
+    if (!primary || !secondary) {
+        return res.status(400).json({ sucesso: false, erro: 'Primary e secondary são obrigatórios' });
+    }
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!usuarios.some(u => u.email === primary)) {
+            return res.status(400).json({ sucesso: false, erro: 'Primary não encontrado nos usuários' });
+        }
+        if (!usuarios.some(u => u.email === secondary)) {
+            return res.status(400).json({ sucesso: false, erro: 'Secondary não encontrado nos usuários' });
+        }
+        const index = associations.findIndex(a => a.primary === primary && a.secondary === secondary);
+        if (index === -1) {
+            return res.status(400).json({ sucesso: false, erro: 'Associação não encontrada entre primary e secondary especificados' });
+        }
+        associations.splice(index, 1);
+        await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
+        console.log(`[DISSOCIATE-USERS] Desvinculado ${secondary} do primary ${primary}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[DISSOCIATE-USERS] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao desvincular usuários' });
+    }
+});
+
 // Endpoint: Servir index.html (não protegido)
 app.get('/', (req, res) => {
     console.log('[GET /] Servindo index.html');
