@@ -27,7 +27,7 @@ app.use(session({
 }));
 
 // Configuração do Nodemailer
-const transporter = nodemailer.createTransport({
+const transporter = nodemailer.createTransporter({
     service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
@@ -229,25 +229,24 @@ app.get('/user-status', isAuthenticated, async (req, res) => {
 // Novo endpoint para obter dados do usuário logado efetivo (/me)
 app.get('/me', isAuthenticated, async (req, res) => {
     const user = req.session.user;
-    const effectiveUser = await getEffectiveUser(user);
     const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
     try {
         let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
-        let usuario = usuarios.find(u => u.email === effectiveUser);
+        let usuario = usuarios.find(u => u.email === user);
         if (!usuario) {
             return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
         }
         // Gerar ID se não existir
         if (!usuario.id) {
             usuario.id = await generateUniqueId();
-            const index = usuarios.findIndex(u => u.email === effectiveUser);
+            const index = usuarios.findIndex(u => u.email === user);
             usuarios[index] = usuario;
             await saveUsuarios(usuarios);
         }
         // Setar nome padrão se não existir
         if (!usuario.nome || usuario.nome.trim() === '') {
             usuario.nome = "Lorem Ipsum";
-            const index = usuarios.findIndex(u => u.email === effectiveUser);
+            const index = usuarios.findIndex(u => u.email === user);
             usuarios[index] = usuario;
             await saveUsuarios(usuarios);
         }

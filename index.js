@@ -363,7 +363,7 @@ function initMenu() {
     if (!menu) return;
     menu.innerHTML = ''; // Limpar menu existente para reordenar
     const sections = [
-        { section: "home", text: "Home" },
+        { section: "home", text: "Bem vindo!" },
         { section: "categorias", text: "Categorias" },
         { section: "componentes", text: "Componentes" },
         { section: "estoque", text: "Estoque de componentes" },
@@ -645,6 +645,7 @@ async function carregarSecao(secao) {
     if (secao === "roadmap") return montarRoadmap();
     if (secao === "categorias") return montarCategorias();
     if (secao === "time") return montarTime();
+    if (secao === "home") return montarManual(); // Novo: Manual de uso
     conteudo.innerHTML = `<h1 class="home--titulo-principal">Bem-vindo!</h1>
 <p>Essa aplicação tem como finalidade servir como calculadora e gestão de estoque para qualquer jogo de RPG (aqueles que envolvem craft e coleta de itens)!</p>
 <p>No momento, estamos jogando somente o jogo Pax Dei, por isso, seguem alguns links úteis para o jogo:</p>
@@ -654,6 +655,153 @@ async function carregarSecao(secao) {
 </ul>
 <iframe id="mapaIframe" src="https://paxdei.th.gl/" title="Pax Dei Interactive Map" loading="lazy"></iframe>
 <iframe id="paxDeiIframe" src="https://paxdei.gaming.tools/" title="Pax Dei DataBase" loading="lazy"></iframe>`;
+}
+
+// Novo: Função para montar o manual de uso
+function montarManual() {
+    conteudo.innerHTML = `
+        <h2>Bem-vindo! Manual de Uso da Ferramenta</h2>
+        <p>Use o filtro abaixo para buscar instruções por palavras-chave. Clique nas setas para expandir as seções.</p>
+        <div class="filtros">
+            <input type="text" id="buscaManual" placeholder="Buscar instruções (ex: 'time', 'receita')">
+        </div>
+        <div id="manualConteudo" class="manual-container">
+            <!-- Seções serão geradas dinamicamente abaixo -->
+        </div>
+    `;
+
+    // Gerar seções do manual
+    const manualSeções = [
+        {
+            titulo: "Introdução à Ferramenta",
+            itens: [
+                "Esta ferramenta é um gerenciador completo para jogos MMORPG com foco em crafting e coleta de itens. Ela permite criar receitas, gerenciar componentes, rastrear estoque, planejar farms e mais.",
+                "Todas as ações são salvas por jogo (você pode alternar entre jogos no menu superior).",
+                "A autenticação é obrigatória para acessar as funcionalidades. Após login, você tem acesso total às ferramentas."
+            ]
+        },
+        {
+            titulo: "Sistema de Time e Permissões",
+            itens: [
+                "O sistema de time permite colaborar com outros jogadores. Há três papéis: Fundador (dono do time), Co-fundador (pode editar tudo como o fundador) e Membro (pode visualizar e usar, mas não editar).",
+                "Para adicionar alguém ao time: Vá na aba 'Time', na seção 'Convidar Novo Membro', digite o email e clique 'Convidar'. O convidado recebe uma pendência e pode aceitar/recusar.",
+                "Aceitar convite: Na aba 'Time', na seção 'Pendências de Convite', clique 'Aceitar' para entrar no time do fundador.",
+                "Promover a co-fundador: Na aba 'Time', na lista de associados, clique 'Promover a Co-Fundador' (apenas fundadores podem fazer isso).",
+                "Desvincular/Banir: Na aba 'Time', use os botões 'Desvincular' ou 'Banir' para remover alguém. Banidos não podem se juntar novamente sem desbanimento.",
+                "Sair do time: Na aba 'Time', clique 'Sair do Time' (apenas membros podem sair; fundadores desvinculam outros)."
+            ]
+        },
+        {
+            titulo: "Gerenciando Jogos",
+            itens: [
+                "Para criar um novo jogo: Clique em 'Novo Jogo' no menu superior, digite o nome e confirme. Um novo conjunto de arquivos (receitas, estoque etc.) é criado.",
+                "Alternar jogo: Use o seletor de jogos no menu superior para mudar entre jogos salvos. As configurações (filtros, quantidades) são salvas por jogo."
+            ]
+        },
+        {
+            titulo: "Gerenciando Receitas",
+            itens: [
+                "Para criar uma nova receita: Na aba 'Receitas', clique '+ Nova Receita'. Digite o nome e adicione componentes com quantidades.",
+                "Editar/Duplicar: Clique 'Editar' para modificar ou 'Duplicar' para criar uma cópia (útil para variações).",
+                "Favoritar: Clique 'Favoritar' para marcar como favorita (aparece em 'Favoritos').",
+                "Concluir: Insira a quantidade desejada e clique 'Concluir' (debitará do estoque automaticamente; apenas fundadores/co-fundadores).",
+                "Arquivar: Clique 'Arquivar' para mover para 'Arquivados' (remove de receitas ativas; apenas fundadores/co-fundadores).",
+                "Visualizar detalhes: Clique na seta ▼ ao lado da receita para ver requisitos de componentes e subcomponentes."
+            ]
+        },
+        {
+            titulo: "Gerenciando Componentes",
+            itens: [
+                "Para criar um novo componente: Na aba 'Componentes', clique '+ Novo Componente'. Defina nome, categoria, quantidade produzida e materiais associados.",
+                "Editar: Clique 'Editar' para alterar (propaga mudanças para receitas e estoque automaticamente).",
+                "Excluir: Clique 'Excluir' (remove referências em receitas/arquivados; apenas fundadores/co-fundadores).",
+                "Categorias: Na aba 'Categorias', crie ou exclua categorias para organizar componentes."
+            ]
+        },
+        {
+            titulo: "Gerenciando Estoque e Log",
+            itens: [
+                "Adicionar/Debitar: Na aba 'Estoque', use o formulário para adicionar ou debitar itens manualmente. O log registra todas as movimentações.",
+                "Editar item: Clique 'Editar' em um item do estoque para ajustar a quantidade.",
+                "Excluir item: Clique 'Excluir' (remove do estoque e componente; afeta receitas).",
+                "Zerar estoque: Clique 'Zerar todo o estoque' (apenas fundadores/co-fundadores).",
+                "Filtrar log: Na seção 'Log de Movimentações', busque por componente ou data."
+            ]
+        },
+        {
+            titulo: "Favoritos (O que Farmar?)",
+            itens: [
+                "Marque receitas como favoritas na aba 'Receitas' para vê-las aqui.",
+                "Filtre por receitas selecionadas (checkboxes) ou categorias para ver o que falta farmar.",
+                "Cores indicam status: Verde (suficiente), Amarelo (quase suficiente), Vermelho (falta muito).",
+                "Fabricar: Clique 'Fabricar Tudo' em um componente com subcomponentes (verifica estoque e debita automaticamente)."
+            ]
+        },
+        {
+            titulo: "Roadmap",
+            itens: [
+                "Adicionar: Clique 'Inserir nova receita' e selecione uma receita para adicionar ao plano.",
+                "Reordenar: Use ↑/↓ para mover itens no roadmap.",
+                "Marcar como pronto: Marque o checkbox 'Pronto' para indicar conclusão (filtro para ver só prontas).",
+                "Excluir: Clique 'Excluir' (apenas fundadores/co-fundadores)."
+            ]
+        },
+        {
+            titulo: "Minha Conta",
+            itens: [
+                "Clique no botão 'Minha Conta' (canto superior direito) para ver seus dados, mudar senha ou fazer logout.",
+                "Mudar senha: Digite a atual e a nova (confirmação obrigatória)."
+            ]
+        }
+    ];
+
+    const manualDiv = document.getElementById("manualConteudo");
+    manualSeções.forEach(secao => {
+        const secaoHtml = `
+            <div class="manual-section">
+                <button class="manual-dropdown-toggle">▶ ${secao.titulo}</button>
+                <div class="manual-dropdown-content" style="display: none;">
+                    ${secao.itens.map(item => `<p class="manual-item">${item}</p>`).join('')}
+                </div>
+            </div>
+        `;
+        manualDiv.innerHTML += secaoHtml;
+    });
+
+    // Adicionar event listeners para dropdowns
+    document.querySelectorAll('.manual-dropdown-toggle').forEach(toggle => {
+        toggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const content = toggle.nextElementSibling;
+            const isOpen = content.style.display !== 'none';
+            content.style.display = isOpen ? 'none' : 'block';
+            const titulo = toggle.textContent.substring(2).trim(); // Extrair título removendo ícone e espaço
+            toggle.textContent = isOpen ? '▶ ' + titulo : '▼ ' + titulo;
+        });
+    });
+
+    // Filtro de busca
+    const buscaInput = document.getElementById("buscaManual");
+    const debouncedFiltrarManual = debounce(filtrarManual, 300);
+    buscaInput.addEventListener("input", () => debouncedFiltrarManual(buscaInput.value.toLowerCase()));
+}
+
+// Função para filtrar manual
+function filtrarManual(termo) {
+    document.querySelectorAll('.manual-section').forEach(secao => {
+        const toggle = secao.querySelector('.manual-dropdown-toggle');
+        const itens = secao.querySelectorAll('.manual-item');
+        const temMatch = Array.from(itens).some(item => item.textContent.toLowerCase().includes(termo));
+        const temMatchTitulo = toggle.textContent.toLowerCase().includes(termo);
+        secao.style.display = (temMatch || temMatchTitulo) ? 'block' : 'none';
+        if (temMatch || temMatchTitulo) {
+            const content = toggle.nextElementSibling;
+            content.style.display = 'block'; // Expandir se match
+            const titulo = toggle.textContent.substring(2).trim();
+            toggle.textContent = '▼ ' + titulo;
+        }
+    });
 }
 
 /* ------------------ MÓDULO TIME ------------------ */
@@ -2971,7 +3119,9 @@ async function carregarListaRoadmap(onlyCompleted = false) {
         btn.addEventListener("click", async () => {
             const itemElement = btn.closest(".item");
             const index = parseInt(itemElement.dataset.index);
-            await reordenarRoadmap(index, index + 1);
+            if (index < roadmap.length - 1) {
+                await reordenarRoadmap(index, index + 1);
+            }
         });
     });
 

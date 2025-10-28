@@ -1,3 +1,4 @@
+/* index.css */
 /* ========================================================================
    RESET & BASE STYLES
    ======================================================================== */
@@ -2042,4 +2043,96 @@ html {
 
 #inputEmailConvidar {
     max-width: 500px;
+}
+
+/* ========================================================================
+   MANUAL DE USO - NOVOS ESTILOS
+   ======================================================================== */
+.manual-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    /* max-height: 80vh; */
+    overflow-y: auto;
+}
+
+.manual-section {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.manual-dropdown-toggle {
+    width: 100%;
+    padding: 16px 20px;
+    background: var(--primary-gradient);
+    color: white;
+    font-weight: 600;
+    font-size: 1.1rem;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: all var(--transition-base);
+    border-radius: 7px;
+}
+
+.manual-dropdown-toggle:hover {
+    background: var(--primary-gradient-hover);
+}
+
+.manual-dropdown-content {
+    display: none;
+    padding: 0;
+    background: white;
+}
+
+.manual-dropdown-content p.manual-item {
+    padding: 16px 20px;
+    margin: 0;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    line-height: 1.6;
+    border-radius: 7px;
+}
+
+.manual-dropdown-content p.manual-item:last-child {
+    border-bottom: none;
+}
+
+.manual-dropdown-content[style*="block"] {
+    display: block !important;
+}
+
+/* Filtro no manual */
+#buscaManual {
+    max-width: 400px;
+}
+
+/* Dark mode adjustments for manual */
+body.dark-mode .manual-section {
+    background: rgba(45, 55, 72, 0.95);
+}
+
+body.dark-mode .manual-dropdown-content {
+    background: #2d3748;
+}
+
+body.dark-mode .manual-dropdown-content p.manual-item {
+    color: #e2e8f0;
+    border-bottom-color: #4a5568;
+}
+
+/* Bright mode adjustments for manual (default light) */
+body.bright-mode .manual-section {
+    background: rgba(255, 255, 255, 0.95);
+}
+
+body.bright-mode .manual-dropdown-content {
+    background: white;
+}
+
+body.bright-mode .manual-dropdown-content p.manual-item {
+    color: var(--text-primary);
+    border-bottom-color: var(--border-color);
 }
