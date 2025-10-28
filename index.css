@@ -1883,3 +1883,8 @@ html {
 #conteudo {
     margin-top: 40px;
 }
+
+.filtros {
+    position: relative;
+    z-index: 10;
+}
