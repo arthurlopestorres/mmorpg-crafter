@@ -144,47 +144,6 @@ function getFilePath(user, game, filename) {
     return path.join(DATA_DIR, safeUser, safeGame, filename);
 }
 
-// Endpoint temporário para migração (REMOVER APÓS USO)
-app.post('/migrate', async (req, res) => {
-    const key = req.headers['x-migration-key'];
-    const targetUser = req.headers['x-target-user'];
-    if (key !== 'migrate-mmorpg-crafter-2025' || targetUser !== 'arthurlopestorres@gmail.com') {
-        return res.status(403).json({ sucesso: false, erro: 'Acesso negado para migração' });
-    }
-
-    const migratedFlag = path.join(DATA_DIR, '.migrated');
-    try {
-        await fs.access(migratedFlag);
-        return res.json({ sucesso: true, mensagem: 'Migração já realizada anteriormente.' });
-    } catch { }
-
-    try {
-        const entries = await fs.readdir(DATA_DIR, { withFileTypes: true });
-        const gameDirs = entries.filter(entry => entry.isDirectory() && !entry.name.includes('@') && !entry.name.includes('.')); // Filtra dirs que não parecem emails ou flags
-        const migratedGames = [];
-
-        for (const dir of gameDirs) {
-            const oldGameDir = path.join(DATA_DIR, dir.name);
-            const newGameDir = path.join(DATA_DIR, targetUser, dir.name);
-
-            try {
-                await fs.mkdir(path.join(DATA_DIR, targetUser), { recursive: true });
-                await fs.rename(oldGameDir, newGameDir);
-                migratedGames.push(dir.name);
-                console.log(`[MIGRATE] Pasta ${dir.name} movida para /data/${targetUser}/${dir.name}`);
-            } catch (err) {
-                console.error(`[MIGRATE] Erro ao mover ${dir.name}:`, err);
-            }
-        }
-
-        await fs.writeFile(migratedFlag, 'migrated-2025');
-        res.json({ sucesso: true, migrados: migratedGames, total: migratedGames.length });
-    } catch (error) {
-        console.error('[MIGRATE] Erro geral:', error);
-        res.status(500).json({ sucesso: false, erro: 'Erro na migração: ' + error.message });
-    }
-});
-
 // Endpoint para associar usuários (protegido por headers)
 app.post('/associate-users', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
