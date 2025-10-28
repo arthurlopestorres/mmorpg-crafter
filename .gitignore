@@ -8,3 +8,5 @@ data/arquivados.json
 data/log.json
 data/usuarios.json
 .env
+readme.txt
+data

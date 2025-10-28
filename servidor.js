@@ -48,34 +48,35 @@ async function sincronizarEstoque() {
     */
 }
 
+// Função para obter usuário efetivo baseado em associações
+async function getEffectiveUser(user) {
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    try {
+        const associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        let current = user;
+        const visited = new Set(); // Para evitar loops infinitos
+        while (true) {
+            if (visited.has(current)) {
+                console.warn('[getEffectiveUser] Loop detectado em associações para:', user);
+                break;
+            }
+            visited.add(current);
+            const assoc = associations.find(a => a.secondary === current);
+            if (!assoc) break;
+            current = assoc.primary;
+        }
+        return current;
+    } catch (error) {
+        console.error('[getEffectiveUser] Erro:', error);
+        return user;
+    }
+}
+
 // Criar diretório de dados e arquivos JSON iniciais, se não existirem
 async function inicializarArquivos() {
     try {
         await fs.mkdir(DATA_DIR, { recursive: true });
         console.log('[INIT] Diretório de dados criado ou já existente:', DATA_DIR);
-
-        // Migração: Se arquivos estão na raiz, mover para /data/Pax Dei
-        const rootFiles = await fs.readdir(DATA_DIR);
-        const gameDir = path.join(DATA_DIR, DEFAULT_GAME);
-        try {
-            await fs.access(gameDir);
-        } catch {
-            await fs.mkdir(gameDir);
-            const filesToMove = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json'];
-            for (const file of filesToMove) {
-                const oldPath = path.join(DATA_DIR, file);
-                const newPath = path.join(gameDir, file);
-                try {
-                    await fs.access(oldPath);
-                    await fs.rename(oldPath, newPath);
-                    console.log(`[INIT] Movido ${file} para ${gameDir}`);
-                } catch (err) {
-                    if (err.code !== 'ENOENT') throw err;
-                    await fs.writeFile(newPath, JSON.stringify([]));
-                    console.log(`[INIT] Criado arquivo vazio em ${gameDir}: ${file}`);
-                }
-            }
-        }
 
         // Usuarios global
         const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
@@ -84,6 +85,15 @@ async function inicializarArquivos() {
         } catch {
             await fs.writeFile(usuariosPath, JSON.stringify([]));
             console.log('[INIT] Criado usuarios.json na raiz');
+        }
+
+        // Associações de usuários
+        const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+        try {
+            await fs.access(associationsPath);
+        } catch {
+            await fs.writeFile(associationsPath, JSON.stringify([]));
+            console.log('[INIT] Criado usuarios-associacoes.json na raiz');
         }
 
     } catch (error) {
@@ -127,11 +137,88 @@ async function verificarRecaptcha(token) {
     }
 }
 
-// Função auxiliar para obter caminho do arquivo baseado no game
-function getFilePath(game, filename) {
+// Função auxiliar para obter caminho do arquivo baseado no user e game
+function getFilePath(user, game, filename) {
+    const safeUser = user.replace(/[^a-zA-Z0-9@._-]/g, ''); // Sanitize email
     const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, ''); // Sanitize
-    return path.join(DATA_DIR, safeGame, filename);
+    return path.join(DATA_DIR, safeUser, safeGame, filename);
 }
+
+// Endpoint temporário para migração (REMOVER APÓS USO)
+app.post('/migrate', async (req, res) => {
+    const key = req.headers['x-migration-key'];
+    const targetUser = req.headers['x-target-user'];
+    if (key !== 'migrate-mmorpg-crafter-2025' || targetUser !== 'arthurlopestorres@gmail.com') {
+        return res.status(403).json({ sucesso: false, erro: 'Acesso negado para migração' });
+    }
+
+    const migratedFlag = path.join(DATA_DIR, '.migrated');
+    try {
+        await fs.access(migratedFlag);
+        return res.json({ sucesso: true, mensagem: 'Migração já realizada anteriormente.' });
+    } catch { }
+
+    try {
+        const entries = await fs.readdir(DATA_DIR, { withFileTypes: true });
+        const gameDirs = entries.filter(entry => entry.isDirectory() && !entry.name.includes('@') && !entry.name.includes('.')); // Filtra dirs que não parecem emails ou flags
+        const migratedGames = [];
+
+        for (const dir of gameDirs) {
+            const oldGameDir = path.join(DATA_DIR, dir.name);
+            const newGameDir = path.join(DATA_DIR, targetUser, dir.name);
+
+            try {
+                await fs.mkdir(path.join(DATA_DIR, targetUser), { recursive: true });
+                await fs.rename(oldGameDir, newGameDir);
+                migratedGames.push(dir.name);
+                console.log(`[MIGRATE] Pasta ${dir.name} movida para /data/${targetUser}/${dir.name}`);
+            } catch (err) {
+                console.error(`[MIGRATE] Erro ao mover ${dir.name}:`, err);
+            }
+        }
+
+        await fs.writeFile(migratedFlag, 'migrated-2025');
+        res.json({ sucesso: true, migrados: migratedGames, total: migratedGames.length });
+    } catch (error) {
+        console.error('[MIGRATE] Erro geral:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro na migração: ' + error.message });
+    }
+});
+
+// Endpoint para associar usuários (protegido por headers)
+app.post('/associate-users', async (req, res) => {
+    const key = req.headers['atboficial-mmo-crafter'];
+    const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
+    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyadhadhiyfad') {
+        return res.status(403).json({ sucesso: false, erro: 'Acesso negado' });
+    }
+    const { primary, secondary } = req.body;
+    if (!primary || !secondary) {
+        return res.status(400).json({ sucesso: false, erro: 'Primary e secondary são obrigatórios' });
+    }
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (associations.some(a => a.secondary === secondary)) {
+            return res.status(400).json({ sucesso: false, erro: 'Secondary já associado' });
+        }
+        if (!usuarios.some(u => u.email === primary)) {
+            return res.status(400).json({ sucesso: false, erro: 'Primary não encontrado nos usuários' });
+        }
+        if (!usuarios.some(u => u.email === secondary)) {
+            return res.status(400).json({ sucesso: false, erro: 'Secondary não encontrado nos usuários' });
+        }
+        associations.push({ primary, secondary });
+        await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
+        console.log(`[ASSOCIATE-USERS] Associado ${secondary} ao primary ${primary}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[ASSOCIATE-USERS] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao associar usuários' });
+    }
+});
 
 // Endpoint: Servir index.html (não protegido)
 app.get('/', (req, res) => {
@@ -235,10 +322,13 @@ app.put('/data/usuarios', async (req, res) => {
     }
 });
 
-// Endpoint para listar jogos
+// Endpoint para listar jogos (agora por user)
 app.get('/games', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     try {
-        const files = await fs.readdir(DATA_DIR, { withFileTypes: true });
+        const userDir = path.join(DATA_DIR, effectiveUser);
+        await fs.mkdir(userDir, { recursive: true }); // Cria dir do user se não existir
+        const files = await fs.readdir(userDir, { withFileTypes: true });
         const games = files.filter(f => f.isDirectory()).map(f => f.name).sort();
         res.json(games);
     } catch (error) {
@@ -247,18 +337,20 @@ app.get('/games', isAuthenticated, async (req, res) => {
     }
 });
 
-// Endpoint para criar novo jogo
+// Endpoint para criar novo jogo (agora por user)
 app.post('/games', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     const { name } = req.body;
     if (!name || !/^[a-zA-Z0-9 ]+$/.test(name)) {
         return res.status(400).json({ sucesso: false, erro: 'Nome do jogo inválido' });
     }
-    const gameDir = path.join(DATA_DIR, name);
+    const userDir = path.join(DATA_DIR, effectiveUser);
+    const gameDir = path.join(userDir, name);
     try {
         await fs.access(gameDir);
         return res.status(400).json({ sucesso: false, erro: 'Jogo já existe' });
     } catch {
-        await fs.mkdir(gameDir);
+        await fs.mkdir(gameDir, { recursive: true });
         const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json'];
         for (const file of files) {
             await fs.writeFile(path.join(gameDir, file), JSON.stringify([]));
@@ -267,7 +359,7 @@ app.post('/games', isAuthenticated, async (req, res) => {
     }
 });
 
-// Endpoint para deletar jogo (protegido por headers)
+// Endpoint para deletar jogo (protegido por headers, agora por user)
 app.delete('/games/:game', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
     const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
@@ -278,9 +370,11 @@ app.delete('/games/:game', async (req, res) => {
     if (!game || game === 'usuarios.json') {
         return res.status(400).json({ sucesso: false, erro: 'Nome do jogo inválido' });
     }
-    const gameDir = path.join(DATA_DIR, game);
+    const sessionUser = req.session.user || 'arthurlopestorres@gmail.com';
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const userGameDir = path.join(DATA_DIR, effectiveUser, game);
     try {
-        await fs.rm(gameDir, { recursive: true, force: true });
+        await fs.rm(userGameDir, { recursive: true, force: true });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[DELETE /games] Erro:', error);
@@ -288,12 +382,14 @@ app.delete('/games/:game', async (req, res) => {
     }
 });
 
-// Endpoints protegidos com suporte a game
+// Endpoints protegidos com suporte a user e game
 app.get('/receitas', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[GET /receitas] Requisição recebida');
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'receitas.json');
+    const file = getFilePath(effectiveUser, game, 'receitas.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true }); // Cria dirs se não existirem
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit, favoritas } = req.query;
 
@@ -324,10 +420,12 @@ app.get('/receitas', isAuthenticated, async (req, res) => {
 });
 
 app.post('/receitas', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /receitas] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'receitas.json');
+    const file = getFilePath(effectiveUser, game, 'receitas.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const novaReceita = req.body;
         if (Array.isArray(novaReceita)) {
             // Atualizar toda a lista de receitas (usado no arquivamento)
@@ -360,10 +458,12 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
 });
 
 app.post('/receitas/editar', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /receitas/editar] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'receitas.json');
+    const file = getFilePath(effectiveUser, game, 'receitas.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const { nomeOriginal, nome, componentes } = req.body;
         if (!nomeOriginal || !nome || !componentes) {
             console.log('[POST /receitas/editar] Erro: Nome original, nome ou componentes ausentes');
@@ -399,10 +499,12 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
 });
 
 app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /receitas/favoritar] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'receitas.json');
+    const file = getFilePath(effectiveUser, game, 'receitas.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const { nome, favorita } = req.body;
         if (!nome || favorita === undefined) {
             console.log('[POST /receitas/favoritar] Erro: Nome ou favorita ausentes');
@@ -433,10 +535,12 @@ app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
 });
 
 app.get('/categorias', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[GET /categorias] Requisição recebida');
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'categorias.json');
+    const file = getFilePath(effectiveUser, game, 'categorias.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         res.json(data);
     } catch (err) {
@@ -447,10 +551,12 @@ app.get('/categorias', isAuthenticated, async (req, res) => {
 });
 
 app.post('/categorias', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /categorias] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'categorias.json');
+    const file = getFilePath(effectiveUser, game, 'categorias.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const { nome } = req.body;
         if (!nome) {
             console.log('[POST /categorias] Erro: Nome ausente');
@@ -475,6 +581,7 @@ app.post('/categorias', isAuthenticated, async (req, res) => {
 });
 
 app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /categorias/excluir] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
     const { nome } = req.body;
@@ -482,9 +589,11 @@ app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
         console.log('[POST /categorias/excluir] Erro: Nome ausente');
         return res.status(400).json({ sucesso: false, erro: 'Nome é obrigatório' });
     }
-    const catFile = getFilePath(game, 'categorias.json');
-    const compFile = getFilePath(game, 'componentes.json');
+    const catFile = getFilePath(effectiveUser, game, 'categorias.json');
+    const compFile = getFilePath(effectiveUser, game, 'componentes.json');
     try {
+        await fs.mkdir(path.dirname(catFile), { recursive: true });
+        await fs.mkdir(path.dirname(compFile), { recursive: true });
         let comps = await fs.readFile(compFile, 'utf8').then(JSON.parse).catch(() => []);
         if (comps.some(c => c.categoria === nome)) {
             console.log('[POST /categorias/excluir] Erro: Categoria em uso:', nome);
@@ -503,10 +612,12 @@ app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
 });
 
 app.get('/componentes', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[GET /componentes] Requisição recebida');
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'componentes.json');
+    const file = getFilePath(effectiveUser, game, 'componentes.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit } = req.query;
 
@@ -533,12 +644,14 @@ app.get('/componentes', isAuthenticated, async (req, res) => {
 });
 
 app.post('/componentes', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /componentes] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'componentes.json');
-    const estoqueFileGame = getFilePath(game, 'estoque.json');
-    const catFile = getFilePath(game, 'categorias.json');
+    const file = getFilePath(effectiveUser, game, 'componentes.json');
+    const estoqueFileGame = getFilePath(effectiveUser, game, 'estoque.json');
+    const catFile = getFilePath(effectiveUser, game, 'categorias.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const novoComponente = req.body;
         if (!novoComponente.nome) {
             console.log('[POST /componentes] Erro: Nome ausente');
@@ -594,13 +707,15 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
 });
 
 app.post('/componentes/editar', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /componentes/editar] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'componentes.json');
-    const estoqueFileGame = getFilePath(game, 'estoque.json');
-    const receitasFileGame = getFilePath(game, 'receitas.json');
-    const catFile = getFilePath(game, 'categorias.json');
+    const file = getFilePath(effectiveUser, game, 'componentes.json');
+    const estoqueFileGame = getFilePath(effectiveUser, game, 'estoque.json');
+    const receitasFileGame = getFilePath(effectiveUser, game, 'receitas.json');
+    const catFile = getFilePath(effectiveUser, game, 'categorias.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const { nomeOriginal, nome, categoria, associados, quantidadeProduzida } = req.body;
         if (!nomeOriginal || !nome) {
             console.log('[POST /componentes/editar] Erro: Nome original ou nome ausente');
@@ -703,13 +818,15 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
 });
 
 app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /componentes/excluir] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'componentes.json');
-    const receitasFileGame = getFilePath(game, 'receitas.json');
-    const arquivadosFileGame = getFilePath(game, 'arquivados.json');
-    const estoqueFileGame = getFilePath(game, 'estoque.json');
+    const file = getFilePath(effectiveUser, game, 'componentes.json');
+    const receitasFileGame = getFilePath(effectiveUser, game, 'receitas.json');
+    const arquivadosFileGame = getFilePath(effectiveUser, game, 'arquivados.json');
+    const estoqueFileGame = getFilePath(effectiveUser, game, 'estoque.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const { nome } = req.body;
         if (!nome) {
             console.log('[POST /componentes/excluir] Erro: Nome ausente');
@@ -816,10 +933,12 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
 });
 
 app.get('/estoque', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[GET /estoque] Requisição recebida');
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'estoque.json');
+    const file = getFilePath(effectiveUser, game, 'estoque.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit } = req.query;
 
@@ -846,10 +965,12 @@ app.get('/estoque', isAuthenticated, async (req, res) => {
 });
 
 app.post('/estoque', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /estoque] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'estoque.json');
+    const file = getFilePath(effectiveUser, game, 'estoque.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const { componente, quantidade, operacao } = req.body;
         if (!componente || !quantidade || !operacao) {
             console.log('[POST /estoque] Erro: Componente, quantidade ou operação ausentes');
@@ -892,10 +1013,12 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
 });
 
 app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /estoque/zerar] Requisição recebida');
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'estoque.json');
+    const file = getFilePath(effectiveUser, game, 'estoque.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         let estoque = [];
         try {
             estoque = JSON.parse(await fs.readFile(file, 'utf8'));
@@ -918,10 +1041,12 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
 });
 
 app.delete('/data', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[DELETE /data] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'estoque.json');
+    const file = getFilePath(effectiveUser, game, 'estoque.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const { componente } = req.body;
         if (!componente) {
             console.log('[DELETE /data] Erro: Nome do componente ausente');
@@ -952,10 +1077,12 @@ app.delete('/data', isAuthenticated, async (req, res) => {
 });
 
 app.get('/arquivados', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[GET /arquivados] Requisição recebida');
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'arquivados.json');
+    const file = getFilePath(effectiveUser, game, 'arquivados.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const data = await fs.readFile(file, 'utf8');
         res.json(JSON.parse(data));
     } catch (err) {
@@ -966,10 +1093,12 @@ app.get('/arquivados', isAuthenticated, async (req, res) => {
 });
 
 app.post('/arquivados', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /arquivados] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'arquivados.json');
+    const file = getFilePath(effectiveUser, game, 'arquivados.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const arquivados = req.body;
         await fs.writeFile(file, JSON.stringify(arquivados, null, 2));
         console.log('[POST /arquivados] Arquivados atualizados');
@@ -981,10 +1110,12 @@ app.post('/arquivados', isAuthenticated, async (req, res) => {
 });
 
 app.get('/log', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[GET /log] Requisição recebida');
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'log.json');
+    const file = getFilePath(effectiveUser, game, 'log.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const data = await fs.readFile(file, 'utf8');
         res.json(JSON.parse(data));
     } catch (err) {
@@ -995,10 +1126,12 @@ app.get('/log', isAuthenticated, async (req, res) => {
 });
 
 app.post('/log', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /log] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'log.json');
+    const file = getFilePath(effectiveUser, game, 'log.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const novosLogs = Array.isArray(req.body) ? req.body : [req.body];
         let logs = [];
         try {
@@ -1018,6 +1151,7 @@ app.post('/log', isAuthenticated, async (req, res) => {
 });
 
 app.post('/fabricar', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     console.log('[POST /fabricar] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
     const { componente, numCrafts = 1 } = req.body;
@@ -1025,10 +1159,11 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
         console.log('[POST /fabricar] Erro: Componente ausente');
         return res.status(400).json({ sucesso: false, erro: 'Componente é obrigatório' });
     }
-    const componentesFile = getFilePath(game, 'componentes.json');
-    const estoqueFile = getFilePath(game, 'estoque.json');
-    const logFile = getFilePath(game, 'log.json');
+    const componentesFile = getFilePath(effectiveUser, game, 'componentes.json');
+    const estoqueFile = getFilePath(effectiveUser, game, 'estoque.json');
+    const logFile = getFilePath(effectiveUser, game, 'log.json');
     try {
+        await fs.mkdir(path.dirname(componentesFile), { recursive: true });
         let componentes = await fs.readFile(componentesFile, 'utf8').then(JSON.parse).catch(() => []);
         const comp = componentes.find(c => c.nome === componente);
         if (!comp || !comp.associados || comp.associados.length === 0) {
@@ -1095,9 +1230,11 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
 
 // Endpoint para roadmap
 app.get('/roadmap', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'roadmap.json');
+    const file = getFilePath(effectiveUser, game, 'roadmap.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const data = await fs.readFile(file, 'utf8');
         res.json(JSON.parse(data));
     } catch (err) {
@@ -1107,9 +1244,11 @@ app.get('/roadmap', isAuthenticated, async (req, res) => {
 });
 
 app.post('/roadmap', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
     const game = req.query.game || DEFAULT_GAME;
-    const file = getFilePath(game, 'roadmap.json');
+    const file = getFilePath(effectiveUser, game, 'roadmap.json');
     try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         const roadmap = req.body;
         await fs.writeFile(file, JSON.stringify(roadmap, null, 2));
         res.json({ sucesso: true });
