@@ -1,8 +1,8 @@
 // index.js
 //rodar node servidor.js (no terminal)
 
-const API = "https://mmorpg-crafter.onrender.com";
-// const API = "http://localhost:10000";
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API = isLocal ? "http://localhost:10000" : "https://mmorpg-crafter.onrender.com";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
 
 const conteudo = document.getElementById("conteudo");
@@ -23,6 +23,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateToggleButtonText(savedMode);
 
     if (sessionStorage.getItem("loggedIn")) {
+        mostrarBotaoMinhaConta(); // Movido para antes do await para garantir visibilidade imediata
         initMenu();
         await initGames();
         const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
@@ -31,6 +32,199 @@ document.addEventListener("DOMContentLoaded", async () => {
         mostrarPopupLogin();
     }
 });
+
+// Novo: Função para mostrar botão "Minha Conta"
+function mostrarBotaoMinhaConta() {
+    const botaoMinhaConta = document.createElement("button");
+    botaoMinhaConta.id = "botaoMinhaConta";
+    botaoMinhaConta.textContent = "Minha Conta";
+    botaoMinhaConta.style.position = "fixed";
+    botaoMinhaConta.style.top = "20px";
+    botaoMinhaConta.style.right = "20px";
+    botaoMinhaConta.style.padding = "12px 20px";
+    botaoMinhaConta.style.background = "var(--primary-gradient)";
+    botaoMinhaConta.style.color = "white";
+    botaoMinhaConta.style.borderRadius = "var(--border-radius-lg)";
+    botaoMinhaConta.style.cursor = "pointer";
+    botaoMinhaConta.style.zIndex = "1000";
+    botaoMinhaConta.style.fontWeight = "600";
+    botaoMinhaConta.style.boxShadow = "var(--shadow-lg)";
+    botaoMinhaConta.style.transition = "all var(--transition-base)";
+    botaoMinhaConta.addEventListener("mouseover", () => {
+        botaoMinhaConta.style.background = "var(--primary-gradient-hover)";
+        botaoMinhaConta.style.transform = "translateY(-2px)";
+    });
+    botaoMinhaConta.addEventListener("mouseout", () => {
+        botaoMinhaConta.style.background = "var(--primary-gradient)";
+        botaoMinhaConta.style.transform = "translateY(0)";
+    });
+    botaoMinhaConta.addEventListener("click", mostrarPopupMinhaConta);
+    document.body.appendChild(botaoMinhaConta);
+}
+
+// Novo: Popup para "Minha Conta"
+async function mostrarPopupMinhaConta() {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupMinhaConta";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.style.borderRadius = "var(--border-radius-xl)";
+    popup.style.boxShadow = "var(--shadow-xl)";
+    popup.style.minWidth = "300px";
+
+    // Buscar dados do usuário do servidor via endpoint /me
+    try {
+        const response = await fetch(`${API}/me`, { credentials: 'include' });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const usuario = await response.json();
+
+        popup.innerHTML = `
+            <h2>Minha Conta</h2>
+            <p><strong>Nome:</strong> #${usuario.id}${usuario.nome}</p>
+            <p><strong>Email:</strong> ${usuario.email}</p>
+            <button id="btnMudarSenha">Mudar Senha</button>
+            <button id="btnLogout">Logout</button>
+            <button type="button" id="btnFecharMinhaConta">Fechar</button>
+        `;
+    } catch (error) {
+        console.error('[MINHA CONTA] Erro ao carregar dados:', error);
+        popup.innerHTML = `
+            <h2>Minha Conta</h2>
+            <p>Erro ao carregar dados: ${error.message}</p>
+            <button type="button" id="btnFecharMinhaConta">Fechar</button>
+        `;
+    }
+
+    document.body.appendChild(popup);
+
+    // Adicionar event listeners após appendChild para garantir que os elementos estejam no DOM
+    const btnMudarSenha = document.getElementById("btnMudarSenha");
+    if (btnMudarSenha) {
+        btnMudarSenha.addEventListener("click", () => {
+            popup.remove();
+            overlay.remove();
+            mostrarPopupMudarSenha();
+        });
+    }
+
+    const btnLogout = document.getElementById("btnLogout");
+    if (btnLogout) {
+        btnLogout.addEventListener("click", () => {
+            sessionStorage.removeItem("loggedIn");
+            sessionStorage.removeItem("userEmail");
+            popup.remove();
+            overlay.remove();
+            window.location.reload(); // Recarrega para mostrar popup login
+        });
+    }
+
+    const btnFecharMinhaConta = document.getElementById("btnFecharMinhaConta");
+    if (btnFecharMinhaConta) {
+        btnFecharMinhaConta.addEventListener("click", () => {
+            popup.remove();
+            overlay.remove();
+        });
+    }
+}
+
+// Novo: Popup para Mudar Senha
+function mostrarPopupMudarSenha() {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupMudarSenha";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.innerHTML = `
+        <h2>Mudar Senha</h2>
+        <form id="formMudarSenha">
+            <input type="password" id="senhaAtual" placeholder="Senha Atual" required>
+            <p id="erroSenhaAtual" style="color: red; display: none;">Senha atual incorreta</p>
+            <input type="password" id="novaSenha" placeholder="Nova Senha" required>
+            <p id="erroNovaSenha" style="color: red; display: none;">Nova senha é obrigatória</p>
+            <input type="password" id="confirmaNovaSenha" placeholder="Confirmar Nova Senha" required>
+            <p id="erroConfirmaSenha" style="color: red; display: none;">Senhas não coincidem</p>
+            <button type="submit">Salvar</button>
+            <button type="button" id="btnCancelarMudarSenha">Cancelar</button>
+        </form>
+    `;
+    document.body.appendChild(popup);
+
+    document.getElementById("formMudarSenha").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const senhaAtual = document.getElementById("senhaAtual").value;
+        const novaSenha = document.getElementById("novaSenha").value;
+        const confirmaNovaSenha = document.getElementById("confirmaNovaSenha").value;
+
+        // Resetar erros e bordas
+        document.querySelectorAll("#formMudarSenha input").forEach(input => input.style.border = "1px solid #ccc");
+        document.querySelectorAll("#formMudarSenha p").forEach(p => p.style.display = "none");
+
+        let hasError = false;
+
+        if (!senhaAtual) {
+            document.getElementById("erroSenhaAtual").textContent = "Senha atual é obrigatória";
+            document.getElementById("erroSenhaAtual").style.display = "block";
+            document.getElementById("senhaAtual").style.border = "1px solid red";
+            hasError = true;
+        }
+        if (!novaSenha) {
+            document.getElementById("erroNovaSenha").textContent = "Nova senha é obrigatória";
+            document.getElementById("erroNovaSenha").style.display = "block";
+            document.getElementById("novaSenha").style.border = "1px solid red";
+            hasError = true;
+        }
+        if (novaSenha !== confirmaNovaSenha) {
+            document.getElementById("erroConfirmaSenha").textContent = "Senhas não coincidem";
+            document.getElementById("erroConfirmaSenha").style.display = "block";
+            document.getElementById("novaSenha").style.border = "1px solid red";
+            document.getElementById("confirmaNovaSenha").style.border = "1px solid red";
+            hasError = true;
+        }
+
+        if (hasError) return;
+
+        try {
+            const response = await fetch(`${API}/change-password`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ oldPassword: senhaAtual, newPassword: novaSenha }),
+                credentials: 'include'
+            });
+            const data = await response.json();
+            if (data.sucesso) {
+                alert("Senha alterada com sucesso!");
+                popup.remove();
+                overlay.remove();
+            } else {
+                document.getElementById("erroSenhaAtual").textContent = data.erro || "Erro ao mudar senha";
+                document.getElementById("erroSenhaAtual").style.display = "block";
+                document.getElementById("senhaAtual").style.border = "1px solid red";
+            }
+        } catch (error) {
+            document.getElementById("erroSenhaAtual").textContent = "Erro ao mudar senha";
+            document.getElementById("erroSenhaAtual").style.display = "block";
+            document.getElementById("senhaAtual").style.border = "1px solid red";
+        }
+    });
+
+    document.getElementById("btnCancelarMudarSenha").addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+    });
+}
 
 async function initGames() {
     let currentGame = localStorage.getItem("currentGame");
@@ -151,6 +345,7 @@ function initMenu() {
         { section: "farmar", text: "Favoritos" },
         { section: "roadmap", text: "Roadmap" },
         { section: "arquivados", text: "Arquivados" },
+        { section: "time", text: "Time" },
     ];
     sections.forEach(sec => {
         const li = document.createElement("li");
@@ -263,8 +458,10 @@ function mostrarPopupLogin() {
             const data = await response.json();
             if (data.sucesso) {
                 sessionStorage.setItem("loggedIn", "true");
+                sessionStorage.setItem("userEmail", email);
                 popup.remove();
                 overlay.remove();
+                mostrarBotaoMinhaConta(); // Garantir que o botão apareça após login
                 initMenu();
                 await initGames();
                 const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
@@ -420,6 +617,7 @@ async function carregarSecao(secao) {
     if (secao === "farmar") return montarFarmar();
     if (secao === "roadmap") return montarRoadmap();
     if (secao === "categorias") return montarCategorias();
+    if (secao === "time") return montarTime();
     conteudo.innerHTML = `<h1 class="home--titulo-principal">Bem-vindo!</h1>
 <p>Essa aplicação tem como finalidade servir como calculadora e gestão de estoque para qualquer jogo de RPG (aqueles que envolvem craft e coleta de itens)!</p>
 <p>No momento, estamos jogando somente o jogo Pax Dei, por isso, seguem alguns links úteis para o jogo:</p>
@@ -429,6 +627,316 @@ async function carregarSecao(secao) {
 </ul>
 <iframe id="mapaIframe" src="https://paxdei.th.gl/" title="Pax Dei Interactive Map" loading="lazy"></iframe>
 <iframe id="paxDeiIframe" src="https://paxdei.gaming.tools/" title="Pax Dei DataBase" loading="lazy"></iframe>`;
+}
+
+/* ------------------ MÓDULO TIME ------------------ */
+async function montarTime() {
+    conteudo.innerHTML = `
+        <h2>Time</h2>
+        <div id="time-lista" class="lista"></div>
+    `;
+    await carregarListaTime();
+}
+
+async function carregarListaTime() {
+    const userEmail = sessionStorage.getItem('userEmail');
+    let isFounder = false;
+    let effectiveUser = userEmail;
+    try {
+        const statusRes = await fetch(`${API}/user-status`, { credentials: 'include' });
+        const status = await statusRes.json();
+        isFounder = status.isFounder;
+        effectiveUser = status.effectiveUser;
+    } catch (error) {
+        console.error('[TIME] Erro ao carregar status do usuário:', error);
+    }
+
+    const div = document.getElementById("time-lista");
+    div.innerHTML = '';
+
+    // Sempre adicionar seção de pendências
+    let html = `
+        <div class="secao" id="pendencias-secao">
+            <h3>Pendências de Convite</h3>
+            <ul id="pendencias-lista"></ul>
+        </div>
+    `;
+
+    if (!isFounder) {
+        html = `
+            <div class="secao">
+                <h3>Seu Status no Time</h3>
+                <p>Você é membro do time de <strong>${effectiveUser}</strong>. Contate o fundador para gerenciar membros.</p>
+                <button class="btn-desvincular" onclick="sairDoTime('${effectiveUser}')">Sair do Time</button>
+            </div>
+        ` + html;
+    }
+
+    if (isFounder) {
+        try {
+            const [associadosRes, banidosRes, disponiveisRes] = await Promise.all([
+                fetch(`${API}/associacoes`, { credentials: 'include' }),
+                fetch(`${API}/banidos`, { credentials: 'include' }),
+                fetch(`${API}/usuarios-disponiveis`, { credentials: 'include' })
+            ]);
+            const associados = await associadosRes.json();
+            const banidosComRole = await banidosRes.json();
+            const disponiveisAll = await disponiveisRes.json();
+
+            // Filtrar associados para excluir o próprio email do usuário logado
+            const associadosFiltrados = associados.filter(a => a.secondary !== userEmail);
+            const associadosEmails = associadosFiltrados.map(a => a.secondary);
+            const banidosEmails = banidosComRole.map(b => b.banned);
+
+            // Filtrar disponíveis para excluir pendências recebidas
+            const disponiveis = disponiveisAll.filter(d => !d.pendingReceived);
+
+            html += `
+                <div class="secao">
+                    <h3>Associados</h3>
+                    <ul>${associadosFiltrados.map(a => `
+                        <li class="time-item">
+                            ${a.secondary}
+                            <button class="btn-desvincular" onclick="desvincularUsuario('${a.secondary}', '${a.role}')">Desvincular</button>
+                            <button class="btn-banir" onclick="banirUsuario('${a.secondary}', '${a.role}')">Banir</button>
+                        </li>
+                    `).join("") || '<li>Nenhum associado</li>'}</ul>
+                </div>
+                <div class="secao">
+                    <h3>Disponíveis para Convidar</h3>
+                    <ul>${disponiveis.map(d => `
+                        <li class="time-item">
+                            ${d.email}
+                            ${d.pendingSent ? '<span class="pending-invite">Convite enviado</span>' : `<button class="btn-vincular" onclick="enviarConvidar('${d.email}')">Convidar</button>`}
+                        </li>
+                    `).join("") || '<li>Nenhum disponível</li>'}</ul>
+                </div>
+                <div class="secao">
+                    <h3>Banidos</h3>
+                    <ul>${banidosComRole.map(b => `
+                        <li class="time-item">
+                            ${b.banned}
+                            <button class="btn-desbanir" onclick="desbanirUsuario('${b.banned}', '${b.role}')">Desbanir</button>
+                        </li>
+                    `).join("") || '<li>Nenhum banido</li>'}</ul>
+                </div>
+            `;
+        } catch (error) {
+            console.error('[TIME] Erro ao carregar lista:', error);
+            html += '<p>Erro ao carregar dados do time.</p>';
+        }
+    }
+
+    div.innerHTML = html;
+    await carregarPendencias();
+}
+
+async function carregarPendencias() {
+    try {
+        const pendenciasRes = await fetch(`${API}/pendencias`, { credentials: 'include' });
+        const pendencias = await pendenciasRes.json();
+        const lista = document.getElementById("pendencias-lista");
+        if (pendencias.length === 0) {
+            lista.innerHTML = '<li>Nenhuma pendência de convite.</li>';
+        } else {
+            lista.innerHTML = pendencias.map(p => `
+                <li class="time-item">
+                    Convite de <strong>${p.from}</strong>
+                    <button class="btn-vincular" onclick="aceitarConvidar('${p.from}')">Aceitar</button>
+                    <button class="btn-desvincular" onclick="recusarConvidar('${p.from}')">Recusar</button>
+                </li>
+            `).join("");
+        }
+    } catch (error) {
+        console.error('[TIME] Erro ao carregar pendências:', error);
+        document.getElementById("pendencias-lista").innerHTML = '<li>Erro ao carregar pendências.</li>';
+    }
+}
+
+async function enviarConvidar(email) {
+    if (!confirm(`Enviar convite para ${email}?`)) return;
+    try {
+        const response = await fetch(`${API}/enviar-convite`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ to: email }),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarListaTime();
+        } else {
+            alert(data.erro || 'Erro ao enviar convite');
+        }
+    } catch (error) {
+        console.error('[TIME] Erro ao enviar convite:', error);
+        alert('Erro ao enviar convite');
+    }
+}
+
+async function aceitarConvidar(from) {
+    if (!confirm(`Aceitar convite de ${from}?`)) return;
+    try {
+        const response = await fetch(`${API}/aceitar-convite`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ from }),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarListaTime();
+        } else {
+            alert(data.erro || 'Erro ao aceitar convite');
+        }
+    } catch (error) {
+        console.error('[TIME] Erro ao aceitar convite:', error);
+        alert('Erro ao aceitar convite');
+    }
+}
+
+async function recusarConvidar(from) {
+    if (!confirm(`Recusar convite de ${from}?`)) return;
+    try {
+        const response = await fetch(`${API}/recusar-convite`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ from }),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarPendencias();
+        } else {
+            alert(data.erro || 'Erro ao recusar convite');
+        }
+    } catch (error) {
+        console.error('[TIME] Erro ao recusar convite:', error);
+        alert('Erro ao recusar convite');
+    }
+}
+
+async function sairDoTime(primary) {
+    if (!confirm(`Sair do time de ${primary}?`)) return;
+    try {
+        const response = await fetch(`${API}/dissociate-as-secondary`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ primary }),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarListaTime();
+        } else {
+            alert(data.erro || 'Erro ao sair do time');
+        }
+    } catch (error) {
+        console.error('[TIME] Erro ao sair do time:', error);
+        alert('Erro ao sair do time');
+    }
+}
+
+async function vincularUsuario(email) {
+    if (!confirm(`Vincular ${email} ao seu time?`)) return;
+    try {
+        const response = await fetch(`${API}/associate-self`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ secondary: email }),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarListaTime();
+        } else {
+            alert(data.erro || 'Erro ao vincular usuário');
+        }
+    } catch (error) {
+        console.error('[TIME] Erro ao vincular:', error);
+        alert('Erro ao vincular usuário');
+    }
+}
+
+async function desvincularUsuario(email, role) {
+    if (!confirm(`Desvincular ${email} do seu time?`)) return;
+    let endpoint = '/dissociate-self';
+    let body = { secondary: email };
+    if (role === 'secondary') {
+        endpoint = '/dissociate-as-secondary';
+        body = { primary: email };
+    }
+    try {
+        const response = await fetch(`${API}${endpoint}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarListaTime();
+        } else {
+            alert(data.erro || 'Erro ao desvincular usuário');
+        }
+    } catch (error) {
+        console.error('[TIME] Erro ao desvincular:', error);
+        alert('Erro ao desvincular usuário');
+    }
+}
+
+async function banirUsuario(email, role) {
+    if (!confirm(`Banir ${email} do seu time?`)) return;
+    let endpoint = '/ban-user';
+    let body = { secondary: email };
+    if (role === 'secondary') {
+        endpoint = '/ban-as-secondary';
+        body = { primary: email };
+    }
+    try {
+        const response = await fetch(`${API}${endpoint}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarListaTime();
+        } else {
+            alert(data.erro || 'Erro ao banir usuário');
+        }
+    } catch (error) {
+        console.error('[TIME] Erro ao banir:', error);
+        alert('Erro ao banir usuário');
+    }
+}
+
+async function desbanirUsuario(email, role) {
+    if (!confirm(`Desbanir ${email}?`)) return;
+    let endpoint = '/unban-user';
+    let body = { bannedEmail: email };
+    if (role === 'banned') {
+        endpoint = '/unban-as-banned';
+        body = { primary: email };
+    }
+    try {
+        const response = await fetch(`${API}${endpoint}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarListaTime();
+        } else {
+            alert(data.erro || 'Erro ao desbanir usuário');
+        }
+    } catch (error) {
+        console.error('[TIME] Erro ao desbanir:', error);
+        alert('Erro ao desbanir usuário');
+    }
 }
 
 /* ------------------ Funções Auxiliares de Filtro e Ordenação ------------------ */

@@ -1,4 +1,5 @@
 // servidor.js
+
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
@@ -72,6 +73,24 @@ async function getEffectiveUser(user) {
     }
 }
 
+// Função para gerar ID único de 4-6 dígitos
+async function generateUniqueId() {
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+    let id;
+    do {
+        const digits = Math.floor(Math.random() * 3) + 4; // 4 a 6 dígitos
+        id = Math.floor(Math.random() * Math.pow(10, digits)).toString().padStart(digits, '0');
+    } while (usuarios.some(u => u.id === id));
+    return id;
+}
+
+// Função para salvar usuários (auxiliar para updates)
+async function saveUsuarios(usuarios) {
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
+}
+
 // Criar diretório de dados e arquivos JSON iniciais, se não existirem
 async function inicializarArquivos() {
     try {
@@ -94,6 +113,24 @@ async function inicializarArquivos() {
         } catch {
             await fs.writeFile(associationsPath, JSON.stringify([]));
             console.log('[INIT] Criado usuarios-associacoes.json na raiz');
+        }
+
+        // Banidos de usuários
+        const banidosPath = path.join(DATA_DIR, 'usuarios-banidos.json');
+        try {
+            await fs.access(banidosPath);
+        } catch {
+            await fs.writeFile(banidosPath, JSON.stringify([]));
+            console.log('[INIT] Criado usuarios-banidos.json na raiz');
+        }
+
+        // Pendências de convites
+        const pendenciasPath = path.join(DATA_DIR, 'usuarios-pendencias.json');
+        try {
+            await fs.access(pendenciasPath);
+        } catch {
+            await fs.writeFile(pendenciasPath, JSON.stringify([]));
+            console.log('[INIT] Criado usuarios-pendencias.json na raiz');
         }
 
     } catch (error) {
@@ -143,6 +180,213 @@ function getFilePath(user, game, filename) {
     const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, ''); // Sanitize
     return path.join(DATA_DIR, safeUser, safeGame, filename);
 }
+
+// Endpoint para status do usuário
+app.get('/user-status', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const effectiveUser = await getEffectiveUser(user);
+    const isFounder = effectiveUser === user;
+    res.json({ isFounder, effectiveUser });
+});
+
+// Novo endpoint para obter dados do usuário logado efetivo (/me)
+app.get('/me', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const effectiveUser = await getEffectiveUser(user);
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuario = usuarios.find(u => u.email === effectiveUser);
+        if (!usuario) {
+            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+        }
+        // Gerar ID se não existir
+        if (!usuario.id) {
+            usuario.id = await generateUniqueId();
+            const index = usuarios.findIndex(u => u.email === effectiveUser);
+            usuarios[index] = usuario;
+            await saveUsuarios(usuarios);
+        }
+        // Setar nome padrão se não existir
+        if (!usuario.nome || usuario.nome.trim() === '') {
+            usuario.nome = "Lorem Ipsum";
+            const index = usuarios.findIndex(u => u.email === effectiveUser);
+            usuarios[index] = usuario;
+            await saveUsuarios(usuarios);
+        }
+        // Não retornar senha
+        const { senhaHash, ...safeUser } = usuario;
+        res.json(safeUser);
+    } catch (error) {
+        console.error('[GET /me] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao buscar usuário' });
+    }
+});
+
+// Endpoint para buscar dados do usuário por email
+app.get('/usuarios', isAuthenticated, async (req, res) => {
+    const { email } = req.query;
+    if (!email) {
+        return res.status(400).json({ sucesso: false, erro: 'Email é obrigatório' });
+    }
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuario = usuarios.find(u => u.email === email);
+        if (!usuario) {
+            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+        }
+        // Gerar ID se não existir
+        if (!usuario.id) {
+            usuario.id = await generateUniqueId();
+            const index = usuarios.findIndex(u => u.email === email);
+            usuarios[index] = usuario;
+            await saveUsuarios(usuarios);
+        }
+        // Setar nome padrão se não existir
+        if (!usuario.nome || usuario.nome.trim() === '') {
+            usuario.nome = "Lorem Ipsum";
+            const index = usuarios.findIndex(u => u.email === email);
+            usuarios[index] = usuario;
+            await saveUsuarios(usuarios);
+        }
+        // Não retornar senha
+        const { senhaHash, ...safeUser } = usuario;
+        res.json(safeUser);
+    } catch (error) {
+        console.error('[GET /usuarios] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao buscar usuário' });
+    }
+});
+
+// Endpoint para enviar convite
+app.post('/enviar-convite', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const effectiveUser = await getEffectiveUser(user);
+    if (effectiveUser !== user) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado a enviar convites' });
+    }
+    const { to } = req.body;
+    if (!to) {
+        return res.status(400).json({ sucesso: false, erro: 'Destinatário é obrigatório' });
+    }
+    const pendenciasPath = path.join(DATA_DIR, 'usuarios-pendencias.json');
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    try {
+        let pendencias = await fs.readFile(pendenciasPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!usuarios.some(u => u.email === to && u.aprovado)) {
+            return res.status(400).json({ sucesso: false, erro: 'Destinatário não aprovado' });
+        }
+        if (associations.some(a => a.primary === to || a.secondary === to)) {
+            return res.status(400).json({ sucesso: false, erro: 'Destinatário já faz parte de um time' });
+        }
+        if (pendencias.some(p => p.from === user && p.to === to)) {
+            return res.status(400).json({ sucesso: false, erro: 'Convite já pendente' });
+        }
+        pendencias.push({ from: user, to, date: new Date().toISOString() });
+        await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
+        console.log(`[ENVIAR-CONVITE] Convite enviado de ${user} para ${to}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[ENVIAR-CONVITE] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao enviar convite' });
+    }
+});
+
+// Endpoint para listar pendências do usuário
+app.get('/pendencias', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const pendenciasPath = path.join(DATA_DIR, 'usuarios-pendencias.json');
+    try {
+        const pendencias = await fs.readFile(pendenciasPath, 'utf8').then(JSON.parse).catch(() => []);
+        const minhasPendencias = pendencias.filter(p => p.to === user);
+        res.json(minhasPendencias);
+    } catch (error) {
+        console.error('[GET /pendencias] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao listar pendências' });
+    }
+});
+
+// Endpoint para aceitar convite
+app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const { from } = req.body;
+    if (!from) {
+        return res.status(400).json({ sucesso: false, erro: 'Remetente é obrigatório' });
+    }
+    const pendenciasPath = path.join(DATA_DIR, 'usuarios-pendencias.json');
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let pendencias = await fs.readFile(pendenciasPath, 'utf8').then(JSON.parse).catch(() => []);
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+
+        // Remover pendência
+        const pendIndex = pendencias.findIndex(p => p.from === from && p.to === user);
+        if (pendIndex === -1) {
+            return res.status(400).json({ sucesso: false, erro: 'Convite não encontrado' });
+        }
+        pendencias.splice(pendIndex, 1);
+
+        // Adicionar associação
+        if (associations.some(a => a.secondary === user)) {
+            return res.status(400).json({ sucesso: false, erro: 'Você já está em um time' });
+        }
+        associations.push({ primary: from, secondary: user });
+
+        await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
+        await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
+
+        // Criar diretório para o usuário se não existir
+        const userDir = path.join(DATA_DIR, user);
+        await fs.mkdir(userDir, { recursive: true });
+        const defaultGameDir = path.join(userDir, DEFAULT_GAME);
+        await fs.mkdir(defaultGameDir, { recursive: true });
+        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json'];
+        for (const file of files) {
+            const filePath = path.join(defaultGameDir, file);
+            try {
+                await fs.access(filePath);
+            } catch {
+                await fs.writeFile(filePath, JSON.stringify([]));
+            }
+        }
+
+        console.log(`[ACEITAR-CONVITE] ${user} aceitou convite de ${from}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[ACEITAR-CONVITE] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao aceitar convite' });
+    }
+});
+
+// Endpoint para recusar convite
+app.post('/recusar-convite', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const { from } = req.body;
+    if (!from) {
+        return res.status(400).json({ sucesso: false, erro: 'Remetente é obrigatório' });
+    }
+    const pendenciasPath = path.join(DATA_DIR, 'usuarios-pendencias.json');
+    try {
+        let pendencias = await fs.readFile(pendenciasPath, 'utf8').then(JSON.parse).catch(() => []);
+        const pendIndex = pendencias.findIndex(p => p.from === from && p.to === user);
+        if (pendIndex === -1) {
+            return res.status(400).json({ sucesso: false, erro: 'Convite não encontrado' });
+        }
+        pendencias.splice(pendIndex, 1);
+        await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
+        console.log(`[RECUSAR-CONVITE] ${user} recusou convite de ${from}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[RECUSAR-CONVITE] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao recusar convite' });
+    }
+});
 
 // Endpoint para associar usuários (protegido por headers)
 app.post('/associate-users', async (req, res) => {
@@ -215,6 +459,363 @@ app.post('/dissociate-users', async (req, res) => {
     }
 });
 
+// Endpoint para listar associações do usuário logado
+app.get('/associacoes', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    try {
+        const associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        const asPrimary = associations.filter(a => a.primary === user).map(a => ({ secondary: a.secondary, role: 'primary' }));
+        const asSecondaryAssoc = associations.find(a => a.secondary === user);
+        const asSecondary = asSecondaryAssoc ? [{ secondary: asSecondaryAssoc.primary, role: 'secondary' }] : [];
+        const allAssociados = [...asPrimary, ...asSecondary];
+        res.json(allAssociados);
+    } catch (error) {
+        console.error('[GET /associacoes] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao listar associações' });
+    }
+});
+
+// Endpoint para associar usuário (self)
+app.post('/associate-self', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const effectiveUser = await getEffectiveUser(user);
+    if (effectiveUser !== user) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado a adicionar membros' });
+    }
+    const { secondary } = req.body;
+    if (!secondary) {
+        return res.status(400).json({ sucesso: false, erro: 'Secondary é obrigatório' });
+    }
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (associations.some(a => a.secondary === secondary)) {
+            return res.status(400).json({ sucesso: false, erro: 'Secondary já associado' });
+        }
+        if (!usuarios.some(u => u.email === user && u.aprovado)) {
+            return res.status(400).json({ sucesso: false, erro: 'Primary não autorizado' });
+        }
+        if (!usuarios.some(u => u.email === secondary && u.aprovado)) {
+            return res.status(400).json({ sucesso: false, erro: 'Secondary não aprovado' });
+        }
+        associations.push({ primary: user, secondary });
+        await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
+        console.log(`[ASSOCIATE-SELF] Associado ${secondary} ao primary ${user}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[ASSOCIATE-SELF] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao associar usuário' });
+    }
+});
+
+// Endpoint para desvincular usuário (self)
+app.post('/dissociate-self', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const effectiveUser = await getEffectiveUser(user);
+    if (effectiveUser !== user) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado a remover membros' });
+    }
+    const { secondary } = req.body;
+    if (!secondary) {
+        return res.status(400).json({ sucesso: false, erro: 'Secondary é obrigatório' });
+    }
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!usuarios.some(u => u.email === user && u.aprovado)) {
+            return res.status(400).json({ sucesso: false, erro: 'Primary não autorizado' });
+        }
+        if (!usuarios.some(u => u.email === secondary && u.aprovado)) {
+            return res.status(400).json({ sucesso: false, erro: 'Secondary não encontrado' });
+        }
+        const index = associations.findIndex(a => a.primary === user && a.secondary === secondary);
+        if (index === -1) {
+            return res.status(400).json({ sucesso: false, erro: 'Associação não encontrada' });
+        }
+        associations.splice(index, 1);
+        await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
+
+        // Criar diretório para o secondary se não existir
+        const secondaryDir = path.join(DATA_DIR, secondary);
+        try {
+            await fs.mkdir(secondaryDir, { recursive: true });
+            const defaultGameDir = path.join(secondaryDir, DEFAULT_GAME);
+            await fs.mkdir(defaultGameDir, { recursive: true });
+            const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json'];
+            for (const file of files) {
+                const filePath = path.join(defaultGameDir, file);
+                try {
+                    await fs.access(filePath);
+                } catch {
+                    await fs.writeFile(filePath, JSON.stringify([]));
+                }
+            }
+            console.log(`[DISSOCIATE-SELF] Diretório criado para ${secondary}`);
+        } catch (error) {
+            console.error(`[DISSOCIATE-SELF] Erro ao criar diretório para ${secondary}:`, error);
+        }
+
+        console.log(`[DISSOCIATE-SELF] Desvinculado ${secondary} do primary ${user}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[DISSOCIATE-SELF] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao desvincular usuário' });
+    }
+});
+
+// Novo endpoint para desvincular como secondary
+app.post('/dissociate-as-secondary', isAuthenticated, async (req, res) => {
+    const secondary = req.session.user;
+    const { primary } = req.body;
+    if (!primary) {
+        return res.status(400).json({ sucesso: false, erro: 'Primary é obrigatório' });
+    }
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!usuarios.some(u => u.email === secondary && u.aprovado)) {
+            return res.status(400).json({ sucesso: false, erro: 'Secondary não autorizado' });
+        }
+        if (!usuarios.some(u => u.email === primary && u.aprovado)) {
+            return res.status(400).json({ sucesso: false, erro: 'Primary não encontrado' });
+        }
+        const index = associations.findIndex(a => a.primary === primary && a.secondary === secondary);
+        if (index === -1) {
+            return res.status(400).json({ sucesso: false, erro: 'Associação não encontrada' });
+        }
+        associations.splice(index, 1);
+        await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
+        console.log(`[DISSOCIATE-AS-SECONDARY] Desvinculado ${secondary} do primary ${primary}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[DISSOCIATE-AS-SECONDARY] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao desvincular usuário' });
+    }
+});
+
+// Endpoint para banir usuário
+app.post('/ban-user', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const effectiveUser = await getEffectiveUser(user);
+    if (effectiveUser !== user) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado a banir usuários' });
+    }
+    const { secondary } = req.body;
+    if (!secondary) {
+        return res.status(400).json({ sucesso: false, erro: 'Secondary é obrigatório' });
+    }
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    const banidosPath = path.join(DATA_DIR, 'usuarios-banidos.json');
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        let banidos = await fs.readFile(banidosPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+
+        // Primeiro, desvincular se associado
+        const assocIndex = associations.findIndex(a => a.primary === user && a.secondary === secondary);
+        if (assocIndex !== -1) {
+            associations.splice(assocIndex, 1);
+            await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
+        }
+
+        if (!usuarios.some(u => u.email === user && u.aprovado)) {
+            return res.status(400).json({ sucesso: false, erro: 'Primary não autorizado' });
+        }
+        if (!usuarios.some(u => u.email === secondary)) {
+            return res.status(400).json({ sucesso: false, erro: 'Secondary não encontrado' });
+        }
+        if (banidos.some(b => b.primary === user && b.banned === secondary)) {
+            return res.status(400).json({ sucesso: false, erro: 'Secondary já banido' });
+        }
+
+        banidos.push({ primary: user, banned: secondary, date: new Date().toISOString() });
+        await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
+        console.log(`[BAN-USER] ${secondary} banido por ${user}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[BAN-USER] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao banir usuário' });
+    }
+});
+
+// Novo endpoint para banir como secondary (banir o primary)
+app.post('/ban-as-secondary', isAuthenticated, async (req, res) => {
+    const secondary = req.session.user;
+    const effectiveUser = await getEffectiveUser(secondary);
+    if (effectiveUser !== secondary) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado a banir usuários' });
+    }
+    const { primary: banned } = req.body;
+    if (!banned) {
+        return res.status(400).json({ sucesso: false, erro: 'Primary a ser banido é obrigatório' });
+    }
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    const banidosPath = path.join(DATA_DIR, 'usuarios-banidos.json');
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        let banidos = await fs.readFile(banidosPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+
+        // Primeiro, desvincular se associado
+        const assocIndex = associations.findIndex(a => a.primary === banned && a.secondary === secondary);
+        if (assocIndex !== -1) {
+            associations.splice(assocIndex, 1);
+            await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
+        }
+
+        if (!usuarios.some(u => u.email === secondary && u.aprovado)) {
+            return res.status(400).json({ sucesso: false, erro: 'Secondary não autorizado' });
+        }
+        if (!usuarios.some(u => u.email === banned)) {
+            return res.status(400).json({ sucesso: false, erro: 'Primary não encontrado' });
+        }
+        if (banidos.some(b => b.primary === secondary && b.banned === banned)) {
+            return res.status(400).json({ sucesso: false, erro: 'Primary já banido' });
+        }
+
+        banidos.push({ primary: secondary, banned, date: new Date().toISOString() });
+        await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
+        console.log(`[BAN-AS-SECONDARY] ${banned} banido por ${secondary}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[BAN-AS-SECONDARY] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao banir usuário' });
+    }
+});
+
+// Endpoint para listar banidos do usuário logado
+app.get('/banidos', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const banidosPath = path.join(DATA_DIR, 'usuarios-banidos.json');
+    try {
+        const banidos = await fs.readFile(banidosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const asBanning = banidos.filter(b => b.primary === user).map(b => ({ banned: b.banned, role: 'banning' }));
+        const asBannedBy = banidos.filter(b => b.banned === user).map(b => ({ banned: b.primary, role: 'banned' }));
+        const allBanidos = [...asBanning, ...asBannedBy];
+        res.json(allBanidos);
+    } catch (error) {
+        console.error('[GET /banidos] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao listar banidos' });
+    }
+});
+
+// Endpoint para desbanir usuário
+app.post('/unban-user', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const effectiveUser = await getEffectiveUser(user);
+    if (effectiveUser !== user) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado a desbanir usuários' });
+    }
+    const { bannedEmail } = req.body;
+    if (!bannedEmail) {
+        return res.status(400).json({ sucesso: false, erro: 'Banned email é obrigatório' });
+    }
+    const banidosPath = path.join(DATA_DIR, 'usuarios-banidos.json');
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let banidos = await fs.readFile(banidosPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+
+        if (!usuarios.some(u => u.email === user && u.aprovado)) {
+            return res.status(400).json({ sucesso: false, erro: 'Primary não autorizado' });
+        }
+
+        const index = banidos.findIndex(b => b.primary === user && b.banned === bannedEmail);
+        if (index === -1) {
+            return res.status(400).json({ sucesso: false, erro: 'Banimento não encontrado' });
+        }
+        banidos.splice(index, 1);
+        await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
+        console.log(`[UNBAN-USER] ${bannedEmail} desbanido por ${user}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[UNBAN-USER] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao desbanir usuário' });
+    }
+});
+
+// Novo endpoint para desbanir como banned (desbanir o baneador)
+app.post('/unban-as-banned', isAuthenticated, async (req, res) => {
+    const banned = req.session.user;
+    const effectiveUser = await getEffectiveUser(banned);
+    if (effectiveUser !== banned) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado a desbanir usuários' });
+    }
+    const { primary: baneador } = req.body;
+    if (!baneador) {
+        return res.status(400).json({ sucesso: false, erro: 'Baneador é obrigatório' });
+    }
+    const banidosPath = path.join(DATA_DIR, 'usuarios-banidos.json');
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let banidos = await fs.readFile(banidosPath, 'utf8').then(JSON.parse).catch(() => []);
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+
+        if (!usuarios.some(u => u.email === banned && u.aprovado)) {
+            return res.status(400).json({ sucesso: false, erro: 'Banned não autorizado' });
+        }
+
+        const index = banidos.findIndex(b => b.primary === baneador && b.banned === banned);
+        if (index === -1) {
+            return res.status(400).json({ sucesso: false, erro: 'Banimento não encontrado' });
+        }
+        banidos.splice(index, 1);
+        await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
+        console.log(`[UNBAN-AS-BANNED] Banimento de ${banned} por ${baneador} removido`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[UNBAN-AS-BANNED] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao desbanir usuário' });
+    }
+});
+
+// Endpoint para listar usuários aprovados (exceto self)
+app.get('/usuarios-aprovados', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        const usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const aprovados = usuarios.filter(u => u.aprovado && u.email !== effectiveUser).map(u => u.email);
+        res.json(aprovados);
+    } catch (error) {
+        console.error('[GET /usuarios-aprovados] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao listar usuários aprovados' });
+    }
+});
+
+// Endpoint para listar usuários disponíveis para convite (não em nenhum time)
+app.get('/usuarios-disponiveis', isAuthenticated, async (req, res) => {
+    const userEmail = req.session.user;
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    const pendenciasPath = path.join(DATA_DIR, 'usuarios-pendencias.json');
+    try {
+        const usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        const pendencias = await fs.readFile(pendenciasPath, 'utf8').then(JSON.parse).catch(() => []);
+        const inTeam = new Set(associations.map(a => [a.primary, a.secondary]).flat());
+        const disponiveisAll = usuarios.filter(u => u.aprovado && !inTeam.has(u.email) && u.email !== userEmail);
+        const disponiveis = disponiveisAll.map(u => {
+            const pendingSent = pendencias.some(p => p.from === userEmail && p.to === u.email);
+            const pendingReceived = pendencias.some(p => p.to === userEmail && p.from === u.email);
+            return { email: u.email, pendingSent, pendingReceived };
+        });
+        res.json(disponiveis);
+    } catch (error) {
+        console.error('[GET /usuarios-disponiveis] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao listar usuários disponíveis' });
+    }
+});
+
 // Endpoint: Servir index.html (não protegido)
 app.get('/', (req, res) => {
     console.log('[GET /] Servindo index.html');
@@ -230,10 +831,25 @@ app.post('/login', async (req, res) => {
             return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
         }
 
-        const usuarios = await fs.readFile(path.join(DATA_DIR, 'usuarios.json'), 'utf8').then(JSON.parse).catch(() => []);
+        const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
         const usuario = usuarios.find(u => u.email === email);
         if (!usuario || !usuario.aprovado || !(await bcrypt.compare(senha, usuario.senhaHash))) {
             return res.status(401).json({ sucesso: false, erro: 'Usuário ou senha não encontrados' });
+        }
+        // Gerar ID se não existir
+        if (!usuario.id) {
+            usuario.id = await generateUniqueId();
+            const index = usuarios.findIndex(u => u.email === email);
+            usuarios[index] = usuario;
+            await saveUsuarios(usuarios);
+        }
+        // Setar nome padrão se não existir
+        if (!usuario.nome || usuario.nome.trim() === '') {
+            usuario.nome = "Lorem Ipsum";
+            const index = usuarios.findIndex(u => u.email === email);
+            usuarios[index] = usuario;
+            await saveUsuarios(usuarios);
         }
         req.session.user = email;
         res.json({ sucesso: true });
@@ -252,13 +868,15 @@ app.post('/cadastro', async (req, res) => {
             return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
         }
 
-        let usuarios = await fs.readFile(path.join(DATA_DIR, 'usuarios.json'), 'utf8').then(JSON.parse).catch(() => []);
+        const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
         if (usuarios.some(u => u.email === email)) {
             return res.status(400).json({ sucesso: false, erro: 'Email já cadastrado' });
         }
         const senhaHash = await bcrypt.hash(senha, 10);
-        usuarios.push({ nome, email, senhaHash, aprovado: false });
-        await fs.writeFile(path.join(DATA_DIR, 'usuarios.json'), JSON.stringify(usuarios, null, 2));
+        const id = await generateUniqueId();
+        usuarios.push({ nome, email, senhaHash, id, aprovado: false });
+        await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
 
         // Enviar email
         await transporter.sendMail({
@@ -275,8 +893,34 @@ app.post('/cadastro', async (req, res) => {
     }
 });
 
+// Novo endpoint para mudar senha (autenticado)
+app.post('/change-password', isAuthenticated, async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) {
+        return res.status(400).json({ sucesso: false, erro: 'Senhas antiga e nova são obrigatórias' });
+    }
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const index = usuarios.findIndex(u => u.email === req.session.user);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+        }
+        if (!(await bcrypt.compare(oldPassword, usuarios[index].senhaHash))) {
+            return res.status(401).json({ sucesso: false, erro: 'Senha atual incorreta' });
+        }
+        const newHash = await bcrypt.hash(newPassword, 10);
+        usuarios[index].senhaHash = newHash;
+        await saveUsuarios(usuarios);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /change-password] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao mudar senha' });
+    }
+});
+
 // Endpoint: Aprovação manual (não protegido, pois manual via Postman)
-app.put('/data/usuarios', async (req, res) => {
+app.put('/usuarios', async (req, res) => {
     const { email, aprovadoParaAcesso } = req.body;
     try {
         let usuarios = await fs.readFile(path.join(DATA_DIR, 'usuarios.json'), 'utf8').then(JSON.parse).catch(() => []);
@@ -285,16 +929,16 @@ app.put('/data/usuarios', async (req, res) => {
             return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
         }
         usuarios[index].aprovado = aprovadoParaAcesso;
-        await fs.writeFile(path.join(DATA_DIR, 'usuarios.json'), JSON.stringify(usuarios, null, 2));
+        await saveUsuarios(usuarios);
         res.json({ sucesso: true });
     } catch (error) {
-        console.error('[PUT /data/usuarios] Erro:', error);
+        console.error('[PUT /usuarios] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao aprovar' });
     }
 });
 
 // Endpoint: Troca de senha (protegido por headers)
-app.put('/data/usuarios', async (req, res) => {
+app.put('/usuarios', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
     const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
     if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyadhadhiyfad') {
@@ -309,10 +953,10 @@ app.put('/data/usuarios', async (req, res) => {
         }
         const senhaHash = await bcrypt.hash(novaSenha, 10);
         usuarios[index].senhaHash = senhaHash;
-        await fs.writeFile(path.join(DATA_DIR, 'usuarios.json'), JSON.stringify(usuarios, null, 2));
+        await saveUsuarios(usuarios);
         res.json({ sucesso: true });
     } catch (error) {
-        console.error('[PUT /data/usuarios/troca-de-senha] Erro:', error);
+        console.error('[PUT /usuarios/troca-de-senha] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao trocar senha' });
     }
 });

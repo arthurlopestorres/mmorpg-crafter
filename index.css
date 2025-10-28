@@ -639,6 +639,65 @@ button.btn-arquivar:hover {
     box-shadow: var(--shadow-md);
 }
 
+.btn-desvincular,
+.btn-vincular,
+.btn-banir,
+.btn-desbanir {
+    padding: 8px 16px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.85rem;
+    margin-left: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-vincular {
+    background: var(--success-gradient);
+    color: white;
+}
+
+.btn-vincular:hover {
+    background: linear-gradient(135deg, #38ef7d 0%, #11998e 100%);
+}
+
+.btn-desvincular {
+    background: var(--warning-gradient);
+    color: #2d3748;
+}
+
+.btn-desvincular:hover {
+    background: linear-gradient(135deg, #fdcb6e 0%, #ffeaa7 100%);
+}
+
+.btn-banir {
+    background: var(--danger-gradient);
+    color: white;
+}
+
+.btn-banir:hover {
+    background: linear-gradient(135deg, #fee140 0%, #fa709a 100%);
+}
+
+.btn-desbanir {
+    background: var(--success-gradient);
+    color: white;
+}
+
+.btn-desbanir:hover {
+    background: linear-gradient(135deg, #38ef7d 0%, #11998e 100%);
+}
+
+.pending-invite {
+    color: #48bb78;
+    font-style: italic;
+    font-weight: 500;
+    padding: 8px 16px;
+    background: rgba(72, 187, 120, 0.1);
+    border-radius: var(--border-radius-sm);
+    border: 1px solid rgba(72, 187, 120, 0.3);
+}
+
 /* ========================================================================
    CARDS & ITEMS
    ======================================================================== */
@@ -839,6 +898,35 @@ button.btn-arquivar:hover {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
+}
+
+/* ========================================================================
+   TIME MODULE STYLES
+   ======================================================================== */
+.secao {
+    margin-bottom: 32px;
+}
+
+.secao h3 {
+    color: #ffffff;
+    margin-bottom: 16px;
+    font-size: 1.5rem;
+}
+
+.time-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: var(--border-radius-md);
+    margin-bottom: 8px;
+    box-shadow: var(--shadow-sm);
+}
+
+.time-item strong {
+    flex: 1;
+    color: var(--text-primary);
 }
 
 /* ========================================================================
@@ -1050,7 +1138,7 @@ form select:focus {
 #themeToggle {
     position: fixed;
     top: 20px;
-    right: 20px;
+    right: 200px;
     padding: 12px 20px;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(20px);
@@ -1486,7 +1574,7 @@ form select:focus {
 }
 
 /* ========================================================================
-   COMPONENTES ESPECÍFICOS
+   COMPONENTES ESPECÍFICO
    ======================================================================== */
 #lista-componentes {
     max-height: 720px;
@@ -1697,6 +1785,21 @@ body.dark-mode .item.favorita .receita-header--titulo {
     color: #ffd700 !important;
 }
 
+body.dark-mode .secao h3 {
+    color: #e2e8f0;
+}
+
+body.dark-mode .time-item {
+    background: rgba(45, 55, 72, 0.95);
+    color: #e2e8f0;
+}
+
+body.dark-mode .pending-invite {
+    color: #48bb78;
+    background: rgba(72, 187, 120, 0.2);
+    border-color: rgba(72, 187, 120, 0.5);
+}
+
 /* ========================================================================
    BRIGHT MODE STYLES
    ======================================================================== */
@@ -1843,6 +1946,12 @@ body.bright-mode #botaoDeMinimizarMenu:hover {
     .menu-text {
         display: none;
     }
+
+    .time-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
 }
 
 /* ========================================================================
@@ -1887,4 +1996,20 @@ html {
 .filtros {
     position: relative;
     z-index: 10;
+}
+
+#popupMinhaConta p {
+    color: darkgray;
+}
+
+.receitas-dropdown option {
+    color: var(--text-primary);
+}
+
+#time-lista li {
+    color: var(--text-muted);
+}
+
+#formCadastro #btnVoltarLogin {
+    color: #2d3748;
 }
