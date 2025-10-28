@@ -874,6 +874,7 @@ async function aceitarConvidar(from) {
         const data = await response.json();
         if (data.sucesso) {
             await carregarListaTime();
+            window.location.reload(); // Refresh automático para atualizar games e estado
         } else {
             alert(data.erro || 'Erro ao aceitar convite');
         }
@@ -915,7 +916,9 @@ async function sairDoTime(primary) {
         });
         const data = await response.json();
         if (data.sucesso) {
+            localStorage.removeItem("currentGame");
             await carregarListaTime();
+            window.location.reload(); // Refresh automático para atualizar games e estado
         } else {
             alert(data.erro || 'Erro ao sair do time');
         }
