@@ -26,12 +26,38 @@ document.addEventListener("DOMContentLoaded", async () => {
         mostrarBotaoMinhaConta(); // Movido para antes do await para garantir visibilidade imediata
         initMenu();
         await initGames();
+        await carregarUserStatus(); // Novo: Carregar status do usuário incluindo isAdmin
         const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
         carregarSecao(ultimaSecao);
     } else {
         mostrarPopupLogin();
     }
 });
+
+// Novo: Função para carregar status do usuário (inclui isAdmin)
+async function carregarUserStatus() {
+    try {
+        const response = await fetch(`${API}/user-status`, { credentials: 'include' });
+        const status = await response.json();
+        sessionStorage.setItem('isFounder', status.isFounder.toString());
+        sessionStorage.setItem('isAdmin', status.isAdmin.toString()); // Novo: Salvar isAdmin
+        sessionStorage.setItem('effectiveUser', status.effectiveUser);
+    } catch (error) {
+        console.error('[USER STATUS] Erro ao carregar status:', error);
+        sessionStorage.setItem('isFounder', 'false');
+        sessionStorage.setItem('isAdmin', 'false');
+    }
+}
+
+// Função auxiliar para checar se é admin (founder ou co-founder)
+function isUserAdmin() {
+    return sessionStorage.getItem('isAdmin') === 'true';
+}
+
+// Função auxiliar para checar se é founder
+function isUserFounder() {
+    return sessionStorage.getItem('isFounder') === 'true';
+}
 
 // Novo: Função para mostrar botão "Minha Conta"
 function mostrarBotaoMinhaConta() {
@@ -464,6 +490,7 @@ function mostrarPopupLogin() {
                 mostrarBotaoMinhaConta(); // Garantir que o botão apareça após login
                 initMenu();
                 await initGames();
+                await carregarUserStatus(); // Novo: Carregar status após login
                 const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
                 carregarSecao(ultimaSecao);
             } else {
@@ -640,13 +667,15 @@ async function montarTime() {
 
 async function carregarListaTime() {
     const userEmail = sessionStorage.getItem('userEmail');
-    let isFounder = false;
-    let effectiveUser = userEmail;
+    let isFounder = isUserFounder();
+    let effectiveUser = sessionStorage.getItem('effectiveUser') || userEmail;
     try {
         const statusRes = await fetch(`${API}/user-status`, { credentials: 'include' });
         const status = await statusRes.json();
         isFounder = status.isFounder;
         effectiveUser = status.effectiveUser;
+        sessionStorage.setItem('isFounder', status.isFounder.toString());
+        sessionStorage.setItem('effectiveUser', effectiveUser);
     } catch (error) {
         console.error('[TIME] Erro ao carregar status do usuário:', error);
     }
@@ -694,13 +723,18 @@ async function carregarListaTime() {
             html += `
                 <div class="secao">
                     <h3>Associados</h3>
-                    <ul>${associadosFiltrados.map(a => `
-                        <li class="time-item">
-                            ${a.secondary}
-                            <button class="btn-desvincular" onclick="desvincularUsuario('${a.secondary}', '${a.role}')">Desvincular</button>
-                            <button class="btn-banir" onclick="banirUsuario('${a.secondary}', '${a.role}')">Banir</button>
-                        </li>
-                    `).join("") || '<li>Nenhum associado</li>'}</ul>
+                    <ul>${associadosFiltrados.map(a => {
+                const isCoFounder = a.role === 'co-founder';
+                return `
+                            <li class="time-item">
+                                ${a.secondary}
+                                ${isCoFounder ? '<span style="color: green;"> (Co-Fundador)</span>' : ''}
+                                <button class="btn-promote-cofounder" onclick="toggleCoFounder('${a.secondary}', ${isCoFounder})">${isCoFounder ? 'Remover Co-Fundador' : 'Promover a Co-Fundador'}</button>
+                                <button class="btn-desvincular" onclick="desvincularUsuario('${a.secondary}', '${a.role}')">Desvincular</button>
+                                <button class="btn-banir" onclick="banirUsuario('${a.secondary}', '${a.role}')">Banir</button>
+                            </li>
+                        `;
+            }).join("") || '<li>Nenhum associado</li>'}</ul>
                 </div>
                 <div class="secao">
                     <h3>Convidar Novo Membro</h3>
@@ -729,7 +763,7 @@ async function carregarListaTime() {
     div.innerHTML = html;
     await carregarPendencias();
 
-    // Novo event listener para o botão de convidar (apenas se founder)
+    // Novo: Event listener para toggle co-founder (apenas se founder)
     if (isFounder) {
         const btnConvidar = document.getElementById("btnConvidar");
         const inputEmail = document.getElementById("inputEmailConvidar");
@@ -743,6 +777,29 @@ async function carregarListaTime() {
             }
             await enviarConvidar(email, btnConvidar, feedbackDiv, inputEmail);
         });
+    }
+}
+
+// Nova: Função para toggle co-founder
+async function toggleCoFounder(secondary, isCoFounder) {
+    if (!confirm(`Confirmar ${isCoFounder ? 'remoção de co-fundador' : 'promoção a co-fundador'} para ${secondary}?`)) return;
+    try {
+        const response = await fetch(`${API}/promote-cofounder`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ secondary, promote: !isCoFounder }),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.sucesso) {
+            await carregarUserStatus(); // Recarregar status para atualizar isAdmin global
+            await carregarListaTime(); // Recarregar lista
+        } else {
+            alert(data.erro || 'Erro ao atualizar co-founder');
+        }
+    } catch (error) {
+        console.error('[TOGGLE CO-FOUNDER] Erro:', error);
+        alert('Erro ao atualizar co-founder');
     }
 }
 
@@ -1143,6 +1200,10 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
         const id = `receita-${r.nome.replace(/\s/g, '-')}`;
         const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
         const savedQtd = quantities[r.nome] || 1;
+        const isAdmin = isUserAdmin();
+        const btnConcluirDisabled = !isAdmin ? 'disabled' : '';
+        const btnEditarDisabled = !isAdmin ? 'disabled' : '';
+        const btnArquivarDisabled = !isAdmin ? 'disabled' : '';
         return `
         <div class="item ${r.favorita ? 'favorita' : ''}" data-receita="${r.nome}">
           <div class="receita-header">
@@ -1150,9 +1211,9 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
             ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
             <input type="number" class="qtd-desejada" min="0.001" step="any" value="${savedQtd}" data-receita="${r.nome}"></div>
             <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button></div><div>
-            <button class="btn-concluir" data-receita="${r.nome}" disabled>Concluir</button>
-            <button class="btn-editar" data-nome="${r.nome}">Editar</button>
-            <button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>
+            <button class="btn-concluir" data-receita="${r.nome}" ${btnConcluirDisabled}>Concluir</button>
+            <button class="btn-editar" data-nome="${r.nome}" ${btnEditarDisabled}>Editar</button>
+            <button class="btn-arquivar" data-nome="${r.nome}" ${btnArquivarDisabled}>Arquivar</button>
             <button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>
             <button class="btn-favoritar ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desfavoritar' : 'Favoritar'}</button></div>
           </div>
@@ -1198,6 +1259,10 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
 
     document.querySelectorAll(".btn-concluir").forEach(btn => {
         btn.addEventListener("click", async () => {
+            if (!isUserAdmin()) {
+                alert('Apenas fundadores ou co-fundadores podem concluir receitas.');
+                return;
+            }
             const receitaNome = btn.dataset.receita;
             const qtd = Math.max(Number(btn.closest(".item").querySelector(".qtd-desejada").value) || 0.001, 0.001);
             await concluirReceita(receitaNome, qtd, componentes, estoque);
@@ -1206,6 +1271,10 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
 
     document.querySelectorAll(".btn-arquivar").forEach(btn => {
         btn.addEventListener("click", () => {
+            if (!isUserAdmin()) {
+                alert('Apenas fundadores ou co-fundadores podem arquivar receitas.');
+                return;
+            }
             const nome = btn.dataset.nome;
             console.log(`[ARQUIVAR] Botão Arquivar clicado para receita: ${nome}`);
             arquivarReceita(nome);
@@ -1214,6 +1283,10 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
 
     document.querySelectorAll(".btn-editar").forEach(btn => {
         btn.addEventListener("click", () => {
+            if (!isUserAdmin()) {
+                alert('Apenas fundadores ou co-fundadores podem editar receitas.');
+                return;
+            }
             const nome = btn.dataset.nome;
             console.log(`[EDITAR] Botão Editar clicado para receita: ${nome}`);
             editarReceita(nome);
@@ -1527,7 +1600,7 @@ async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque
         return disp >= nec;
     });
 
-    btn.disabled = !podeConcluir;
+    btn.disabled = !podeConcluir || !isUserAdmin(); // Desabilitar se não admin
 }
 
 async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
@@ -1709,6 +1782,13 @@ function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
 
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
 
+    if (nome && !duplicar) {
+        if (!isUserAdmin()) {
+            alert('Apenas fundadores ou co-fundadores podem editar receitas.');
+            return;
+        }
+    }
+
     if (nome) {
         titulo.textContent = duplicar ? "Duplicar Receita" : "Editar Receita";
         fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).then(list => {
@@ -1888,6 +1968,10 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria
         comps = comps.filter(c => c.categoria === categoria);
     }
 
+    const isAdmin = isUserAdmin();
+    const btnEditarDisabled = !isAdmin ? 'disabled' : '';
+    const btnExcluirDisabled = !isAdmin ? 'disabled' : '';
+
     const div = document.getElementById("lista-componentes");
     div.innerHTML = comps.map(c => {
         const assoc = (c.associados || []).map(a => `${formatQuantity(a.quantidade)} x ${a.nome}`).join(", ");
@@ -1900,8 +1984,8 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria
           </div>
         </div>
         <div class="acoes">
-          <button onclick="abrirPopupComponente('${escapeJsString(c.nome)}')" class="primary">Editar</button>
-          <button onclick="excluirComponente('${escapeJsString(c.nome)}')" class="warn">Excluir</button>
+          <button onclick="abrirPopupComponente('${escapeJsString(c.nome)}')" class="primary" ${btnEditarDisabled}>Editar</button>
+          <button onclick="excluirComponente('${escapeJsString(c.nome)}')" class="warn" ${btnExcluirDisabled}>Excluir</button>
         </div>
       </div>`;
     }).join("");
@@ -1921,6 +2005,10 @@ function escapeJsString(s) {
 
 /* ------------------ Popup de Componente ------------------ */
 function abrirPopupComponente(nome = null) {
+    if (nome && !isUserAdmin()) {
+        alert('Apenas fundadores ou co-fundadores podem editar componentes.');
+        return;
+    }
     const popup = document.getElementById("popupComponente");
     const titulo = document.getElementById("tituloPopup");
     const form = document.getElementById("formComponente");
@@ -2015,6 +2103,10 @@ function adicionarAssociadoRow(nome = "", quantidade = "") {
 }
 
 async function excluirComponente(nome) {
+    if (!isUserAdmin()) {
+        alert('Apenas fundadores ou co-fundadores podem excluir componentes.');
+        return;
+    }
     if (!confirm(`Confirmar exclusão de "${nome}"?`)) return;
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const res = await fetch(`${API}/componentes/excluir?game=${encodeURIComponent(currentGame)}`, {
@@ -2190,7 +2282,13 @@ async function montarEstoque() {
         await carregarLog(buscaLogComponente.value, filtroLogData.value);
     };
 
-    document.getElementById("btnZerarEstoque").addEventListener("click", async () => {
+    const btnZerarEstoque = document.getElementById("btnZerarEstoque");
+    btnZerarEstoque.disabled = !isUserAdmin(); // Novo: Desabilitar se não admin
+    btnZerarEstoque.addEventListener("click", async () => {
+        if (!isUserAdmin()) {
+            alert('Apenas fundadores ou co-fundadores podem zerar o estoque.');
+            return;
+        }
         if (confirm("Tem certeza que deseja zerar todo o estoque? Essa ação não pode ser desfeita.")) {
             try {
                 const response = await fetch(`${API}/estoque/zerar?game=${encodeURIComponent(currentGame)}`, {
@@ -2376,6 +2474,8 @@ async function montarArquivados() {
 async function carregarArquivados() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const arquivados = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
+    const isAdmin = isUserAdmin();
+    const btnExcluirDisabled = !isAdmin ? 'disabled' : '';
     const div = document.getElementById("listaArquivados");
     if (div) {
         div.innerHTML = arquivados.map(r => {
@@ -2386,13 +2486,17 @@ async function carregarArquivados() {
                 <strong>${r.nome}</strong>
                 ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
               </div>
-              <button class="warn" onclick="excluirArquivado('${escapeJsString(r.nome)}')">Excluir</button>
+              <button class="warn" onclick="excluirArquivado('${escapeJsString(r.nome)}')" ${btnExcluirDisabled}>Excluir</button>
             </div>`;
         }).join("");
     }
 }
 
 async function excluirArquivado(nome) {
+    if (!isUserAdmin()) {
+        alert('Apenas fundadores ou co-fundadores podem excluir itens arquivados.');
+        return;
+    }
     if (!confirm(`Confirmar exclusão da receita arquivada "${nome}"?`)) return;
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -2646,7 +2750,7 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                 </select>
                 ${hasSubs ? `<button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>` : ''}
                 <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
-                ${hasSubs ? `<button class="btn-fabricar" data-componente="${m.nome}" data-pendente="${m.pendente}" data-qtdprod="${component.quantidadeProduzida || 1}" disabled>Fabricar Tudo</button>` : ''}
+                ${hasSubs ? `<button class="btn-fabricar" data-componente="${m.nome}" data-pendente="${m.pendente}" data-qtdprod="${component.quantidadeProduzida || 1}">Fabricar Tudo</button>` : ''}
             </div>
         `}).join("");
 
@@ -2780,6 +2884,9 @@ async function carregarListaRoadmap(onlyCompleted = false) {
     const estoque = {};
     estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
 
+    const isAdmin = isUserAdmin();
+    const btnExcluirDisabled = !isAdmin ? 'disabled' : '';
+
     const div = document.getElementById("listaRoadmap");
     div.innerHTML = roadmap.map((item, index) => {
         if (onlyCompleted && !item.completed) return '';
@@ -2803,7 +2910,7 @@ async function carregarListaRoadmap(onlyCompleted = false) {
               <label><input type="checkbox" class="checkbox-completed" ${item.completed ? 'checked' : ''}> Pronto</label>
               <button class="btn-move-up">↑</button>
               <button class="btn-move-down">↓</button>
-              <button class="btn-excluir-roadmap">Excluir</button>
+              <button class="btn-excluir-roadmap" ${btnExcluirDisabled}>Excluir</button>
             </div>
           </div>
           <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
@@ -2870,6 +2977,10 @@ async function carregarListaRoadmap(onlyCompleted = false) {
 
     document.querySelectorAll("#listaRoadmap .btn-excluir-roadmap").forEach(btn => {
         btn.addEventListener("click", async () => {
+            if (!isUserAdmin()) {
+                alert('Apenas fundadores ou co-fundadores podem excluir receitas do roadmap.');
+                return;
+            }
             const itemElement = btn.closest(".item");
             const index = parseInt(itemElement.dataset.index);
             await excluirRoadmapItem(index);

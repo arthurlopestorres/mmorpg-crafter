@@ -73,6 +73,23 @@ async function getEffectiveUser(user) {
     }
 }
 
+// Função para checar se é admin (founder ou co-founder)
+async function isUserAdmin(userEmail) {
+    if (!userEmail) return false;
+    const effectiveUser = await getEffectiveUser(userEmail);
+    if (effectiveUser === userEmail) return true; // Founder
+
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    try {
+        const associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        const assoc = associations.find(a => a.primary === effectiveUser && a.secondary === userEmail);
+        return assoc && assoc.role === 'co-founder';
+    } catch (error) {
+        console.error('[isUserAdmin] Erro:', error);
+        return false;
+    }
+}
+
 // Função para gerar ID único de 4-6 dígitos
 async function generateUniqueId() {
     const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
@@ -200,12 +217,13 @@ async function ensureGameDir(user, game, method) {
     }
 }
 
-// Endpoint para status do usuário
+// Endpoint para status do usuário (agora inclui isAdmin)
 app.get('/user-status', isAuthenticated, async (req, res) => {
     const user = req.session.user;
     const effectiveUser = await getEffectiveUser(user);
     const isFounder = effectiveUser === user;
-    res.json({ isFounder, effectiveUser });
+    const isAdmin = await isUserAdmin(user); // Novo: Checar se admin
+    res.json({ isFounder, isAdmin, effectiveUser });
 });
 
 // Novo endpoint para obter dados do usuário logado efetivo (/me)
@@ -275,6 +293,34 @@ app.get('/usuarios', isAuthenticated, async (req, res) => {
     } catch (error) {
         console.error('[GET /usuarios] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao buscar usuário' });
+    }
+});
+
+// Novo: Endpoint para promover/demover co-founder (só founder)
+app.post('/promote-cofounder', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const effectiveUser = await getEffectiveUser(user);
+    if (effectiveUser !== user) {
+        return res.status(403).json({ sucesso: false, erro: 'Apenas o fundador pode promover co-fundadores' });
+    }
+    const { secondary, promote } = req.body;
+    if (!secondary || promote === undefined) {
+        return res.status(400).json({ sucesso: false, erro: 'Secondary e promote são obrigatórios' });
+    }
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    try {
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        const assocIndex = associations.findIndex(a => a.primary === user && a.secondary === secondary);
+        if (assocIndex === -1) {
+            return res.status(400).json({ sucesso: false, erro: 'Associação não encontrada' });
+        }
+        associations[assocIndex].role = promote ? 'co-founder' : 'member';
+        await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
+        console.log(`[PROMOTE-COFOUNDER] ${secondary} ${promote ? 'promovido' : 'removido'} como co-founder por ${user}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[PROMOTE-COFOUNDER] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar co-founder' });
     }
 });
 
@@ -355,7 +401,7 @@ app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
         if (associations.some(a => a.secondary === user)) {
             return res.status(400).json({ sucesso: false, erro: 'Você já está em um time' });
         }
-        associations.push({ primary: from, secondary: user });
+        associations.push({ primary: from, secondary: user, role: 'member' }); // Novo: Role padrão 'member'
 
         await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
@@ -417,7 +463,7 @@ app.post('/associate-users', async (req, res) => {
         if (!usuarios.some(u => u.email === secondary)) {
             return res.status(400).json({ sucesso: false, erro: 'Secondary não encontrado nos usuários' });
         }
-        associations.push({ primary, secondary });
+        associations.push({ primary, secondary, role: 'member' }); // Novo: Role padrão 'member'
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
         console.log(`[ASSOCIATE-USERS] Associado ${secondary} ao primary ${primary}`);
         res.json({ sucesso: true });
@@ -469,9 +515,9 @@ app.get('/associacoes', isAuthenticated, async (req, res) => {
     const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
     try {
         const associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
-        const asPrimary = associations.filter(a => a.primary === user).map(a => ({ secondary: a.secondary, role: 'primary' }));
+        const asPrimary = associations.filter(a => a.primary === user).map(a => ({ secondary: a.secondary, role: a.role || 'member' })); // Novo: Incluir role
         const asSecondaryAssoc = associations.find(a => a.secondary === user);
-        const asSecondary = asSecondaryAssoc ? [{ secondary: asSecondaryAssoc.primary, role: 'secondary' }] : [];
+        const asSecondary = asSecondaryAssoc ? [{ secondary: asSecondaryAssoc.primary, role: asSecondaryAssoc.role || 'member' }] : []; // Novo: Incluir role
         const allAssociados = [...asPrimary, ...asSecondary];
         res.json(allAssociados);
     } catch (error) {
@@ -505,7 +551,7 @@ app.post('/associate-self', isAuthenticated, async (req, res) => {
         if (!usuarios.some(u => u.email === secondary && u.aprovado)) {
             return res.status(400).json({ sucesso: false, erro: 'Secondary não aprovado' });
         }
-        associations.push({ primary: user, secondary });
+        associations.push({ primary: user, secondary, role: 'member' }); // Novo: Role 'member'
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
         console.log(`[ASSOCIATE-SELF] Associado ${secondary} ao primary ${user}`);
         res.json({ sucesso: true });
