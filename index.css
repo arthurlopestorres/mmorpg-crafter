@@ -658,7 +658,7 @@ button.btn-arquivar:hover {
     transition: all var(--transition-base);
     border: 1px solid rgba(255, 255, 255, 0.8);
     position: relative;
-    overflow: hidden;
+    /* overflow: hidden; */
 }
 
 .item::before {
