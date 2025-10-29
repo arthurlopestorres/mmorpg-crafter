@@ -978,7 +978,7 @@ button.btn-arquivar:hover {
     background: white;
     padding: 32px;
     border-radius: var(--border-radius-xl);
-    max-width: 560px;
+    max-width: 650px;
     width: 90%;
     max-height: 90vh;
     overflow-y: auto;
@@ -2139,4 +2139,10 @@ body.bright-mode .manual-dropdown-content p.manual-item {
 
 #botaoMinhaConta {
     top: 22px !important;
+}
+
+#btnImportEstoque:hover {
+    background: var(--primary-gradient-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
 }

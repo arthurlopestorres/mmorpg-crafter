@@ -1255,6 +1255,7 @@ function filtrarItens(itens, termo, campo) {
 
 /* ------------------ RECEITAS ------------------ */
 async function montarReceitas() {
+    const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
     <h2>Receitas</h2>
     <div class="filtros">
@@ -1264,11 +1265,13 @@ async function montarReceitas() {
             <option value="za">Alfabética Z-A</option>
         </select>
         <label><input type="checkbox" id="filtroFavoritas"> Somente Favoritas</label>
-        <button id="btnNovaReceita" class="primary">+ Nova Receita</button>
+        ${isAdmin ? '<button id="btnNovaReceita" class="primary">+ Nova Receita</button>' : ''}
     </div>
     <div id="listaReceitas" class="lista"></div>
     `;
-    document.getElementById("btnNovaReceita").addEventListener("click", () => abrirPopupReceita(null));
+    if (isAdmin) {
+        document.getElementById("btnNovaReceita").addEventListener("click", () => abrirPopupReceita(null));
+    }
     const buscaInput = document.getElementById("buscaReceitas");
     const ordemSelect = document.getElementById("ordemReceitas");
     const filtroFavoritas = document.getElementById("filtroFavoritas");
@@ -1344,14 +1347,15 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
     }
 
     const div = document.getElementById("listaReceitas");
+    const isAdmin = isUserAdmin();
     div.innerHTML = receitas.filter(r => r.nome).map(r => {
         const id = `receita-${r.nome.replace(/\s/g, '-')}`;
         const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
         const savedQtd = quantities[r.nome] || 1;
-        const isAdmin = isUserAdmin();
-        const btnConcluirDisabled = !isAdmin ? 'disabled' : '';
-        const btnEditarDisabled = !isAdmin ? 'disabled' : '';
-        const btnArquivarDisabled = !isAdmin ? 'disabled' : '';
+        const btnConcluirHtml = isAdmin ? `<button class="btn-concluir" data-receita="${r.nome}">Concluir</button>` : '';
+        const btnEditarHtml = isAdmin ? `<button class="btn-editar" data-nome="${r.nome}">Editar</button>` : '';
+        const btnArquivarHtml = isAdmin ? `<button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>` : '';
+        const btnDuplicarHtml = isAdmin ? `<button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>` : '';
         return `
         <div class="item ${r.favorita ? 'favorita' : ''}" data-receita="${r.nome}">
           <div class="receita-header">
@@ -1359,10 +1363,10 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
             ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
             <input type="number" class="qtd-desejada" min="0.001" step="any" value="${savedQtd}" data-receita="${r.nome}"></div>
             <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button></div><div>
-            <button class="btn-concluir" data-receita="${r.nome}" ${btnConcluirDisabled}>Concluir</button>
-            <button class="btn-editar" data-nome="${r.nome}" ${btnEditarDisabled}>Editar</button>
-            <button class="btn-arquivar" data-nome="${r.nome}" ${btnArquivarDisabled}>Arquivar</button>
-            <button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>
+            ${btnConcluirHtml}
+            ${btnEditarHtml}
+            ${btnArquivarHtml}
+            ${btnDuplicarHtml}
             <button class="btn-favoritar ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desfavoritar' : 'Favoritar'}</button></div>
           </div>
           <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
@@ -1385,7 +1389,7 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
                 const receitaNome = receitaElement.dataset.receita;
                 const qtd = Math.max(Number(receitaElement.querySelector(".qtd-desejada").value) || 0.001, 0.001);
                 await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
-                await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
+                if (isAdmin) await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
             }
         });
     });
@@ -1400,54 +1404,44 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
             const detalhes = receitaElement.querySelector(".detalhes");
             if (detalhes && detalhes.style.display !== "none") {
                 await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
-                await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
+                if (isAdmin) await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
             }
         });
     });
 
-    document.querySelectorAll(".btn-concluir").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            if (!isUserAdmin()) {
-                alert('Apenas fundadores ou co-fundadores podem concluir receitas.');
-                return;
-            }
-            const receitaNome = btn.dataset.receita;
-            const qtd = Math.max(Number(btn.closest(".item").querySelector(".qtd-desejada").value) || 0.001, 0.001);
-            await concluirReceita(receitaNome, qtd, componentes, estoque);
+    if (isAdmin) {
+        document.querySelectorAll(".btn-concluir").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const receitaNome = btn.dataset.receita;
+                const qtd = Math.max(Number(btn.closest(".item").querySelector(".qtd-desejada").value) || 0.001, 0.001);
+                await concluirReceita(receitaNome, qtd, componentes, estoque);
+            });
         });
-    });
 
-    document.querySelectorAll(".btn-arquivar").forEach(btn => {
-        btn.addEventListener("click", () => {
-            if (!isUserAdmin()) {
-                alert('Apenas fundadores ou co-fundadores podem arquivar receitas.');
-                return;
-            }
-            const nome = btn.dataset.nome;
-            console.log(`[ARQUIVAR] Botão Arquivar clicado para receita: ${nome}`);
-            arquivarReceita(nome);
+        document.querySelectorAll(".btn-arquivar").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const nome = btn.dataset.nome;
+                console.log(`[ARQUIVAR] Botão Arquivar clicado para receita: ${nome}`);
+                arquivarReceita(nome);
+            });
         });
-    });
 
-    document.querySelectorAll(".btn-editar").forEach(btn => {
-        btn.addEventListener("click", () => {
-            if (!isUserAdmin()) {
-                alert('Apenas fundadores ou co-fundadores podem editar receitas.');
-                return;
-            }
-            const nome = btn.dataset.nome;
-            console.log(`[EDITAR] Botão Editar clicado para receita: ${nome}`);
-            editarReceita(nome);
+        document.querySelectorAll(".btn-editar").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const nome = btn.dataset.nome;
+                console.log(`[EDITAR] Botão Editar clicado para receita: ${nome}`);
+                editarReceita(nome);
+            });
         });
-    });
 
-    document.querySelectorAll(".btn-duplicar").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const nome = btn.dataset.nome;
-            console.log(`[DUPLICAR] Botão Duplicar clicado para receita: ${nome}`);
-            duplicarReceita(nome);
+        document.querySelectorAll(".btn-duplicar").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const nome = btn.dataset.nome;
+                console.log(`[DUPLICAR] Botão Duplicar clicado para receita: ${nome}`);
+                duplicarReceita(nome);
+            });
         });
-    });
+    }
 
     document.querySelectorAll(".btn-favoritar").forEach(btn => {
         btn.addEventListener("click", async () => {
@@ -1458,11 +1452,13 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
     });
 
     // Verificar botões inicialmente
-    document.querySelectorAll(".item").forEach(async item => {
-        const receitaNome = item.dataset.receita;
-        const qtd = Math.max(Number(item.querySelector(".qtd-desejada").value) || 0.001, 0.001);
-        await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
-    });
+    if (isAdmin) {
+        document.querySelectorAll(".item").forEach(async item => {
+            const receitaNome = item.dataset.receita;
+            const qtd = Math.max(Number(item.querySelector(".qtd-desejada").value) || 0.001, 0.001);
+            await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
+        });
+    }
 }
 
 async function toggleFavorita(nome, favorita) {
@@ -1748,7 +1744,7 @@ async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque
         return disp >= nec;
     });
 
-    btn.disabled = !podeConcluir || !isUserAdmin(); // Desabilitar se não admin
+    btn.disabled = !podeConcluir;
 }
 
 async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
@@ -2042,6 +2038,7 @@ async function adicionarLinhaReceita(dados = {}) {
 
 /* ------------------ COMPONENTES ------------------ */
 async function montarComponentes() {
+    const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
     <h2>Componentes</h2>
     <div class="filtros">
@@ -2053,11 +2050,13 @@ async function montarComponentes() {
         <select id="filtroCategoriaComponentes">
             <option value="">Todas as categorias</option>
         </select>
-        <button id="btnNovoComponente" class="primary">+ Novo Componente</button>
+        ${isAdmin ? '<button id="btnNovoComponente" class="primary">+ Novo Componente</button>' : ''}
     </div>
     <div id="lista-componentes" class="lista"></div>
     `;
-    document.getElementById("btnNovoComponente").addEventListener("click", () => abrirPopupComponente());
+    if (isAdmin) {
+        document.getElementById("btnNovoComponente").addEventListener("click", () => abrirPopupComponente());
+    }
     const buscaInput = document.getElementById("buscaComponentes");
     const ordemSelect = document.getElementById("ordemComponentes");
     const categoriaSelect = document.getElementById("filtroCategoriaComponentes");
@@ -2125,6 +2124,8 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria
     const div = document.getElementById("lista-componentes");
     div.innerHTML = comps.map(c => {
         const assoc = (c.associados || []).map(a => `${formatQuantity(a.quantidade)} x ${a.nome}`).join(", ");
+        const btnEditarHtml = isAdmin ? `<button onclick="abrirPopupComponente('${escapeJsString(c.nome)}')" class="primary" ${btnEditarDisabled}>Editar</button>` : '';
+        const btnExcluirHtml = isAdmin ? `<button onclick="excluirComponente('${escapeJsString(c.nome)}')" class="warn" ${btnExcluirDisabled}>Excluir</button>` : '';
         return `
       <div class="item">
         <div>
@@ -2134,8 +2135,8 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria
           </div>
         </div>
         <div class="acoes">
-          <button onclick="abrirPopupComponente('${escapeJsString(c.nome)}')" class="primary" ${btnEditarDisabled}>Editar</button>
-          <button onclick="excluirComponente('${escapeJsString(c.nome)}')" class="warn" ${btnExcluirDisabled}>Excluir</button>
+          ${btnEditarHtml}
+          ${btnExcluirHtml}
         </div>
       </div>`;
     }).join("");
@@ -2280,6 +2281,7 @@ async function carregarCategoriasDatalist() {
 
 /* ------------------ ESTOQUE ------------------ */
 async function montarEstoque() {
+    const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
     <h2>Estoque</h2>
     <div class="filtros">
@@ -2293,16 +2295,24 @@ async function montarEstoque() {
     <div style="display:flex; gap:16px;">
       <div style="flex:1">
         <form id="formEstoque">
+        <h3 class="tituloFormEstoque">Atualize o estoque:</h2>
           <input type="text" id="selectComponenteEstoque" list="componentesDatalist" placeholder="Digite para buscar..." required>
           <datalist id="componentesDatalist"></datalist>
           <select id="selectOperacao">
             <option value="adicionar">Adicionar</option>
-            <option value="debitar">Debitar</option>
+            ${isAdmin ? '<option value="debitar">Debitar</option>' : ''}
           </select>
           <input id="inputQuantidadeEstoque" type="number" min="0.001" step="any" value="0.001" />
           <button class="primary" type="submit">Confirmar</button>
         </form>
-        <button id="btnZerarEstoque" class="warn">Zerar todo o estoque</button>
+        ${isAdmin ? `
+        <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+          <button id="btnExportEstoque" class="primary">Exportar Estoque (XLS)</button>
+          <label id="btnImportEstoque" for="fileImportEstoque" class="primary" style="cursor: pointer; padding: 12px 24px; border-radius: var(--border-radius-sm); background: var(--primary-gradient); color: white; text-decoration: none; font-weight: 500; transition: all var(--transition-fast);">Importar Estoque (XLS)</label>
+          <input type="file" id="fileImportEstoque" accept=".xls,.xlsx" style="display: none;">
+        </div>
+        ` : ''}
+        ${isAdmin ? '<button id="btnZerarEstoque" class="warn">Zerar todo o estoque</button>' : ''}
         <div id="listaEstoque" class="lista"></div>
       </div>
       <div style="flex:1">
@@ -2454,32 +2464,96 @@ async function montarEstoque() {
         await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
     };
 
-    const btnZerarEstoque = document.getElementById("btnZerarEstoque");
-    btnZerarEstoque.disabled = !isUserAdmin(); // Novo: Desabilitar se não admin
-    btnZerarEstoque.addEventListener("click", async () => {
-        if (!isUserAdmin()) {
-            alert('Apenas fundadores ou co-fundadores podem zerar o estoque.');
-            return;
-        }
-        if (confirm("Tem certeza que deseja zerar todo o estoque? Essa ação não pode ser desfeita.")) {
-            try {
-                const response = await fetch(`${API}/estoque/zerar?game=${encodeURIComponent(currentGame)}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: 'include'
-                });
-                const data = await response.json();
-                if (data.sucesso) {
-                    await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
-                    await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
-                } else {
-                    mostrarErro(data.erro || "Erro ao zerar estoque");
+    // Novo: Exportar Estoque
+    if (isAdmin) {
+        const btnExportEstoque = document.getElementById("btnExportEstoque");
+        btnExportEstoque.addEventListener("click", async () => {
+            const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+            const data = [['Componente', 'Quantidade'], ...estoqueList.map(e => [e.componente, e.quantidade])];
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Estoque');
+            XLSX.writeFile(wb, `estoque_${currentGame}_${new Date().toISOString().split('T')[0]}.xlsx`);
+        });
+
+        // Novo: Importar Estoque
+        const fileInput = document.getElementById("fileImportEstoque");
+        fileInput.addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                if (jsonData.length < 2) {
+                    mostrarErro("Arquivo inválido: sem dados.");
+                    return;
                 }
-            } catch (error) {
-                mostrarErro("Erro ao zerar estoque: " + error.message);
+                const headers = jsonData[0];
+                const componenteIndex = headers.indexOf('Componente');
+                const quantidadeIndex = headers.indexOf('Quantidade');
+                if (componenteIndex === -1 || quantidadeIndex === -1) {
+                    mostrarErro("Arquivo inválido: colunas 'Componente' e 'Quantidade' não encontradas.");
+                    return;
+                }
+                const updates = jsonData.slice(1).map(row => ({
+                    componente: row[componenteIndex],
+                    novaQuantidade: parseFloat(row[quantidadeIndex]) || 0
+                })).filter(u => u.componente && !isNaN(u.novaQuantidade));
+                try {
+                    const response = await fetch(`${API}/estoque/import?game=${encodeURIComponent(currentGame)}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(updates),
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    if (data.sucesso) {
+                        mostrarSucesso(`Estoque importado com sucesso! ${data.updated} itens atualizados.`);
+                        await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
+                        await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
+                    } else {
+                        mostrarErro(data.erro || "Erro ao importar estoque.");
+                    }
+                } catch (error) {
+                    mostrarErro("Erro ao importar estoque: " + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    const btnZerarEstoque = document.getElementById("btnZerarEstoque");
+    if (btnZerarEstoque) {
+        btnZerarEstoque.disabled = !isAdmin;
+        btnZerarEstoque.addEventListener("click", async () => {
+            if (!isAdmin) {
+                alert('Apenas fundadores ou co-fundadores podem zerar o estoque.');
+                return;
             }
-        }
-    });
+            if (confirm("Tem certeza que deseja zerar todo o estoque? Essa ação não pode ser desfeita.")) {
+                try {
+                    const response = await fetch(`${API}/estoque/zerar?game=${encodeURIComponent(currentGame)}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    if (data.sucesso) {
+                        await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
+                        await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
+                    } else {
+                        mostrarErro(data.erro || "Erro ao zerar estoque");
+                    }
+                } catch (error) {
+                    mostrarErro("Erro ao zerar estoque: " + error.message);
+                }
+            }
+        });
+    }
 
     await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
     await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
@@ -2495,10 +2569,11 @@ async function carregarEstoque(termoBusca = "", ordem = "az") {
     }
     const estoque = await fetch(url, { credentials: 'include' }).then(r => r.json());
 
+    const isAdmin = isUserAdmin();
     const listaEstoque = document.getElementById("listaEstoque");
     if (listaEstoque) {
         listaEstoque.innerHTML = estoque.map(e =>
-            `<div class = "estoque-item-container"><div class="item"><strong>${e.componente || "(Sem nome)"}</strong> - ${formatQuantity(e.quantidade)}x</div> <button class="primary" onclick="editarEstoqueItem('${escapeJsString(e.componente)}', ${e.quantidade})">Editar</button> <button class="warn" onclick="excluirEstoqueItem('${escapeJsString(e.componente)}')">Excluir</button></div>`
+            `<div class = "estoque-item-container"><div class="item"><strong>${e.componente || "(Sem nome)"}</strong> - ${formatQuantity(e.quantidade)}x</div> <button class="primary" onclick="editarEstoqueItem('${escapeJsString(e.componente)}', ${e.quantidade})">Editar</button> ${isAdmin ? `<button class="warn" onclick="excluirEstoqueItem('${escapeJsString(e.componente)}')">Excluir</button>` : ''}</div>`
         ).join("");
     }
 }
@@ -2662,13 +2737,14 @@ async function carregarArquivados() {
     if (div) {
         div.innerHTML = arquivados.map(r => {
             const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
+            const btnExcluirHtml = isAdmin ? `<button class="warn" onclick="excluirArquivado('${escapeJsString(r.nome)}')" ${btnExcluirDisabled}>Excluir</button>` : '';
             return `
             <div class="item">
               <div>
                 <strong>${r.nome}</strong>
                 ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
               </div>
-              <button class="warn" onclick="excluirArquivado('${escapeJsString(r.nome)}')" ${btnExcluirDisabled}>Excluir</button>
+              ${btnExcluirHtml}
             </div>`;
         }).join("");
     }
@@ -2908,6 +2984,7 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
         listaMaterias = ordenarItens(listaMaterias, ordem, "nome");
     }
 
+    const isAdmin = isUserAdmin();
     const div = document.getElementById("listaFarmar");
     if (div) {
         div.innerHTML = listaMaterias.map(m => {
@@ -2918,6 +2995,7 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
             const id = `farmar-${m.nome.replace(/\s/g, '-')}`;
             const component = componentes.find(c => c.nome === m.nome);
             const hasSubs = component && component.associados && component.associados.length > 0;
+            const btnFabricarHtml = isAdmin && hasSubs ? `<button class="btn-fabricar" data-componente="${m.nome}" data-pendente="${m.pendente}" data-qtdprod="${component.quantidadeProduzida || 1}">Fabricar Tudo</button>` : '';
             return `
             <div class="item" style="background-color: ${color}; color: white;" data-componente="${m.nome}">
                 <div class="comp-item">
@@ -2932,7 +3010,7 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                 </select>
                 ${hasSubs ? `<button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>` : ''}
                 <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
-                ${hasSubs ? `<button class="btn-fabricar" data-componente="${m.nome}" data-pendente="${m.pendente}" data-qtdprod="${component.quantidadeProduzida || 1}">Fabricar Tudo</button>` : ''}
+                ${btnFabricarHtml}
             </div>
         `}).join("");
 
@@ -2957,40 +3035,42 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
         });
 
         // Verificar botões fabricar inicialmente
-        document.querySelectorAll("#listaFarmar .item").forEach(async item => {
-            const componenteNome = item.dataset.componente;
-            const componente = componentes.find(c => c.nome === componenteNome);
-            if (componente && componente.associados && componente.associados.length > 0) {
-                let qtdProd = componente.quantidadeProduzida || 1;
-                const m = listaMaterias.find(mat => mat.nome === componenteNome);
-                let pendente = m ? m.pendente : 0;
-                let numCrafts = Math.ceil(pendente / qtdProd);
-                let canFabricate = pendente > 0;
-                if (canFabricate) {
-                    for (const assoc of componente.associados) {
-                        const subDisp = estoqueMap[assoc.nome] || 0;
-                        if (subDisp < assoc.quantidade * numCrafts) {
-                            canFabricate = false;
-                            break;
+        if (isAdmin) {
+            document.querySelectorAll("#listaFarmar .item").forEach(async item => {
+                const componenteNome = item.dataset.componente;
+                const componente = componentes.find(c => c.nome === componenteNome);
+                if (componente && componente.associados && componente.associados.length > 0) {
+                    let qtdProd = componente.quantidadeProduzida || 1;
+                    const m = listaMaterias.find(mat => mat.nome === componenteNome);
+                    let pendente = m ? m.pendente : 0;
+                    let numCrafts = Math.ceil(pendente / qtdProd);
+                    let canFabricate = pendente > 0;
+                    if (canFabricate) {
+                        for (const assoc of componente.associados) {
+                            const subDisp = estoqueMap[assoc.nome] || 0;
+                            if (subDisp < assoc.quantidade * numCrafts) {
+                                canFabricate = false;
+                                break;
+                            }
                         }
                     }
+                    const btn = item.querySelector(".btn-fabricar");
+                    if (btn) btn.disabled = !canFabricate;
                 }
-                const btn = item.querySelector(".btn-fabricar");
-                if (btn) btn.disabled = !canFabricate;
-            }
-        });
-
-        // Adicionar event listeners para botões fabricar
-        document.querySelectorAll("#listaFarmar .btn-fabricar").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                const componenteNome = btn.dataset.componente;
-                const pendente = parseFloat(btn.dataset.pendente);
-                const qtdProd = parseFloat(btn.dataset.qtdprod);
-                const numCrafts = Math.ceil(pendente / qtdProd);
-                await fabricarComponente(componenteNome, numCrafts);
-                btn.disabled = true;
             });
-        });
+
+            // Adicionar event listeners para botões fabricar
+            document.querySelectorAll("#listaFarmar .btn-fabricar").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const componenteNome = btn.dataset.componente;
+                    const pendente = parseFloat(btn.dataset.pendente);
+                    const qtdProd = parseFloat(btn.dataset.qtdprod);
+                    const numCrafts = Math.ceil(pendente / qtdProd);
+                    await fabricarComponente(componenteNome, numCrafts);
+                    btn.disabled = true;
+                });
+            });
+        }
     } else {
         console.log("[FARMAR] Skip updating farmar list as div not found.");
     }
@@ -3026,16 +3106,18 @@ async function fabricarComponente(nome, numCrafts = 1) {
 
 /* ------------------ ROADMAP ------------------ */
 async function montarRoadmap() {
+    const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
     <h2>Roadmap</h2>
     <div class="filtros">
         <label><input type="checkbox" id="filtroProntasRoadmap"> Visualizar somente receitas prontas</label>
     </div>
-    <button id="btnInserirNovaReceita" class="primary">Inserir nova receita</button>
+    ${isAdmin ? '<button id="btnInserirNovaReceita" class="primary">Inserir nova receita</button>' : ''}
     <div id="listaRoadmap" class="lista" style="flex-direction: column;"></div>
     `;
-
-    document.getElementById("btnInserirNovaReceita").addEventListener("click", mostrarPopupAdicionarReceitaRoadmap);
+    if (isAdmin) {
+        document.getElementById("btnInserirNovaReceita").addEventListener("click", mostrarPopupAdicionarReceitaRoadmap);
+    }
 
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const savedFilters = JSON.parse(localStorage.getItem(`roadmapFilters_${currentGame}`)) || {};
@@ -3078,6 +3160,9 @@ async function carregarListaRoadmap(onlyCompleted = false) {
         const id = `roadmap-${item.name.replace(/\s/g, '-')}-${index}`;
         const comps = (receita.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
         const savedQtd = quantities[item.name] || 1;
+        const checkboxHtml = isAdmin ? `<label><input type="checkbox" class="checkbox-completed" ${item.completed ? 'checked' : ''}> Pronto</label>` : '';
+        const reordenacaoHtml = isAdmin ? `<button class="btn-move-up">↑</button><button class="btn-move-down">↓</button>` : '';
+        const btnExcluirHtml = isAdmin ? `<button class="btn-excluir-roadmap" ${btnExcluirDisabled}>Excluir</button>` : '';
         return `
         <div class="item" style="${item.completed ? 'background-color: green;' : ''}" data-receita="${item.name}" data-index="${index}">
           <div class="receita-header">
@@ -3090,10 +3175,9 @@ async function carregarListaRoadmap(onlyCompleted = false) {
               <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>
             </div>
             <div>
-              <label><input type="checkbox" class="checkbox-completed" ${item.completed ? 'checked' : ''}> Pronto</label>
-              <button class="btn-move-up">↑</button>
-              <button class="btn-move-down">↓</button>
-              <button class="btn-excluir-roadmap" ${btnExcluirDisabled}>Excluir</button>
+              ${checkboxHtml}
+              ${reordenacaoHtml}
+              ${btnExcluirHtml}
             </div>
           </div>
           <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
@@ -3130,47 +3214,45 @@ async function carregarListaRoadmap(onlyCompleted = false) {
         });
     });
 
-    document.querySelectorAll("#listaRoadmap .checkbox-completed").forEach(cb => {
-        cb.addEventListener("change", async () => {
-            const itemElement = cb.closest(".item");
-            const index = parseInt(itemElement.dataset.index);
-            const completed = cb.checked;
-            await atualizarRoadmapItem(index, { completed });
-            itemElement.style.backgroundColor = completed ? 'green' : '';
+    if (isAdmin) {
+        document.querySelectorAll("#listaRoadmap .checkbox-completed").forEach(cb => {
+            cb.addEventListener("change", async () => {
+                const itemElement = cb.closest(".item");
+                const index = parseInt(itemElement.dataset.index);
+                const completed = cb.checked;
+                await atualizarRoadmapItem(index, { completed });
+                itemElement.style.backgroundColor = completed ? 'green' : '';
+            });
         });
-    });
 
-    document.querySelectorAll("#listaRoadmap .btn-move-up").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const itemElement = btn.closest(".item");
-            const index = parseInt(itemElement.dataset.index);
-            if (index > 0) {
-                await reordenarRoadmap(index, index - 1);
-            }
+        document.querySelectorAll("#listaRoadmap .btn-move-up").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const itemElement = btn.closest(".item");
+                const index = parseInt(itemElement.dataset.index);
+                if (index > 0) {
+                    await reordenarRoadmap(index, index - 1);
+                }
+            });
         });
-    });
 
-    document.querySelectorAll("#listaRoadmap .btn-move-down").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const itemElement = btn.closest(".item");
-            const index = parseInt(itemElement.dataset.index);
-            if (index < roadmap.length - 1) {
-                await reordenarRoadmap(index, index + 1);
-            }
+        document.querySelectorAll("#listaRoadmap .btn-move-down").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const itemElement = btn.closest(".item");
+                const index = parseInt(itemElement.dataset.index);
+                if (index < roadmap.length - 1) {
+                    await reordenarRoadmap(index, index + 1);
+                }
+            });
         });
-    });
 
-    document.querySelectorAll("#listaRoadmap .btn-excluir-roadmap").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            if (!isUserAdmin()) {
-                alert('Apenas fundadores ou co-fundadores podem excluir receitas do roadmap.');
-                return;
-            }
-            const itemElement = btn.closest(".item");
-            const index = parseInt(itemElement.dataset.index);
-            await excluirRoadmapItem(index);
+        document.querySelectorAll("#listaRoadmap .btn-excluir-roadmap").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const itemElement = btn.closest(".item");
+                const index = parseInt(itemElement.dataset.index);
+                await excluirRoadmapItem(index);
+            });
         });
-    });
+    }
 }
 
 async function excluirRoadmapItem(index) {
@@ -3300,6 +3382,7 @@ function mostrarPopupAdicionarReceitaRoadmap() {
 
 /* ------------------ CATEGORIAS ------------------ */
 async function montarCategorias() {
+    const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
     <h2>Categorias</h2>
     <div class="filtros">
@@ -3308,11 +3391,13 @@ async function montarCategorias() {
             <option value="az">Alfabética A-Z</option>
             <option value="za">Alfabética Z-A</option>
         </select>
-        <button id="btnNovaCategoria" class="primary">+ Nova Categoria</button>
+        ${isAdmin ? '<button id="btnNovaCategoria" class="primary">+ Nova Categoria</button>' : ''}
     </div>
     <div id="lista-categorias" class="lista"></div>
     `;
-    document.getElementById("btnNovaCategoria").addEventListener("click", () => abrirPopupCategoria(null));
+    if (isAdmin) {
+        document.getElementById("btnNovaCategoria").addEventListener("click", () => abrirPopupCategoria(null));
+    }
     const buscaInput = document.getElementById("buscaCategorias");
     const ordemSelect = document.getElementById("ordemCategorias");
 
@@ -3362,16 +3447,18 @@ async function carregarCategoriasLista(termoBusca = "", ordem = "az") {
         categorias.sort((a, b) => b.localeCompare(a));
     }
 
+    const isAdmin = isUserAdmin();
     const div = document.getElementById("lista-categorias");
     div.innerHTML = categorias.map(cat => {
         const count = counts[cat] || 0;
+        const btnExcluirHtml = isAdmin && count === 0 ? `<button onclick="excluirCategoria('${escapeJsString(cat)}')" class="warn">Excluir</button>` : '';
         return `
       <div class="item">
         <div>
           <strong>${cat}</strong> (${count} componentes)
         </div>
         <div class="acoes">
-          ${count === 0 ? `<button onclick="excluirCategoria('${escapeJsString(cat)}')" class="warn">Excluir</button>` : ''}
+          ${btnExcluirHtml}
         </div>
       </div>`;
     }).join("");
@@ -3466,7 +3553,13 @@ function formatQuantity(quantity) {
 }
 
 function mostrarErro(msg) {
-    const overlay = document.getElementById("overlay") || criarOverlay();
+    // Remover overlay e modal existentes para evitar conflitos
+    const existingOverlay = document.getElementById("overlay");
+    if (existingOverlay) existingOverlay.remove();
+    const existingModal = document.getElementById("modalErro");
+    if (existingModal) existingModal.remove();
+
+    const overlay = criarOverlay();
     const modalErro = document.createElement("div");
     modalErro.id = "modalErro";
     modalErro.style.position = "fixed";
@@ -3478,20 +3571,47 @@ function mostrarErro(msg) {
     modalErro.style.zIndex = "1000";
     modalErro.style.borderRadius = "5px";
     modalErro.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.1)";
+
+    // Criar o botão de fechar antes de append para garantir o listener
+    const buttonClose = document.createElement("button");
+    buttonClose.id = "fecharModal";
+    buttonClose.style.background = "none";
+    buttonClose.style.border = "none";
+    buttonClose.style.fontSize = "16px";
+    buttonClose.style.cursor = "pointer";
+    buttonClose.innerHTML = "❌";
+
     modalErro.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h3>Erro</h3>
-            <button id="fecharModal" style="background: none; border: none; font-size: 16px; cursor: pointer;">❌</button>
+            ${buttonClose.outerHTML}
         </div>
         <p id="mensagemErro">${msg}</p>
     `;
+
+    // Adicionar listener imediatamente após criar o botão
+    buttonClose.addEventListener("click", () => {
+        modalErro.remove();
+        const currentOverlay = document.getElementById("overlay");
+        if (currentOverlay) currentOverlay.remove();
+    });
+
     document.body.appendChild(modalErro);
 
+    // Re-adicionar listener para segurança (caso haja manipulação DOM)
     const fecharModal = document.getElementById("fecharModal");
-    fecharModal.addEventListener("click", () => {
+    if (fecharModal) {
+        fecharModal.addEventListener("click", () => {
+            modalErro.remove();
+            const currentOverlay = document.getElementById("overlay");
+            if (currentOverlay) currentOverlay.remove();
+        });
+    }
+
+    // Fechar ao clicar no overlay
+    overlay.addEventListener("click", () => {
         modalErro.remove();
-        const overlay = document.getElementById("overlay");
-        if (overlay) overlay.remove();
+        overlay.remove();
     });
 }
 

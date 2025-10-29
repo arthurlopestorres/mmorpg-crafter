@@ -1663,8 +1663,78 @@ app.get('/estoque', isAuthenticated, async (req, res) => {
     }
 });
 
+// Novo: Endpoint para importação em massa de estoque
+app.post('/estoque/import', isAuthenticated, async (req, res) => {
+    const effectiveUser = await getEffectiveUser(req.session.user);
+    const game = req.query.game || DEFAULT_GAME;
+    const updates = req.body; // Array de {componente, novaQuantidade}
+    if (!Array.isArray(updates) || updates.length === 0) {
+        return res.status(400).json({ sucesso: false, erro: 'Dados inválidos para importação' });
+    }
+    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
+    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
+    await ensureGameDir(effectiveUser, game, 'POST');
+    const estoqueFile = path.join(gameDir, 'estoque.json');
+    const logFile = path.join(gameDir, 'log.json');
+    try {
+        let estoque = await fs.readFile(estoqueFile, 'utf8').then(JSON.parse).catch(() => []);
+        const estoqueMap = {};
+        estoque.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
+        let updatedCount = 0;
+        const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
+        const userEmail = req.session.user;
+        let newLogs = [];
+        for (const update of updates) {
+            const { componente, novaQuantidade } = update;
+            if (!componente || isNaN(novaQuantidade) || novaQuantidade < 0) continue;
+            const atual = estoqueMap[componente] || 0;
+            const diff = novaQuantidade - atual;
+            if (diff === 0) continue;
+            const operacao = diff > 0 ? "adicionar" : "debitar";
+            const qtd = Math.abs(diff);
+            // Atualizar estoque
+            let index = estoque.findIndex(e => e.componente === componente);
+            if (index === -1) {
+                if (operacao === 'adicionar') {
+                    estoque.push({ componente, quantidade: novaQuantidade });
+                    estoqueMap[componente] = novaQuantidade;
+                }
+            } else {
+                if (operacao === 'debitar' && atual < qtd) {
+                    continue; // Pular se insuficiente, mas como é set, não deve acontecer se nova >=0
+                }
+                estoque[index].quantidade = novaQuantidade;
+                estoqueMap[componente] = novaQuantidade;
+            }
+            // Log
+            newLogs.push({
+                dataHora,
+                componente,
+                quantidade: qtd,
+                operacao,
+                origem: "Importação de estoque",
+                user: userEmail
+            });
+            updatedCount++;
+        }
+        await fs.writeFile(estoqueFile, JSON.stringify(estoque, null, 2));
+        if (newLogs.length > 0) {
+            let logs = await fs.readFile(logFile, 'utf8').then(JSON.parse).catch(() => []);
+            logs.push(...newLogs);
+            await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
+        }
+        console.log(`[POST /estoque/import] Importado: ${updatedCount} itens atualizados`);
+        res.json({ sucesso: true, updated: updatedCount });
+    } catch (error) {
+        console.error('[POST /estoque/import] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao importar estoque' });
+    }
+});
+
 app.post('/estoque', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(req.session.user);
+    const isAdminUser = await isUserAdmin(req.session.user);
     console.log('[POST /estoque] Requisição recebida:', req.body);
     const game = req.query.game || DEFAULT_GAME;
     const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
@@ -1677,6 +1747,9 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
         if (!componente || !quantidade || !operacao) {
             console.log('[POST /estoque] Erro: Componente, quantidade ou operação ausentes');
             return res.status(400).json({ sucesso: false, erro: 'Componente, quantidade e operação são obrigatórios' });
+        }
+        if (operacao === 'debitar' && !isAdminUser) {
+            return res.status(403).json({ sucesso: false, erro: 'Não autorizado a debitar estoque' });
         }
 
         let estoque = [];
@@ -1716,6 +1789,10 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
 
 app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(req.session.user);
+    const isAdminUser = await isUserAdmin(req.session.user);
+    if (!isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado a zerar estoque' });
+    }
     console.log('[POST /estoque/zerar] Requisição recebida');
     const game = req.query.game || DEFAULT_GAME;
     const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
@@ -1723,6 +1800,7 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
     const gameDir = path.join(DATA_DIR, safeUser, safeGame);
     await ensureGameDir(effectiveUser, game, 'POST');
     const file = path.join(gameDir, 'estoque.json');
+    const logFile = path.join(gameDir, 'log.json');
     try {
         let estoque = [];
         try {
@@ -1732,11 +1810,28 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
         }
 
         // Zerar todas as quantidades
+        const originalQuantities = estoque.map(e => ({ componente: e.componente, quantidade: e.quantidade || 0 }));
         estoque.forEach(e => {
             e.quantidade = 0;
         });
 
         await fs.writeFile(file, JSON.stringify(estoque, null, 2));
+
+        // Registrar no log como uma única entrada
+        const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
+        const userEmail = req.session.user;
+        const logEntry = {
+            dataHora,
+            componente: "TODOS",
+            quantidade: 0,
+            operacao: "zerar",
+            origem: "Zerar todo o estoque",
+            user: userEmail
+        };
+        let logs = await fs.readFile(logFile, 'utf8').then(JSON.parse).catch(() => []);
+        logs.push(logEntry);
+        await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
+
         console.log('[POST /estoque/zerar] Estoque zerado');
         res.json({ sucesso: true });
     } catch (error) {
