@@ -17,7 +17,7 @@ const DATA_DIR = '/data';
 const DEFAULT_GAME = 'Pax Dei';
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '100mb' }));
 app.use(express.static(__dirname)); // Servir arquivos estáticos da raiz do projeto
 app.use(session({
     secret: 'secret-key-mmo-crafter', // Mude para um secret seguro
@@ -27,7 +27,7 @@ app.use(session({
 }));
 
 // Configuração do Nodemailer
-const transporter = nodemailer.createTransport({
+const transporter = nodemailer.createTransporter({
     service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
