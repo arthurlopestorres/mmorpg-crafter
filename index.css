@@ -2017,7 +2017,7 @@ html {
 }
 
 #conteudo {
-    margin-top: 40px;
+    margin-top: 60px;
 }
 
 .filtros {
@@ -2135,4 +2135,8 @@ body.bright-mode .manual-dropdown-content {
 body.bright-mode .manual-dropdown-content p.manual-item {
     color: var(--text-primary);
     border-bottom-color: var(--border-color);
+}
+
+#botaoMinhaConta {
+    top: 22px !important;
 }

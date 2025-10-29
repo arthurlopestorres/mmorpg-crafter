@@ -1802,12 +1802,14 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
 
         // Registrar no log
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
+        const userEmail = sessionStorage.getItem('userEmail');
         const logEntries = Object.entries(requisitos).map(([componente, quantidade]) => ({
             dataHora,
             componente,
             quantidade,
             operacao: "debitar",
-            origem: `Conclusão de ${receitaNome}`
+            origem: `Conclusão de ${receitaNome}`,
+            user: userEmail  // Novo: Adicionar usuário
         }));
         console.log("[CONCLUIR] Registrando no log:", logEntries);
         const logResponse = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, {
@@ -2308,6 +2310,8 @@ async function montarEstoque() {
         <div class="filtros">
             <input type="text" id="buscaLogComponente" list="logComponentesDatalist" placeholder="Digite componente para buscar...">
             <datalist id="logComponentesDatalist"></datalist>
+            <input type="text" id="filtroLogUser" list="logUsersDatalist" placeholder="Digite usuário para buscar...">
+            <datalist id="logUsersDatalist"></datalist>
             <input type="date" id="filtroLogData" placeholder="Selecionar data...">
             <button id="limparFiltrosLog" class="secondary">Limpar Filtros</button>
         </div>
@@ -2335,6 +2339,7 @@ async function montarEstoque() {
     const buscaEstoque = document.getElementById("buscaEstoque");
     const ordemEstoque = document.getElementById("ordemEstoque");
     const buscaLogComponente = document.getElementById("buscaLogComponente");
+    const filtroLogUser = document.getElementById("filtroLogUser");
     const filtroLogData = document.getElementById("filtroLogData");
     const limparFiltrosLog = document.getElementById("limparFiltrosLog");
 
@@ -2342,6 +2347,7 @@ async function montarEstoque() {
     buscaEstoque.value = savedFilters.termoBuscaEstoque || "";
     ordemEstoque.value = savedFilters.ordemEstoque || "az";
     buscaLogComponente.value = savedFilters.termoBuscaLog || "";
+    filtroLogUser.value = savedFilters.userLog || "";
     filtroLogData.value = savedFilters.dataLog || "";
 
     const saveFilters = () => {
@@ -2349,6 +2355,7 @@ async function montarEstoque() {
             termoBuscaEstoque: buscaEstoque.value,
             ordemEstoque: ordemEstoque.value,
             termoBuscaLog: buscaLogComponente.value,
+            userLog: filtroLogUser.value,
             dataLog: filtroLogData.value
         }));
     };
@@ -2371,26 +2378,41 @@ async function montarEstoque() {
     const logDatalist = document.getElementById("logComponentesDatalist");
     logDatalist.innerHTML = componentesUnicos.map(c => `<option value="${c}">`).join("");
 
+    // Carregar usuários únicos para o datalist do log
+    const usuariosUnicos = [...new Set(logs.map(log => log.user).filter(Boolean))];
+    const logUsersDatalist = document.getElementById("logUsersDatalist");
+    logUsersDatalist.innerHTML = usuariosUnicos.map(u => `<option value="${u}">`).join("");
+
     // Atualizar datalist dinamicamente enquanto digita no log
     buscaLogComponente.addEventListener("input", () => {
         const termo = buscaLogComponente.value.toLowerCase();
         const filteredOptions = componentesUnicos.filter(c => c.toLowerCase().includes(termo))
             .map(c => `<option value="${c}">`);
         logDatalist.innerHTML = filteredOptions.join("");
-        debouncedCarregarLog(buscaLogComponente.value, filtroLogData.value);
+        debouncedCarregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
+        saveFilters();
+    });
+
+    filtroLogUser.addEventListener("input", () => {
+        const termo = filtroLogUser.value.toLowerCase();
+        const filteredOptions = usuariosUnicos.filter(u => u.toLowerCase().includes(termo))
+            .map(u => `<option value="${u}">`);
+        logUsersDatalist.innerHTML = filteredOptions.join("");
+        debouncedCarregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
         saveFilters();
     });
 
     filtroLogData.addEventListener("change", () => {
-        debouncedCarregarLog(buscaLogComponente.value, filtroLogData.value);
+        debouncedCarregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
         saveFilters();
     });
 
     // Limpar filtros
     limparFiltrosLog.addEventListener("click", () => {
         buscaLogComponente.value = "";
+        filtroLogUser.value = "";
         filtroLogData.value = "";
-        carregarLog("", "");
+        carregarLog("", "", "");
         saveFilters();
     });
 
@@ -2400,6 +2422,7 @@ async function montarEstoque() {
         const quantidade = Math.max(Number(document.getElementById("inputQuantidadeEstoque").value) || 0.001, 0.001);
         const operacao = document.getElementById("selectOperacao").value;
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
+        const userEmail = sessionStorage.getItem('userEmail');
 
         const res = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
@@ -2415,7 +2438,8 @@ async function montarEstoque() {
             componente,
             quantidade,
             operacao,
-            origem: "Movimentação manual"
+            origem: "Movimentação manual",
+            user: userEmail  // Novo: Adicionar usuário
         };
         const logResponse = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
@@ -2427,7 +2451,7 @@ async function montarEstoque() {
         if (!logData.sucesso) return mostrarErro("Erro ao registrar log.");
 
         await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
-        await carregarLog(buscaLogComponente.value, filtroLogData.value);
+        await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
     };
 
     const btnZerarEstoque = document.getElementById("btnZerarEstoque");
@@ -2447,7 +2471,7 @@ async function montarEstoque() {
                 const data = await response.json();
                 if (data.sucesso) {
                     await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
-                    await carregarLog(buscaLogComponente.value, filtroLogData.value);
+                    await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
                 } else {
                     mostrarErro(data.erro || "Erro ao zerar estoque");
                 }
@@ -2458,7 +2482,7 @@ async function montarEstoque() {
     });
 
     await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
-    await carregarLog(buscaLogComponente.value, filtroLogData.value);
+    await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
 }
 
 async function carregarEstoque(termoBusca = "", ordem = "az") {
@@ -2517,6 +2541,8 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
         }
         const operacao = diff > 0 ? "adicionar" : "debitar";
         const qtd = Math.abs(diff);
+        const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
+        const userEmail = sessionStorage.getItem('userEmail');
         try {
             const response = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
@@ -2530,13 +2556,13 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
                 return;
             }
             // Registrar no log
-            const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
             const logEntry = {
                 dataHora,
                 componente,
                 quantidade: qtd,
                 operacao,
-                origem: "Edição manual"
+                origem: "Edição manual",
+                user: userEmail  // Novo: Adicionar usuário
             };
             const logResponse = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
@@ -2553,7 +2579,7 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
             overlay.remove();
             // Atualizar listas
             await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
-            await carregarLog(document.getElementById("buscaLogComponente")?.value || "", document.getElementById("filtroLogData")?.value || "");
+            await carregarLog(document.getElementById("buscaLogComponente")?.value || "", document.getElementById("filtroLogUser")?.value || "", document.getElementById("filtroLogData")?.value || "");
         } catch (error) {
             mostrarErro("Erro ao atualizar estoque: " + error.message);
         }
@@ -2582,7 +2608,7 @@ async function excluirEstoqueItem(nome) {
     await carregarListaFarmar();
 }
 
-async function carregarLog(componenteFiltro = "", dataFiltro = "") {
+async function carregarLog(componenteFiltro = "", userFiltro = "", dataFiltro = "") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const logs = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
     let logsFiltrados = logs.reverse();
@@ -2592,9 +2618,16 @@ async function carregarLog(componenteFiltro = "", dataFiltro = "") {
         logsFiltrados = logsFiltrados.filter(l => l.componente && l.componente.toLowerCase().includes(componenteFiltro.toLowerCase()));
     }
 
-    // Filtro por data
+    // Filtro por usuário
+    if (userFiltro) {
+        logsFiltrados = logsFiltrados.filter(l => l.user && l.user.toLowerCase().includes(userFiltro.toLowerCase()));
+    }
+
+    // Filtro por data (convertendo dataFiltro de YYYY-MM-DD para DD/MM/YYYY para matching com dataHora)
     if (dataFiltro) {
-        logsFiltrados = logsFiltrados.filter(l => l.dataHora && l.dataHora.startsWith(dataFiltro));
+        const [ano, mes, dia] = dataFiltro.split('-');
+        const dataFormatada = `${dia}/${mes}/${ano}`;  // Novo: Converter para formato DD/MM/YYYY
+        logsFiltrados = logsFiltrados.filter(l => l.dataHora && l.dataHora.startsWith(dataFormatada));
     }
 
     const div = document.getElementById("logMovimentacoes");
@@ -2604,8 +2637,9 @@ async function carregarLog(componenteFiltro = "", dataFiltro = "") {
             const qtd = l.quantidade ?? 0;
             const nome = l.componente ?? "(Sem nome)";
             const hora = l.dataHora ?? "(Sem data)";
+            const user = l.user ? ` por ${l.user}` : '';  // Novo: Exibir usuário
             const origem = l.origem ? ` (Origem: ${l.origem})` : "";
-            return `<div class="item"><span>[${hora}]</span> ${simb}${formatQuantity(qtd)} x ${nome}${origem}</div>`;
+            return `<div class="item"><span>[${hora}]</span> ${simb}${formatQuantity(qtd)} x ${nome}${user}${origem}</div>`;
         }).join("");
     }
 }
@@ -2964,6 +2998,7 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
 
 async function fabricarComponente(nome, numCrafts = 1) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const userEmail = sessionStorage.getItem('userEmail');
     try {
         const response = await fetch(`${API}/fabricar?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
@@ -2980,7 +3015,7 @@ async function fabricarComponente(nome, numCrafts = 1) {
                 document.getElementById("filtroReceitaFarmar")?.value || ""
             );
             await carregarEstoque();
-            await carregarLog();
+            await carregarLog(document.getElementById("buscaLogComponente")?.value || "", document.getElementById("filtroLogUser")?.value || "", document.getElementById("filtroLogData")?.value || "");
         } else {
             mostrarErro(data.erro || "Erro ao fabricar componente");
         }

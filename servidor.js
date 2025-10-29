@@ -171,6 +171,16 @@ const isAuthenticated = (req, res, next) => {
     }
 };
 
+// Middleware para admin (headers)
+const isAdmin = (req, res, next) => {
+    const key = req.headers['atboficial-mmo-crafter'];
+    const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
+    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyadhadhiyfad') {
+        return res.status(403).json({ sucesso: false, erro: 'Acesso negado' });
+    }
+    next();
+};
+
 // Função para verificar reCAPTCHA (usada em login e cadastro)
 async function verificarRecaptcha(token) {
     if (!process.env.RECAPTCHA_SECRET) {
@@ -1848,7 +1858,13 @@ app.post('/log', isAuthenticated, async (req, res) => {
     await ensureGameDir(effectiveUser, game, 'POST');
     const file = path.join(gameDir, 'log.json');
     try {
-        const novosLogs = Array.isArray(req.body) ? req.body : [req.body];
+        let novosLogs = Array.isArray(req.body) ? req.body : [req.body];
+        // Novo: Adicionar user a cada entry se não existir
+        const userEmail = req.session.user;
+        novosLogs = novosLogs.map(entry => ({
+            ...entry,
+            user: entry.user || userEmail  // Adicionar user se ausente
+        }));
         let logs = [];
         try {
             logs = JSON.parse(await fs.readFile(file, 'utf8'));
@@ -1903,6 +1919,7 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
 
         // Debitar subcomponentes
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
+        const userEmail = req.session.user;
         let newLogs = [];
         for (const assoc of comp.associados) {
             const eIndex = estoque.findIndex(e => e.componente === assoc.nome);
@@ -1912,7 +1929,8 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
                 componente: assoc.nome,
                 quantidade: assoc.quantidade * numCrafts,
                 operacao: "debitar",
-                origem: `Fabricação de ${componente}`
+                origem: `Fabricação de ${componente}`,
+                user: userEmail  // Novo: Adicionar usuário
             });
         }
 
@@ -1929,7 +1947,8 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
             componente,
             quantidade: qtdProd * numCrafts,
             operacao: "adicionar",
-            origem: `Fabricação de ${componente}`
+            origem: `Fabricação de ${componente}`,
+            user: userEmail  // Novo: Adicionar usuário
         });
 
         await fs.writeFile(estoqueFile, JSON.stringify(estoque, null, 2));
@@ -1983,6 +2002,233 @@ app.post('/roadmap', isAuthenticated, async (req, res) => {
         res.json({ sucesso: true });
     } catch (error) {
         res.status(500).json({ sucesso: false, erro: 'Erro ao salvar roadmap' });
+    }
+});
+
+// Novo: Endpoint admin para listar todos os usuários e associações (protegido por headers)
+app.get('/admin/users', async (req, res) => {
+    const key = req.headers['atboficial-mmo-crafter'];
+    const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
+    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyadhadhiyfad') {
+        return res.status(403).json({ sucesso: false, erro: 'Acesso negado' });
+    }
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    try {
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        // Para cada usuário, encontrar associações
+        const usersWithAssocs = usuarios.map(u => {
+            const { senhaHash, ...safeU } = u;
+            const primaries = associations.filter(a => a.primary === u.email).map(a => ({ secondary: a.secondary, role: a.role || 'member' }));
+            const secondaries = associations.filter(a => a.secondary === u.email).map(a => ({ primary: a.primary, role: a.role || 'member' }));
+            return { ...safeU, associations: { primaries, secondaries } };
+        });
+        res.json(usersWithAssocs);
+    } catch (error) {
+        console.error('[GET /admin/users] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao listar usuários' });
+    }
+});
+
+// Novo: Endpoint admin para adicionar usuário (protegido por headers)
+app.post('/admin/users', async (req, res) => {
+    const key = req.headers['atboficial-mmo-crafter'];
+    const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
+    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyadhadhiyfad') {
+        return res.status(403).json({ sucesso: false, erro: 'Acesso negado' });
+    }
+    const { nome, email, senha, aprovado = false } = req.body;
+    if (!nome || !email || !senha) {
+        return res.status(400).json({ sucesso: false, erro: 'Nome, email e senha são obrigatórios' });
+    }
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (usuarios.some(u => u.email === email)) {
+            return res.status(400).json({ sucesso: false, erro: 'Email já cadastrado' });
+        }
+        const senhaHash = await bcrypt.hash(senha, 10);
+        const id = await generateUniqueId();
+        const newUser = { nome, email, senhaHash, id, aprovado };
+        usuarios.push(newUser);
+        await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
+        res.json({ sucesso: true, user: { ...newUser, senhaHash: undefined } });
+    } catch (error) {
+        console.error('[POST /admin/users] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao adicionar usuário' });
+    }
+});
+
+// Novo: Endpoint admin para excluir usuário e dados (protegido por headers)
+app.delete('/admin/users/:email', async (req, res) => {
+    const key = req.headers['atboficial-mmo-crafter'];
+    const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
+    if (key !== 'atboficial-mmo-crafter' || token !== 'aisdbfaidfbhyadhiyadhadhiyfad') {
+        return res.status(403).json({ sucesso: false, erro: 'Acesso negado' });
+    }
+    const { email } = req.params;
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    const pendenciasPath = path.join(DATA_DIR, 'usuarios-pendencias.json');
+    const banidosPath = path.join(DATA_DIR, 'usuarios-banidos.json');
+    try {
+        // Remover de usuarios
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const userIndex = usuarios.findIndex(u => u.email === email);
+        if (userIndex === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+        }
+        usuarios.splice(userIndex, 1);
+        await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
+
+        // Remover associações onde primary ou secondary é email
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        associations = associations.filter(a => a.primary !== email && a.secondary !== email);
+        await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
+
+        // Remover pendências envolvendo email
+        let pendencias = await fs.readFile(pendenciasPath, 'utf8').then(JSON.parse).catch(() => []);
+        pendencias = pendencias.filter(p => p.from !== email && p.to !== email);
+        await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
+
+        // Remover banidos envolvendo email
+        let banidos = await fs.readFile(banidosPath, 'utf8').then(JSON.parse).catch(() => []);
+        banidos = banidos.filter(b => b.primary !== email && b.banned !== email);
+        await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
+
+        // Deletar diretório do usuário
+        const safeUser = email.replace(/[^a-zA-Z0-9@._-]/g, '');
+        const userDir = path.join(DATA_DIR, safeUser);
+        try {
+            await fs.rm(userDir, { recursive: true, force: true });
+            console.log(`[DELETE /admin/users] Diretório removido: ${userDir}`);
+        } catch (dirErr) {
+            console.warn(`[DELETE /admin/users] Aviso: Não foi possível remover diretório ${userDir}:`, dirErr);
+        }
+
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[DELETE /admin/users] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao excluir usuário' });
+    }
+});
+
+// Nova rota 1: Obter todos os jogos do diretório de um usuário (admin)
+app.get('/admin/user-games', isAdmin, async (req, res) => {
+    const { email } = req.query;
+    if (!email) {
+        return res.status(400).json({ sucesso: false, erro: 'Email é obrigatório' });
+    }
+    try {
+        const safeUser = email.replace(/[^a-zA-Z0-9@._-]/g, '');
+        const userDir = path.join(DATA_DIR, safeUser);
+        await fs.mkdir(userDir, { recursive: true });
+        const files = await fs.readdir(userDir, { withFileTypes: true });
+        const games = files.filter(f => f.isDirectory()).map(f => f.name).sort();
+        res.json(games);
+    } catch (error) {
+        console.error('[GET /admin/user-games] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao listar jogos do usuário' });
+    }
+});
+
+// Nova rota 2: Criar jogo novo no diretório do usuário (admin)
+app.post('/admin/user-games', isAdmin, async (req, res) => {
+    const { email, name } = req.body;
+    if (!email || !name || !/^[a-zA-Z0-9 ]+$/.test(name)) {
+        return res.status(400).json({ sucesso: false, erro: 'Email e nome do jogo são obrigatórios e válidos' });
+    }
+    const safeUser = email.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const safeGame = name.replace(/[^a-zA-Z0-9 ]/g, '');
+    const userDir = path.join(DATA_DIR, safeUser);
+    const gameDir = path.join(userDir, safeGame);
+    try {
+        await fs.access(gameDir);
+        return res.status(400).json({ sucesso: false, erro: 'Jogo já existe' });
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json'];
+        for (const file of files) {
+            await fs.writeFile(path.join(gameDir, file), JSON.stringify([]));
+        }
+        console.log(`[POST /admin/user-games] Jogo criado: ${name} para ${email}`);
+        res.json({ sucesso: true });
+    }
+});
+
+// Nova rota 3: Deletar jogo do diretório do usuário (admin)
+app.delete('/admin/user-games', isAdmin, async (req, res) => {
+    const { email, game } = req.body;
+    if (!email || !game) {
+        return res.status(400).json({ sucesso: false, erro: 'Email e nome do jogo são obrigatórios' });
+    }
+    const safeUser = email.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
+    const userGameDir = path.join(DATA_DIR, safeUser, safeGame);
+    try {
+        await fs.rm(userGameDir, { recursive: true, force: true });
+        console.log(`[DELETE /admin/user-games] Jogo deletado: ${game} para ${email}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[DELETE /admin/user-games] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao deletar jogo' });
+    }
+});
+
+// Nova rota 4: Obter arquivos json de um jogo do usuário (admin)
+app.get('/admin/game-files', isAdmin, async (req, res) => {
+    const { email, game } = req.query;
+    if (!email || !game) {
+        return res.status(400).json({ sucesso: false, erro: 'Email e nome do jogo são obrigatórios' });
+    }
+    const safeUser = email.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
+    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
+    try {
+        await fs.access(gameDir);
+        const files = await fs.readdir(gameDir);
+        const jsonFiles = files.filter(f => f.endsWith('.json')).sort();
+        res.json(jsonFiles);
+    } catch {
+        res.json([]);
+    }
+});
+
+// Nova rota 5: Obter dados do arquivo json de um jogo do usuário (admin)
+app.get('/admin/game-file', isAdmin, async (req, res) => {
+    const { email, game, file } = req.query;
+    if (!email || !game || !file) {
+        return res.status(400).json({ sucesso: false, erro: 'Email, nome do jogo e nome do arquivo são obrigatórios' });
+    }
+    const safeUser = email.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
+    const filePath = path.join(DATA_DIR, safeUser, safeGame, file);
+    try {
+        const data = await fs.readFile(filePath, 'utf8');
+        res.json(JSON.parse(data));
+    } catch (error) {
+        console.error('[GET /admin/game-file] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao ler arquivo' });
+    }
+});
+
+// Nova rota 6: Editar arquivo json de um jogo do usuário (admin)
+app.put('/admin/game-file', isAdmin, async (req, res) => {
+    const { email, game, file, content } = req.body;
+    if (!email || !game || !file || content === undefined) {
+        return res.status(400).json({ sucesso: false, erro: 'Email, nome do jogo, nome do arquivo e content são obrigatórios' });
+    }
+    const safeUser = email.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
+    const filePath = path.join(DATA_DIR, safeUser, safeGame, file);
+    try {
+        await fs.writeFile(filePath, JSON.stringify(content, null, 2));
+        console.log(`[PUT /admin/game-file] Arquivo atualizado: ${file} para ${game} de ${email}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[PUT /admin/game-file] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao editar arquivo' });
     }
 });
 
