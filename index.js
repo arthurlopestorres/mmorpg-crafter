@@ -2791,6 +2791,10 @@ async function montarFarmar() {
 
     conteudo.innerHTML = `
     <h2>Favoritos</h2>
+    <div id="suggestedSequence">
+        <h3>Sequência Sugerida</h3>
+        <ol id="sequenceList"></ol>
+    </div>
     <div class="filtros">
         <input type="text" id="buscaFarmar" placeholder="Buscar por matéria prima...">
         <div class="multi-select-wrapper">
@@ -3074,6 +3078,20 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
     } else {
         console.log("[FARMAR] Skip updating farmar list as div not found.");
     }
+
+    // Computar e exibir sequência sugerida
+    let listaMateriasPendentes = listaMaterias.filter(m => m.pendente > 0);
+    if (listaMateriasPendentes.length > 0) {
+        const sequence = computeSuggestedSequence(componentes, listaMateriasPendentes);
+        const sequenceList = document.getElementById("sequenceList");
+        sequenceList.innerHTML = sequence.map((item, index) => {
+            const pendente = listaMateriasPendentes.find(m => m.nome === item.nome)?.pendente || 0;
+            const action = item.hasSubs ? "Fabricar" : "Coletar";
+            return `<li>${index + 1}. ${action} ${item.nome} (Pendente: ${formatQuantity(pendente)})</li>`;
+        }).join("");
+    } else {
+        document.getElementById("sequenceList").innerHTML = "<li>Nenhuma sequência sugerida disponível.</li>";
+    }
 }
 
 function computeSuggestedSequence(componentes, listaMaterias) {
@@ -3152,10 +3170,6 @@ async function montarRoadmap() {
     const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
     <h2>Roadmap</h2>
-    <div id="suggestedSequence">
-        <h3>Sequência Sugerida</h3>
-        <ol id="sequenceList"></ol>
-    </div>
     <div class="filtros">
         <label><input type="checkbox" id="filtroProntasRoadmap"> Visualizar somente receitas prontas</label>
     </div>
@@ -3299,44 +3313,6 @@ async function carregarListaRoadmap(onlyCompleted = false) {
                 await excluirRoadmapItem(index);
             });
         });
-    }
-
-    // Computar e exibir sequência sugerida
-    const roadmapReceitas = roadmap.map(item => receitas.find(r => r.nome === item.name)).filter(Boolean);
-    const bases = new Map();
-    for (const receita of roadmapReceitas) {
-        if (!receita.nome) continue;
-        const recipeQuantity = quantities[receita.nome] || 1;
-        let req = {};
-        receita.componentes.forEach(comp => {
-            const qtdNec = comp.quantidade * recipeQuantity;
-            mergeReq(req, calculateComponentRequirements(comp.nome, qtdNec, componentes, estoque));
-        });
-        for (const [baseNome, baseQtd] of Object.entries(req)) {
-            if (!bases.has(baseNome)) {
-                bases.set(baseNome, { nec: 0, receitas: new Set() });
-            }
-            bases.get(baseNome).nec += baseQtd;
-            bases.get(baseNome).receitas.add(receita.nome);
-        }
-    }
-
-    let listaMaterias = Array.from(bases.entries()).map(([nome, data]) => {
-        const disp = estoque[nome] !== undefined ? estoque[nome] : 0;
-        const pendente = Math.max(0, data.nec - disp);
-        return { nome, nec: data.nec, disp, pendente, receitas: Array.from(data.receitas) };
-    }).filter(m => m.pendente > 0);
-
-    if (listaMaterias.length > 0) {
-        const sequence = computeSuggestedSequence(componentes, listaMaterias);
-        const sequenceList = document.getElementById("sequenceList");
-        sequenceList.innerHTML = sequence.map((item, index) => {
-            const pendente = listaMaterias.find(m => m.nome === item.nome)?.pendente || 0;
-            const action = item.hasSubs ? "Fabricar" : "Coletar";
-            return `<li>${index + 1}. ${action} ${item.nome} (Pendente: ${formatQuantity(pendente)})</li>`;
-        }).join("");
-    } else {
-        document.getElementById("sequenceList").innerHTML = "<li>Nenhuma sequência sugerida disponível.</li>";
     }
 }
 
