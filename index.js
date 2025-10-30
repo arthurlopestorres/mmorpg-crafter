@@ -818,8 +818,8 @@ async function carregarListaTime() {
     let isFounder = isUserFounder();
     let effectiveUser = sessionStorage.getItem('effectiveUser') || userEmail;
     try {
-        const statusRes = await fetch(`${API}/user-status`, { credentials: 'include' });
-        const status = await statusRes.json();
+        const response = await fetch(`${API}/user-status`, { credentials: 'include' });
+        const status = await response.json();
         isFounder = status.isFounder;
         effectiveUser = status.effectiveUser;
         sessionStorage.setItem('isFounder', status.isFounder.toString());
@@ -3076,9 +3076,52 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
     }
 }
 
+function computeSuggestedSequence(componentes, listaMaterias) {
+    const allComponents = new Set(listaMaterias.map(m => m.nome));
+
+    const adj = new Map(); // pré-req -> dependentes
+    const indegree = new Map();
+
+    for (let comp of componentes) {
+        if (!allComponents.has(comp.nome)) continue;
+        indegree.set(comp.nome, indegree.get(comp.nome) || 0);
+        for (let assoc of comp.associados || []) {
+            if (!allComponents.has(assoc.nome)) continue;
+            if (!adj.has(assoc.nome)) adj.set(assoc.nome, []);
+            adj.get(assoc.nome).push(comp.nome);
+            indegree.set(comp.nome, (indegree.get(comp.nome) || 0) + 1);
+        }
+    }
+
+    // Adicionar componentes sem entries
+    for (let c of allComponents) {
+        if (!indegree.has(c)) indegree.set(c, 0);
+        if (!adj.has(c)) adj.set(c, []);
+    }
+
+    let queue = [];
+    for (let [c, d] of indegree) {
+        if (d === 0) queue.push(c);
+    }
+
+    let order = [];
+    while (queue.length > 0) {
+        let u = queue.shift();
+        const comp = componentes.find(c => c.nome === u);
+        const hasSubs = comp && comp.associados && comp.associados.length > 0;
+        order.push({ nome: u, hasSubs });
+        for (let v of adj.get(u)) {
+            indegree.set(v, indegree.get(v) - 1);
+            if (indegree.get(v) === 0) queue.push(v);
+        }
+    }
+
+    // Se houver ciclo, order.length < allComponents.size, mas assumimos sem ciclos
+    return order;
+}
+
 async function fabricarComponente(nome, numCrafts = 1) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const userEmail = sessionStorage.getItem('userEmail');
     try {
         const response = await fetch(`${API}/fabricar?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
@@ -3109,6 +3152,10 @@ async function montarRoadmap() {
     const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
     <h2>Roadmap</h2>
+    <div id="suggestedSequence">
+        <h3>Sequência Sugerida</h3>
+        <ol id="sequenceList"></ol>
+    </div>
     <div class="filtros">
         <label><input type="checkbox" id="filtroProntasRoadmap"> Visualizar somente receitas prontas</label>
     </div>
@@ -3252,6 +3299,44 @@ async function carregarListaRoadmap(onlyCompleted = false) {
                 await excluirRoadmapItem(index);
             });
         });
+    }
+
+    // Computar e exibir sequência sugerida
+    const roadmapReceitas = roadmap.map(item => receitas.find(r => r.nome === item.name)).filter(Boolean);
+    const bases = new Map();
+    for (const receita of roadmapReceitas) {
+        if (!receita.nome) continue;
+        const recipeQuantity = quantities[receita.nome] || 1;
+        let req = {};
+        receita.componentes.forEach(comp => {
+            const qtdNec = comp.quantidade * recipeQuantity;
+            mergeReq(req, calculateComponentRequirements(comp.nome, qtdNec, componentes, estoque));
+        });
+        for (const [baseNome, baseQtd] of Object.entries(req)) {
+            if (!bases.has(baseNome)) {
+                bases.set(baseNome, { nec: 0, receitas: new Set() });
+            }
+            bases.get(baseNome).nec += baseQtd;
+            bases.get(baseNome).receitas.add(receita.nome);
+        }
+    }
+
+    let listaMaterias = Array.from(bases.entries()).map(([nome, data]) => {
+        const disp = estoque[nome] !== undefined ? estoque[nome] : 0;
+        const pendente = Math.max(0, data.nec - disp);
+        return { nome, nec: data.nec, disp, pendente, receitas: Array.from(data.receitas) };
+    }).filter(m => m.pendente > 0);
+
+    if (listaMaterias.length > 0) {
+        const sequence = computeSuggestedSequence(componentes, listaMaterias);
+        const sequenceList = document.getElementById("sequenceList");
+        sequenceList.innerHTML = sequence.map((item, index) => {
+            const pendente = listaMaterias.find(m => m.nome === item.nome)?.pendente || 0;
+            const action = item.hasSubs ? "Fabricar" : "Coletar";
+            return `<li>${index + 1}. ${action} ${item.nome} (Pendente: ${formatQuantity(pendente)})</li>`;
+        }).join("");
+    } else {
+        document.getElementById("sequenceList").innerHTML = "<li>Nenhuma sequência sugerida disponível.</li>";
     }
 }
 

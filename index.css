@@ -1853,6 +1853,13 @@ body.bright-mode .estoque-item-container {
     background: rgba(255, 255, 255, 0.98);
 }
 
+body.bright-mode #sequenceList {
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    padding: 20px 0px 20px 20px;
+    border-radius: 7px;
+}
+
 body.bright-mode #popupLogin,
 body.bright-mode #popupCadastro,
 body.bright-mode #popupNovoJogo,
@@ -2145,4 +2152,11 @@ body.bright-mode .manual-dropdown-content p.manual-item {
     background: var(--primary-gradient-hover);
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+#sequenceList {
+    margin-bottom: 20px;
+    padding: 20px 0px 20px 20px;
+    border-radius: 7px;
+    background: rgba(45, 55, 72, 0.95);
 }
