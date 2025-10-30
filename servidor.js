@@ -90,6 +90,61 @@ async function isUserAdmin(userEmail) {
     }
 }
 
+// Função para verificar se o jogo é próprio do session user
+async function isOwnGame(sessionUser, game) {
+    const safeUser = sessionUser.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
+    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
+    try {
+        await fs.access(gameDir);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// Função para obter o gameDir correto
+async function getGameDir(sessionUser, effectiveUser, game) {
+    const safeOwn = sessionUser.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
+    const ownDir = path.join(DATA_DIR, safeOwn, safeGame);
+    try {
+        await fs.access(ownDir);
+        return ownDir;
+    } catch {
+        const safeEff = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
+        return path.join(DATA_DIR, safeEff, safeGame);
+    }
+}
+
+// Nova função para obter a lista de jogos acessíveis ao usuário
+async function getUserGames(sessionUser) {
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isFounderLocal = effectiveUser === sessionUser;
+    let games = [];
+    // Listar jogos próprios
+    const safeOwn = sessionUser.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const ownDir = path.join(DATA_DIR, safeOwn);
+    try {
+        const ownFiles = await fs.readdir(ownDir, { withFileTypes: true });
+        games.push(...ownFiles.filter(f => f.isDirectory()).map(f => f.name));
+    } catch (error) {
+        console.warn('[getUserGames] No own dir:', error);
+    }
+    // Se não for founder, adicionar jogos compartilhados do effectiveUser
+    if (!isFounderLocal) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        try {
+            const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+            games.push(...shared);
+        } catch (error) {
+            console.warn('[getUserGames] No shared:', error);
+        }
+    }
+    games = [...new Set(games)].sort();
+    return games;
+}
+
 // Função para gerar ID único de 4-6 dígitos
 async function generateUniqueId() {
     const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
@@ -202,38 +257,19 @@ async function verificarRecaptcha(token) {
 }
 
 // Função auxiliar para obter caminho do arquivo baseado no user e game
-function getFilePath(user, game, filename) {
-    const safeUser = user.replace(/[^a-zA-Z0-9@._-]/g, ''); // Sanitize email
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, ''); // Sanitize
-    return path.join(DATA_DIR, safeUser, safeGame, filename);
+function getFilePath(gameDir, filename) {
+    return path.join(gameDir, filename);
 }
 
-// Função auxiliar para checar existência de game dir e lidar com criação seletiva
-async function ensureGameDir(user, game, method) {
-    const safeUser = user.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    try {
-        await fs.access(gameDir);
-        return true; // Existe
-    } catch {
-        if (method === 'GET') {
-            return false; // Não existe, para GET retornar []
-        } else {
-            // Para POST/DELETE/etc., criar
-            await fs.mkdir(gameDir, { recursive: true });
-            return true;
-        }
-    }
-}
-
-// Endpoint para status do usuário (agora inclui isAdmin)
+// Endpoint para status do usuário (agora inclui isAdmin per game)
 app.get('/user-status', isAuthenticated, async (req, res) => {
     const user = req.session.user;
+    const game = req.query.game || DEFAULT_GAME;
     const effectiveUser = await getEffectiveUser(user);
     const isFounder = effectiveUser === user;
-    const isAdmin = await isUserAdmin(user); // Novo: Checar se admin
-    res.json({ isFounder, isAdmin, effectiveUser });
+    const isOwn = await isOwnGame(user, game);
+    let isAdminLocal = isOwn ? true : await isUserAdmin(user);
+    res.json({ isFounder, isAdmin: isAdminLocal, effectiveUser });
 });
 
 // Novo endpoint para obter dados do usuário logado efetivo (/me)
@@ -970,29 +1006,43 @@ app.put('/usuarios', async (req, res) => {
     }
 });
 
-// Endpoint para listar jogos (agora por user)
+// Endpoint para listar jogos
 app.get('/games', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
+    const sessionUser = req.session.user;
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isFounderLocal = effectiveUser === sessionUser;
+    let games = [];
+    // Always list own games
+    const safeOwn = sessionUser.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const ownDir = path.join(DATA_DIR, safeOwn);
     try {
-        const userDir = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''));
-        await fs.mkdir(userDir, { recursive: true }); // Cria dir do user se não existir
-        const files = await fs.readdir(userDir, { withFileTypes: true });
-        const games = files.filter(f => f.isDirectory()).map(f => f.name).sort();
-        res.json(games);
+        const ownFiles = await fs.readdir(ownDir, { withFileTypes: true });
+        games.push(...ownFiles.filter(f => f.isDirectory()).map(f => f.name));
     } catch (error) {
-        console.error('[GET /games] Erro:', error);
-        res.status(500).json({ sucesso: false, erro: 'Erro ao listar jogos' });
+        console.warn('[GET /games] No own dir:', error);
     }
+    // If not founder, add shared from effectiveUser
+    if (!isFounderLocal) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        try {
+            const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+            games.push(...shared);
+        } catch (error) {
+            console.warn('[GET /games] No shared:', error);
+        }
+    }
+    games = [...new Set(games)].sort();
+    res.json(games);
 });
 
-// Endpoint para criar novo jogo (agora por user)
+// Endpoint para criar novo jogo (sempre no own dir)
 app.post('/games', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
+    const sessionUser = req.session.user;
     const { name } = req.body;
     if (!name || !/^[a-zA-Z0-9 ]+$/.test(name)) {
         return res.status(400).json({ sucesso: false, erro: 'Nome do jogo inválido' });
     }
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const safeUser = sessionUser.replace(/[^a-zA-Z0-9@._-]/g, '');
     const safeGame = name.replace(/[^a-zA-Z0-9 ]/g, '');
     const userDir = path.join(DATA_DIR, safeUser);
     const gameDir = path.join(userDir, safeGame);
@@ -1009,7 +1059,7 @@ app.post('/games', isAuthenticated, async (req, res) => {
     }
 });
 
-// Endpoint para deletar jogo (protegido por headers, agora por user)
+// Endpoint para deletar jogo (protegido por headers)
 app.delete('/games/:game', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
     const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
@@ -1034,20 +1084,70 @@ app.delete('/games/:game', async (req, res) => {
     }
 });
 
+// Novo: Endpoint para jogos compartilhados (somente founder)
+app.get('/shared', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isFounder = effectiveUser === sessionUser;
+    if (!isFounder) {
+        return res.status(403).json({ sucesso: false, erro: 'Apenas founder pode acessar shared' });
+    }
+    const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+    try {
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        res.json(shared);
+    } catch (error) {
+        res.status(500).json({ sucesso: false, erro: 'Erro ao ler shared' });
+    }
+});
+
+app.post('/shared', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isFounder = effectiveUser === sessionUser;
+    if (!isFounder) {
+        return res.status(403).json({ sucesso: false, erro: 'Apenas founder pode alterar shared' });
+    }
+    const { game, share } = req.body;
+    if (!game || share === undefined) {
+        return res.status(400).json({ sucesso: false, erro: 'Game e share são obrigatórios' });
+    }
+    const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+    let shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+    if (share) {
+        if (!shared.includes(game)) shared.push(game);
+    } else {
+        shared = shared.filter(g => g !== game);
+    }
+    await fs.writeFile(sharedPath, JSON.stringify(shared, null, 2));
+    res.json({ sucesso: true });
+});
+
 // Endpoints protegidos com suporte a user e game
 app.get('/receitas', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[GET /receitas] Requisição recebida');
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    const exists = await ensureGameDir(effectiveUser, game, 'GET');
-    if (!exists) {
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
         res.json([]);
         return;
     }
-    const file = path.join(gameDir, 'receitas.json');
+    const file = getFilePath(gameDir, 'receitas.json');
     try {
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit, favoritas } = req.query;
@@ -1078,14 +1178,32 @@ app.get('/receitas', isAuthenticated, async (req, res) => {
 });
 
 app.post('/receitas', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[POST /receitas] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'receitas.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'receitas.json');
     try {
         const novaReceita = req.body;
         if (Array.isArray(novaReceita)) {
@@ -1119,14 +1237,32 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
 });
 
 app.post('/receitas/editar', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[POST /receitas/editar] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'receitas.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'receitas.json');
     try {
         const { nomeOriginal, nome, componentes } = req.body;
         if (!nomeOriginal || !nome || !componentes) {
@@ -1163,14 +1299,28 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
 });
 
 app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[POST /receitas/favoritar] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'receitas.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'receitas.json');
     try {
         const { nome, favorita } = req.body;
         if (!nome || favorita === undefined) {
@@ -1202,18 +1352,29 @@ app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
 });
 
 app.get('/categorias', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[GET /categorias] Requisição recebida');
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const exists = await ensureGameDir(effectiveUser, game, 'GET');
-    if (!exists) {
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
         res.json([]);
         return;
     }
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    const file = path.join(gameDir, 'categorias.json');
+    const file = getFilePath(gameDir, 'categorias.json');
     try {
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         res.json(data);
@@ -1224,14 +1385,32 @@ app.get('/categorias', isAuthenticated, async (req, res) => {
 });
 
 app.post('/categorias', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[POST /categorias] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'categorias.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'categorias.json');
     try {
         const { nome } = req.body;
         if (!nome) {
@@ -1257,21 +1436,40 @@ app.post('/categorias', isAuthenticated, async (req, res) => {
 });
 
 app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[POST /categorias/excluir] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const { nome } = req.body;
-    if (!nome) {
-        console.log('[POST /categorias/excluir] Erro: Nome ausente');
-        return res.status(400).json({ sucesso: false, erro: 'Nome é obrigatório' });
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
     }
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const catFile = path.join(gameDir, 'categorias.json');
-    const compFile = path.join(gameDir, 'componentes.json');
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
     try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const catFile = getFilePath(gameDir, 'categorias.json');
+    const compFile = getFilePath(gameDir, 'componentes.json');
+    try {
+        const { nome } = req.body;
+        if (!nome) {
+            console.log('[POST /categorias/excluir] Erro: Nome ausente');
+            return res.status(400).json({ sucesso: false, erro: 'Nome é obrigatório' });
+        }
+
         let comps = await fs.readFile(compFile, 'utf8').then(JSON.parse).catch(() => []);
         if (comps.some(c => c.categoria === nome)) {
             console.log('[POST /categorias/excluir] Erro: Categoria em uso:', nome);
@@ -1290,18 +1488,29 @@ app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
 });
 
 app.get('/componentes', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[GET /componentes] Requisição recebida');
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const exists = await ensureGameDir(effectiveUser, game, 'GET');
-    if (!exists) {
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
         res.json([]);
         return;
     }
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    const file = path.join(gameDir, 'componentes.json');
+    const file = getFilePath(gameDir, 'componentes.json');
     try {
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit } = req.query;
@@ -1328,16 +1537,34 @@ app.get('/componentes', isAuthenticated, async (req, res) => {
 });
 
 app.post('/componentes', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[POST /componentes] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'componentes.json');
-    const estoqueFileGame = path.join(gameDir, 'estoque.json');
-    const catFile = path.join(gameDir, 'categorias.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'componentes.json');
+    const estoqueFileGame = getFilePath(gameDir, 'estoque.json');
+    const catFile = getFilePath(gameDir, 'categorias.json');
     try {
         const novoComponente = req.body;
         if (!novoComponente.nome) {
@@ -1394,17 +1621,35 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
 });
 
 app.post('/componentes/editar', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[POST /componentes/editar] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'componentes.json');
-    const estoqueFileGame = path.join(gameDir, 'estoque.json');
-    const receitasFileGame = path.join(gameDir, 'receitas.json');
-    const catFile = path.join(gameDir, 'categorias.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'componentes.json');
+    const estoqueFileGame = getFilePath(gameDir, 'estoque.json');
+    const receitasFileGame = getFilePath(gameDir, 'receitas.json');
+    const catFile = getFilePath(gameDir, 'categorias.json');
     try {
         const { nomeOriginal, nome, categoria, associados, quantidadeProduzida } = req.body;
         if (!nomeOriginal || !nome) {
@@ -1508,17 +1753,35 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
 });
 
 app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[POST /componentes/excluir] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'componentes.json');
-    const receitasFileGame = path.join(gameDir, 'receitas.json');
-    const arquivadosFileGame = path.join(gameDir, 'arquivados.json');
-    const estoqueFileGame = path.join(gameDir, 'estoque.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'componentes.json');
+    const receitasFileGame = getFilePath(gameDir, 'receitas.json');
+    const arquivadosFileGame = getFilePath(gameDir, 'arquivados.json');
+    const estoqueFileGame = getFilePath(gameDir, 'estoque.json');
     try {
         const { nome } = req.body;
         if (!nome) {
@@ -1626,18 +1889,29 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
 });
 
 app.get('/estoque', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[GET /estoque] Requisição recebida');
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const exists = await ensureGameDir(effectiveUser, game, 'GET');
-    if (!exists) {
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
         res.json([]);
         return;
     }
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    const file = path.join(gameDir, 'estoque.json');
+    const file = getFilePath(gameDir, 'estoque.json');
     try {
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit } = req.query;
@@ -1665,22 +1939,47 @@ app.get('/estoque', isAuthenticated, async (req, res) => {
 
 // Novo: Endpoint para importação em massa de estoque
 app.post('/estoque/import', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const updates = req.body; // Array de {componente, novaQuantidade}
-    if (!Array.isArray(updates) || updates.length === 0) {
-        return res.status(400).json({ sucesso: false, erro: 'Dados inválidos para importação' });
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
     }
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const estoqueFile = path.join(gameDir, 'estoque.json');
-    const logFile = path.join(gameDir, 'log.json');
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const estoqueFile = getFilePath(gameDir, 'estoque.json');
+    const logFile = getFilePath(gameDir, 'log.json');
     try {
         let estoque = await fs.readFile(estoqueFile, 'utf8').then(JSON.parse).catch(() => []);
         const estoqueMap = {};
         estoque.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
+        const updates = req.body; // Array de {componente, novaQuantidade}
+        if (!Array.isArray(updates) || updates.length === 0) {
+            return res.status(400).json({ sucesso: false, erro: 'Dados inválidos para importação' });
+        }
+        // Verificar se há débitos para membros
+        const hasDebit = updates.some(update => {
+            if (!update.componente || typeof update.novaQuantidade !== 'number' || update.novaQuantidade < 0) return false;
+            const atual = estoqueMap[update.componente] || 0;
+            return update.novaQuantidade < atual;
+        });
+        if (hasDebit && !isOwn && !isAdminUser) {
+            return res.status(403).json({ sucesso: false, erro: 'Não autorizado a debitar itens via importação' });
+        }
         let updatedCount = 0;
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
         const userEmail = req.session.user;
@@ -1733,22 +2032,37 @@ app.post('/estoque/import', isAuthenticated, async (req, res) => {
 });
 
 app.post('/estoque', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    const isAdminUser = await isUserAdmin(req.session.user);
-    console.log('[POST /estoque] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'estoque.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'estoque.json');
     try {
         const { componente, quantidade, operacao } = req.body;
         if (!componente || !quantidade || !operacao) {
             console.log('[POST /estoque] Erro: Componente, quantidade ou operação ausentes');
             return res.status(400).json({ sucesso: false, erro: 'Componente, quantidade e operação são obrigatórios' });
         }
-        if (operacao === 'debitar' && !isAdminUser) {
+        // Correção: Permitir debitar em jogos próprios (isOwn), mesmo para não-admins; em compartilhados, só admins
+        if (operacao === 'debitar' && !isAdminUser && !isOwn) {
             return res.status(403).json({ sucesso: false, erro: 'Não autorizado a debitar estoque' });
         }
 
@@ -1788,19 +2102,33 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
 });
 
 app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    const isAdminUser = await isUserAdmin(req.session.user);
-    if (!isAdminUser) {
-        return res.status(403).json({ sucesso: false, erro: 'Não autorizado a zerar estoque' });
-    }
-    console.log('[POST /estoque/zerar] Requisição recebida');
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'estoque.json');
-    const logFile = path.join(gameDir, 'log.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'estoque.json');
+    const logFile = getFilePath(gameDir, 'log.json');
     try {
         let estoque = [];
         try {
@@ -1841,14 +2169,32 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
 });
 
 app.delete('/data', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[DELETE /data] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'DELETE');
-    const file = path.join(gameDir, 'estoque.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'estoque.json');
     try {
         const { componente } = req.body;
         if (!componente) {
@@ -1880,18 +2226,29 @@ app.delete('/data', isAuthenticated, async (req, res) => {
 });
 
 app.get('/arquivados', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[GET /arquivados] Requisição recebida');
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const exists = await ensureGameDir(effectiveUser, game, 'GET');
-    if (!exists) {
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
         res.json([]);
         return;
     }
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    const file = path.join(gameDir, 'arquivados.json');
+    const file = getFilePath(gameDir, 'arquivados.json');
     try {
         const data = await fs.readFile(file, 'utf8');
         res.json(JSON.parse(data));
@@ -1902,14 +2259,32 @@ app.get('/arquivados', isAuthenticated, async (req, res) => {
 });
 
 app.post('/arquivados', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[POST /arquivados] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'arquivados.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'arquivados.json');
     try {
         const arquivados = req.body;
         await fs.writeFile(file, JSON.stringify(arquivados, null, 2));
@@ -1922,18 +2297,29 @@ app.post('/arquivados', isAuthenticated, async (req, res) => {
 });
 
 app.get('/log', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[GET /log] Requisição recebida');
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const exists = await ensureGameDir(effectiveUser, game, 'GET');
-    if (!exists) {
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
         res.json([]);
         return;
     }
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    const file = path.join(gameDir, 'log.json');
+    const file = getFilePath(gameDir, 'log.json');
     try {
         const data = await fs.readFile(file, 'utf8');
         res.json(JSON.parse(data));
@@ -1944,14 +2330,28 @@ app.get('/log', isAuthenticated, async (req, res) => {
 });
 
 app.post('/log', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[POST /log] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'log.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'log.json');
     try {
         let novosLogs = Array.isArray(req.body) ? req.body : [req.body];
         // Novo: Adicionar user a cada entry se não existir
@@ -1978,22 +2378,40 @@ app.post('/log', isAuthenticated, async (req, res) => {
 });
 
 app.post('/fabricar', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
-    console.log('[POST /fabricar] Requisição recebida:', req.body);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const { componente, numCrafts = 1 } = req.body;
-    if (!componente) {
-        console.log('[POST /fabricar] Erro: Componente ausente');
-        return res.status(400).json({ sucesso: false, erro: 'Componente é obrigatório' });
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
     }
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const componentesFile = path.join(gameDir, 'componentes.json');
-    const estoqueFile = path.join(gameDir, 'estoque.json');
-    const logFile = path.join(gameDir, 'log.json');
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
     try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const componentesFile = getFilePath(gameDir, 'componentes.json');
+    const estoqueFile = getFilePath(gameDir, 'estoque.json');
+    const logFile = getFilePath(gameDir, 'log.json');
+    try {
+        const { componente, numCrafts = 1 } = req.body;
+        if (!componente) {
+            console.log('[POST /fabricar] Erro: Componente ausente');
+            return res.status(400).json({ sucesso: false, erro: 'Componente é obrigatório' });
+        }
         let componentes = await fs.readFile(componentesFile, 'utf8').then(JSON.parse).catch(() => []);
         const comp = componentes.find(c => c.nome === componente);
         if (!comp || !comp.associados || comp.associados.length === 0) {
@@ -2063,17 +2481,29 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
 
 // Endpoint para roadmap
 app.get('/roadmap', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const exists = await ensureGameDir(effectiveUser, game, 'GET');
-    if (!exists) {
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
         res.json([]);
         return;
     }
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    const file = path.join(gameDir, 'roadmap.json');
+    const file = getFilePath(gameDir, 'roadmap.json');
     try {
         const data = await fs.readFile(file, 'utf8');
         res.json(JSON.parse(data));
@@ -2084,13 +2514,32 @@ app.get('/roadmap', isAuthenticated, async (req, res) => {
 });
 
 app.post('/roadmap', isAuthenticated, async (req, res) => {
-    const effectiveUser = await getEffectiveUser(req.session.user);
+    const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
-    const safeUser = effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const safeGame = game.replace(/[^a-zA-Z0-9 ]/g, '');
-    const gameDir = path.join(DATA_DIR, safeUser, safeGame);
-    await ensureGameDir(effectiveUser, game, 'POST');
-    const file = path.join(gameDir, 'roadmap.json');
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && !isAdminUser) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'roadmap.json');
     try {
         const roadmap = req.body;
         await fs.writeFile(file, JSON.stringify(roadmap, null, 2));

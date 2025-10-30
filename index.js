@@ -5,6 +5,84 @@ const isLocal = window.location.hostname === 'localhost' || window.location.host
 const API = isLocal ? "http://localhost:10000" : "https://mmorpg-crafter.onrender.com";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
 
+async function safeApi(endpoint, init = {}) {
+    if (!init.credentials) init.credentials = 'include';
+    const url = `${API}${endpoint}`;
+    const response = await fetch(url, init);
+    if (response.status === 403) {
+        mostrarPopupAcessoNegado();
+        throw new Error('Acesso negado');
+    }
+    let data;
+    try {
+        data = await response.json();
+    } catch (e) {
+        throw new Error('Resposta inválida do servidor');
+    }
+    if (!response.ok) {
+        throw new Error(data.erro || `HTTP error! status: ${response.status}`);
+    }
+    return data;
+}
+
+function mostrarPopupAcessoNegado() {
+    // Remover overlay e modal existentes para evitar conflitos
+    const existingOverlay = document.getElementById("overlayAcessoNegado");
+    if (existingOverlay) existingOverlay.remove();
+    const existingModal = document.getElementById("modalAcessoNegado");
+    if (existingModal) existingModal.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "overlayAcessoNegado";
+    overlay.style.position = "fixed";
+    overlay.style.top = "0";
+    overlay.style.left = "0";
+    overlay.style.width = "100%";
+    overlay.style.height = "100%";
+    overlay.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+    overlay.style.zIndex = "999";
+    document.body.appendChild(overlay);
+
+    const popup = document.createElement("div");
+    popup.id = "modalAcessoNegado";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1001";
+    popup.style.borderRadius = "5px";
+    popup.style.boxShadow = "0 2px 10px rgba(0,0,0,0.1)";
+    popup.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h3>Acesso Negado</h3>
+      <button id="fecharAcessoNegado" style="background: none; border: none; font-size: 16px; cursor: pointer;">❌</button>
+    </div>
+    <p>Você não tem permissão para esta ação.</p>
+    <p>A página será recarregada em 3 segundos...</p>
+    <button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Recarregar agora</button>
+  `;
+    document.body.appendChild(popup);
+
+    const fecharBtn = document.getElementById("fecharAcessoNegado");
+    if (fecharBtn) {
+        fecharBtn.addEventListener("click", () => {
+            popup.remove();
+            overlay.remove();
+        });
+    }
+
+    overlay.addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+    });
+
+    setTimeout(() => {
+        window.location.reload();
+    }, 3000);
+}
+
 const conteudo = document.getElementById("conteudo");
 
 function debounce(func, delay) {
@@ -36,9 +114,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 // Novo: Função para carregar status do usuário (inclui isAdmin)
 async function carregarUserStatus() {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
-        const response = await fetch(`${API}/user-status`, { credentials: 'include' });
-        const status = await response.json();
+        const status = await safeApi(`/user-status?game=${encodeURIComponent(currentGame)}`);
         sessionStorage.setItem('isFounder', status.isFounder.toString());
         sessionStorage.setItem('isAdmin', status.isAdmin.toString()); // Novo: Salvar isAdmin
         sessionStorage.setItem('effectiveUser', status.effectiveUser);
@@ -106,12 +184,7 @@ async function mostrarPopupMinhaConta() {
 
     // Buscar dados do usuário do servidor via endpoint /me
     try {
-        const response = await fetch(`${API}/me`, { credentials: 'include' });
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        const usuario = await response.json();
-
+        const usuario = await safeApi(`/me`);
         popup.innerHTML = `
             <h2>Minha Conta</h2>
             <p><strong>Nome:</strong> #${usuario.id}${usuario.nome}</p>
@@ -162,7 +235,7 @@ async function mostrarPopupMinhaConta() {
 }
 
 // Novo: Popup para Mudar Senha
-function mostrarPopupMudarSenha() {
+async function mostrarPopupMudarSenha() {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
     popup.id = "popupMudarSenha";
@@ -223,13 +296,11 @@ function mostrarPopupMudarSenha() {
         if (hasError) return;
 
         try {
-            const response = await fetch(`${API}/change-password`, {
+            const data = await safeApi(`/change-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ oldPassword: senhaAtual, newPassword: novaSenha }),
-                credentials: 'include'
+                body: JSON.stringify({ oldPassword: senhaAtual, newPassword: novaSenha })
             });
-            const data = await response.json();
             if (data.sucesso) {
                 alert("Senha alterada com sucesso!");
                 popup.remove();
@@ -258,11 +329,24 @@ async function initGames() {
         currentGame = "Pax Dei";
         localStorage.setItem("currentGame", currentGame);
     }
+    // Validar se o currentGame ainda é acessível
+    try {
+        const games = await safeApi(`/games`);
+        if (!games.includes(currentGame)) {
+            currentGame = games.length > 0 ? games[0] : "Pax Dei";
+            localStorage.setItem("currentGame", currentGame);
+        }
+    } catch (error) {
+        console.error('[INIT GAMES] Erro ao validar jogos acessíveis:', error);
+        // Fallback para o default se houver erro na validação
+        currentGame = "Pax Dei";
+        localStorage.setItem("currentGame", currentGame);
+    }
     await carregarGamesSelector();
 }
 
 async function carregarGamesSelector() {
-    const games = await fetch(`${API}/games`, { credentials: 'include' }).then(r => r.json());
+    const games = await safeApi(`/games`);
     const menu = document.querySelector(".menu");
     if (!menu) return;
 
@@ -285,6 +369,7 @@ async function carregarGamesSelector() {
     document.getElementById("gameSelector").addEventListener("change", async (e) => {
         const newGame = e.target.value;
         localStorage.setItem("currentGame", newGame);
+        await carregarUserStatus();
         const currentSecao = localStorage.getItem("ultimaSecao") || "receitas";
         await carregarSecao(currentSecao);
     });
@@ -328,13 +413,11 @@ function mostrarPopupNovoJogo() {
             return;
         }
         try {
-            const response = await fetch(`${API}/games`, {
+            const data = await safeApi(`/games`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: nome }),
-                credentials: 'include'
+                body: JSON.stringify({ name: nome })
             });
-            const data = await response.json();
             if (data.sucesso) {
                 localStorage.setItem("currentGame", nome);
                 popup.remove();
@@ -475,13 +558,11 @@ function mostrarPopupLogin() {
         const email = document.getElementById("emailLogin").value;
         const senha = document.getElementById("senhaLogin").value;
         try {
-            const response = await fetch(`${API}/login`, {
+            const data = await safeApi(`/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, senha, recaptchaToken: token }),
-                credentials: 'include'
+                body: JSON.stringify({ email, senha, recaptchaToken: token })
             });
-            const data = await response.json();
             if (data.sucesso) {
                 sessionStorage.setItem("loggedIn", "true");
                 sessionStorage.setItem("userEmail", email);
@@ -589,13 +670,11 @@ function mostrarPopupCadastro() {
             return;
         }
         try {
-            const response = await fetch(`${API}/cadastro`, {
+            const data = await safeApi(`/cadastro`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ nome, email, senha, recaptchaToken: token }),
-                credentials: 'include'
+                body: JSON.stringify({ nome, email, senha, recaptchaToken: token })
             });
-            const data = await response.json();
             if (data.sucesso) {
                 document.getElementById("formCadastro").querySelectorAll("input, button").forEach(el => el.style.display = "none");
                 document.getElementById("mensagemCadastro").style.display = "block";
@@ -818,8 +897,7 @@ async function carregarListaTime() {
     let isFounder = isUserFounder();
     let effectiveUser = sessionStorage.getItem('effectiveUser') || userEmail;
     try {
-        const response = await fetch(`${API}/user-status`, { credentials: 'include' });
-        const status = await response.json();
+        const status = await safeApi(`/user-status`);
         isFounder = status.isFounder;
         effectiveUser = status.effectiveUser;
         sessionStorage.setItem('isFounder', status.isFounder.toString());
@@ -851,14 +929,11 @@ async function carregarListaTime() {
 
     if (isFounder) {
         try {
-            const [associadosRes, banidosRes, disponiveisRes] = await Promise.all([
-                fetch(`${API}/associacoes`, { credentials: 'include' }),
-                fetch(`${API}/banidos`, { credentials: 'include' }),
-                fetch(`${API}/usuarios-disponiveis`, { credentials: 'include' })
+            const [associados, banidosComRole, disponiveisAll] = await Promise.all([
+                safeApi(`/associacoes`),
+                safeApi(`/banidos`),
+                safeApi(`/usuarios-disponiveis`)
             ]);
-            const associados = await associadosRes.json();
-            const banidosComRole = await banidosRes.json();
-            const disponiveisAll = await disponiveisRes.json();
 
             // Filtrar associados para excluir o próprio email do usuário logado
             const associadosFiltrados = associados.filter(a => a.secondary !== userEmail);
@@ -902,6 +977,8 @@ async function carregarListaTime() {
                     `).join("") || '<li>Nenhum banido</li>'}</ul>
                 </div>
             `;
+            // Novo: Seção para compartilhar jogos (somente para founder)
+            html += await getSharedGamesSection();
         } catch (error) {
             console.error('[TIME] Erro ao carregar lista:', error);
             html += '<p>Erro ao carregar dados do time.</p>';
@@ -926,19 +1003,74 @@ async function carregarListaTime() {
             await enviarConvidar(email, btnConvidar, feedbackDiv, inputEmail);
         });
     }
+
+    // Novo: Adicionar event listeners para toggles de compartilhamento de jogos
+    if (isFounder) {
+        document.querySelectorAll('.toggle-share').forEach(toggle => {
+            toggle.addEventListener('change', async (e) => {
+                const game = e.target.dataset.game;
+                const share = e.target.checked;
+                await toggleShareGame(game, share);
+            });
+        });
+    }
+}
+
+// Nova função para obter seção de jogos compartilhados
+async function getSharedGamesSection() {
+    try {
+        const games = await safeApi(`/games`);
+        const shared = await safeApi(`/shared`).catch(() => []);
+        let html = `
+            <div class="secao">
+                <h3>Compartilhar Jogos com Membros</h3>
+                <ul>
+        `;
+        games.forEach(g => {
+            const isShared = shared.includes(g);
+            html += `
+                <li class="time-item">
+                    ${g}
+                    <label>
+                        Compartilhar: <input type="checkbox" class="toggle-share" data-game="${g}" ${isShared ? 'checked' : ''}>
+                    </label>
+                </li>
+            `;
+        });
+        html += '</ul></div>';
+        return html;
+    } catch (error) {
+        console.error('[SHARED GAMES] Erro ao carregar jogos compartilhados:', error);
+        return '<div class="secao"><h3>Compartilhar Jogos com Membros</h3><p>Erro ao carregar dados.</p></div>';
+    }
+}
+
+// Nova função para toggle compartilhamento de jogo
+async function toggleShareGame(game, share) {
+    try {
+        const data = await safeApi(`/shared`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ game, share })
+        });
+        if (!data.sucesso) {
+            alert(data.erro || 'Erro ao atualizar compartilhamento');
+        }
+    } catch (error) {
+        console.error('[TOGGLE SHARE] Erro:', error);
+        alert('Erro ao atualizar compartilhamento');
+    }
 }
 
 // Nova: Função para toggle co-founder
 async function toggleCoFounder(secondary, isCoFounder) {
     if (!confirm(`Confirmar ${isCoFounder ? 'remoção de co-fundador' : 'promoção a co-fundador'} para ${secondary}?`)) return;
     try {
-        const response = await fetch(`${API}/promote-cofounder`, {
+        const data = await safeApi(`/promote-cofounder`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ secondary, promote: !isCoFounder }),
-            credentials: 'include'
+            body: JSON.stringify({ secondary, promote: !isCoFounder })
         });
-        const data = await response.json();
         if (data.sucesso) {
             await carregarUserStatus(); // Recarregar status para atualizar isAdmin global
             await carregarListaTime(); // Recarregar lista
@@ -953,8 +1085,7 @@ async function toggleCoFounder(secondary, isCoFounder) {
 
 async function carregarPendencias() {
     try {
-        const pendenciasRes = await fetch(`${API}/pendencias`, { credentials: 'include' });
-        const pendencias = await pendenciasRes.json();
+        const pendencias = await safeApi(`/pendencias`);
         const lista = document.getElementById("pendencias-lista");
         if (pendencias.length === 0) {
             lista.innerHTML = '<li>Nenhuma pendência de convite.</li>';
@@ -979,13 +1110,11 @@ async function enviarConvidar(email, btn = null, feedbackDiv = null, input = nul
     if (input) input.disabled = true;
     if (feedbackDiv) feedbackDiv.style.display = "none";
     try {
-        const response = await fetch(`${API}/enviar-convite`, {
+        const data = await safeApi(`/enviar-convite`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ to: email }),
-            credentials: 'include'
+            body: JSON.stringify({ to: email })
         });
-        const data = await response.json();
         if (data.sucesso) {
             mostrarSucesso("Convite enviado ✅");
             if (input) input.value = "";
@@ -1070,13 +1199,11 @@ function mostrarSucesso(msg) {
 async function aceitarConvidar(from) {
     if (!confirm(`Aceitar convite de ${from}?`)) return;
     try {
-        const response = await fetch(`${API}/aceitar-convite`, {
+        const data = await safeApi(`/aceitar-convite`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ from }),
-            credentials: 'include'
+            body: JSON.stringify({ from })
         });
-        const data = await response.json();
         if (data.sucesso) {
             await carregarListaTime();
             window.location.reload(); // Refresh automático para atualizar games e estado
@@ -1092,13 +1219,11 @@ async function aceitarConvidar(from) {
 async function recusarConvidar(from) {
     if (!confirm(`Recusar convite de ${from}?`)) return;
     try {
-        const response = await fetch(`${API}/recusar-convite`, {
+        const data = await safeApi(`/recusar-convite`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ from }),
-            credentials: 'include'
+            body: JSON.stringify({ from })
         });
-        const data = await response.json();
         if (data.sucesso) {
             await carregarPendencias();
         } else {
@@ -1113,13 +1238,11 @@ async function recusarConvidar(from) {
 async function sairDoTime(primary) {
     if (!confirm(`Sair do time de ${primary}?`)) return;
     try {
-        const response = await fetch(`${API}/dissociate-as-secondary`, {
+        const data = await safeApi(`/dissociate-as-secondary`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ primary }),
-            credentials: 'include'
+            body: JSON.stringify({ primary })
         });
-        const data = await response.json();
         if (data.sucesso) {
             localStorage.removeItem("currentGame");
             await carregarListaTime();
@@ -1136,13 +1259,11 @@ async function sairDoTime(primary) {
 async function vincularUsuario(email) {
     if (!confirm(`Vincular ${email} ao seu time?`)) return;
     try {
-        const response = await fetch(`${API}/associate-self`, {
+        const data = await safeApi(`/associate-self`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ secondary: email }),
-            credentials: 'include'
+            body: JSON.stringify({ secondary: email })
         });
-        const data = await response.json();
         if (data.sucesso) {
             await carregarListaTime();
         } else {
@@ -1163,13 +1284,11 @@ async function desvincularUsuario(email, role) {
         body = { primary: email };
     }
     try {
-        const response = await fetch(`${API}${endpoint}`, {
+        const data = await safeApi(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-            credentials: 'include'
+            body: JSON.stringify(body)
         });
-        const data = await response.json();
         if (data.sucesso) {
             await carregarListaTime();
         } else {
@@ -1190,13 +1309,11 @@ async function banirUsuario(email, role) {
         body = { primary: email };
     }
     try {
-        const response = await fetch(`${API}${endpoint}`, {
+        const data = await safeApi(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-            credentials: 'include'
+            body: JSON.stringify(body)
         });
-        const data = await response.json();
         if (data.sucesso) {
             await carregarListaTime();
         } else {
@@ -1217,13 +1334,11 @@ async function desbanirUsuario(email, role) {
         body = { primary: email };
     }
     try {
-        const response = await fetch(`${API}${endpoint}`, {
+        const data = await safeApi(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-            credentials: 'include'
+            body: JSON.stringify(body)
         });
-        const data = await response.json();
         if (data.sucesso) {
             await carregarListaTime();
         } else {
@@ -1311,7 +1426,7 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     let quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
-    let url = `${API}/receitas?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
+    let url = `/receitas?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
     if (termoBusca) {
         url += `&search=${encodeURIComponent(termoBusca)}`;
     }
@@ -1321,42 +1436,43 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
     if (!termoBusca && !onlyFavorites) {
         url += `&limit=10`;
     }
-    let receitas = await fetch(url, { credentials: 'include' }).then(r => r.json());
-    const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const estoque = {};
-    estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
+    try {
+        let receitas = await safeApi(url);
+        const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
+        const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
+        const estoque = {};
+        estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
 
-    if (termoBusca) {
-        receitas = receitas.filter(r => r.nome.toLowerCase().includes(termoBusca.toLowerCase()));
-    }
+        if (termoBusca) {
+            receitas = receitas.filter(r => r.nome.toLowerCase().includes(termoBusca.toLowerCase()));
+        }
 
-    if (onlyFavorites) {
-        receitas = receitas.filter(r => r.favorita);
-    }
+        if (onlyFavorites) {
+            receitas = receitas.filter(r => r.favorita);
+        }
 
-    receitas = receitas.sort((a, b) => {
-        if (a.favorita !== b.favorita) return b.favorita - a.favorita; // Favoritas primeiro
-        const valorA = a.nome.toLowerCase();
-        const valorB = b.nome.toLowerCase();
-        return ordem === "az" ? valorA.localeCompare(valorB) : valorB.localeCompare(valorA);
-    });
+        receitas = receitas.sort((a, b) => {
+            if (a.favorita !== b.favorita) return b.favorita - a.favorita; // Favoritas primeiro
+            const valorA = a.nome.toLowerCase();
+            const valorB = b.nome.toLowerCase();
+            return ordem === "az" ? valorA.localeCompare(valorB) : valorB.localeCompare(valorA);
+        });
 
-    if (!termoBusca && !onlyFavorites) {
-        receitas = receitas.slice(0, 10);
-    }
+        if (!termoBusca && !onlyFavorites) {
+            receitas = receitas.slice(0, 10);
+        }
 
-    const div = document.getElementById("listaReceitas");
-    const isAdmin = isUserAdmin();
-    div.innerHTML = receitas.filter(r => r.nome).map(r => {
-        const id = `receita-${r.nome.replace(/\s/g, '-')}`;
-        const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
-        const savedQtd = quantities[r.nome] || 1;
-        const btnConcluirHtml = isAdmin ? `<button class="btn-concluir" data-receita="${r.nome}">Concluir</button>` : '';
-        const btnEditarHtml = isAdmin ? `<button class="btn-editar" data-nome="${r.nome}">Editar</button>` : '';
-        const btnArquivarHtml = isAdmin ? `<button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>` : '';
-        const btnDuplicarHtml = isAdmin ? `<button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>` : '';
-        return `
+        const div = document.getElementById("listaReceitas");
+        const isAdmin = isUserAdmin();
+        div.innerHTML = receitas.filter(r => r.nome).map(r => {
+            const id = `receita-${r.nome.replace(/\s/g, '-')}`;
+            const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
+            const savedQtd = quantities[r.nome] || 1;
+            const btnConcluirHtml = isAdmin ? `<button class="btn-concluir" data-receita="${r.nome}">Concluir</button>` : '';
+            const btnEditarHtml = isAdmin ? `<button class="btn-editar" data-nome="${r.nome}">Editar</button>` : '';
+            const btnArquivarHtml = isAdmin ? `<button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>` : '';
+            const btnDuplicarHtml = isAdmin ? `<button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>` : '';
+            return `
         <div class="item ${r.favorita ? 'favorita' : ''}" data-receita="${r.nome}">
           <div class="receita-header">
             <div class = "receita-header--container1"><div style="margin-right: 15px;"><strong class= "receita-header--titulo">${r.nome}</strong>
@@ -1371,106 +1487,109 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
           </div>
           <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
         </div>`;
-    }).join("");
+        }).join("");
 
-    document.querySelectorAll(".toggle-detalhes").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const targetId = btn.dataset.target;
-            const detalhes = document.getElementById(targetId);
-            if (!detalhes) {
-                console.error(`[DETALHES] Elemento com ID ${targetId} não encontrado`);
-                return;
-            }
-            const isVisible = detalhes.style.display !== "none";
-            detalhes.style.display = isVisible ? "none" : "block";
-            btn.textContent = isVisible ? "▼" : "▲";
-            if (!isVisible) {
-                const receitaElement = btn.closest(".item");
-                const receitaNome = receitaElement.dataset.receita;
-                const qtd = Math.max(Number(receitaElement.querySelector(".qtd-desejada").value) || 0.001, 0.001);
-                await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
-                if (isAdmin) await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
-            }
-        });
-    });
-
-    document.querySelectorAll(".qtd-desejada").forEach(input => {
-        input.addEventListener("input", async () => {
-            const receitaElement = input.closest(".item");
-            const receitaNome = receitaElement.dataset.receita;
-            const qtd = Math.max(Number(input.value) || 0.001, 0.001);
-            quantities[receitaNome] = qtd;
-            localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
-            const detalhes = receitaElement.querySelector(".detalhes");
-            if (detalhes && detalhes.style.display !== "none") {
-                await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
-                if (isAdmin) await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
-            }
-        });
-    });
-
-    if (isAdmin) {
-        document.querySelectorAll(".btn-concluir").forEach(btn => {
+        document.querySelectorAll(".toggle-detalhes").forEach(btn => {
             btn.addEventListener("click", async () => {
-                const receitaNome = btn.dataset.receita;
-                const qtd = Math.max(Number(btn.closest(".item").querySelector(".qtd-desejada").value) || 0.001, 0.001);
-                await concluirReceita(receitaNome, qtd, componentes, estoque);
+                const targetId = btn.dataset.target;
+                const detalhes = document.getElementById(targetId);
+                if (!detalhes) {
+                    console.error(`[DETALHES] Elemento com ID ${targetId} não encontrado`);
+                    return;
+                }
+                const isVisible = detalhes.style.display !== "none";
+                detalhes.style.display = isVisible ? "none" : "block";
+                btn.textContent = isVisible ? "▼" : "▲";
+                if (!isVisible) {
+                    const receitaElement = btn.closest(".item");
+                    const receitaNome = receitaElement.dataset.receita;
+                    const qtd = Math.max(Number(receitaElement.querySelector(".qtd-desejada").value) || 0.001, 0.001);
+                    await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
+                    if (isAdmin) await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
+                }
             });
         });
 
-        document.querySelectorAll(".btn-arquivar").forEach(btn => {
-            btn.addEventListener("click", () => {
+        document.querySelectorAll(".qtd-desejada").forEach(input => {
+            input.addEventListener("input", async () => {
+                const receitaElement = input.closest(".item");
+                const receitaNome = receitaElement.dataset.receita;
+                const qtd = Math.max(Number(input.value) || 0.001, 0.001);
+                quantities[receitaNome] = qtd;
+                localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
+                const detalhes = receitaElement.querySelector(".detalhes");
+                if (detalhes && detalhes.style.display !== "none") {
+                    await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
+                    if (isAdmin) await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
+                }
+            });
+        });
+
+        if (isAdmin) {
+            document.querySelectorAll(".btn-concluir").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const receitaNome = btn.dataset.receita;
+                    const qtd = Math.max(Number(btn.closest(".item").querySelector(".qtd-desejada").value) || 0.001, 0.001);
+                    await concluirReceita(receitaNome, qtd, componentes, estoque);
+                });
+            });
+
+            document.querySelectorAll(".btn-arquivar").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const nome = btn.dataset.nome;
+                    console.log(`[ARQUIVAR] Botão Arquivar clicado para receita: ${nome}`);
+                    arquivarReceita(nome);
+                });
+            });
+
+            document.querySelectorAll(".btn-editar").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const nome = btn.dataset.nome;
+                    console.log(`[EDITAR] Botão Editar clicado para receita: ${nome}`);
+                    editarReceita(nome);
+                });
+            });
+
+            document.querySelectorAll(".btn-duplicar").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const nome = btn.dataset.nome;
+                    console.log(`[DUPLICAR] Botão Duplicar clicado para receita: ${nome}`);
+                    duplicarReceita(nome);
+                });
+            });
+        }
+
+        document.querySelectorAll(".btn-favoritar").forEach(btn => {
+            btn.addEventListener("click", async () => {
                 const nome = btn.dataset.nome;
-                console.log(`[ARQUIVAR] Botão Arquivar clicado para receita: ${nome}`);
-                arquivarReceita(nome);
+                const isFavorita = btn.classList.contains('favorita');
+                await toggleFavorita(nome, !isFavorita);
             });
         });
 
-        document.querySelectorAll(".btn-editar").forEach(btn => {
-            btn.addEventListener("click", () => {
-                const nome = btn.dataset.nome;
-                console.log(`[EDITAR] Botão Editar clicado para receita: ${nome}`);
-                editarReceita(nome);
+        // Verificar botões inicialmente
+        if (isAdmin) {
+            document.querySelectorAll(".item").forEach(async item => {
+                const receitaNome = item.dataset.receita;
+                const qtd = Math.max(Number(item.querySelector(".qtd-desejada").value) || 0.001, 0.001);
+                await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
             });
-        });
-
-        document.querySelectorAll(".btn-duplicar").forEach(btn => {
-            btn.addEventListener("click", () => {
-                const nome = btn.dataset.nome;
-                console.log(`[DUPLICAR] Botão Duplicar clicado para receita: ${nome}`);
-                duplicarReceita(nome);
-            });
-        });
-    }
-
-    document.querySelectorAll(".btn-favoritar").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const nome = btn.dataset.nome;
-            const isFavorita = btn.classList.contains('favorita');
-            await toggleFavorita(nome, !isFavorita);
-        });
-    });
-
-    // Verificar botões inicialmente
-    if (isAdmin) {
-        document.querySelectorAll(".item").forEach(async item => {
-            const receitaNome = item.dataset.receita;
-            const qtd = Math.max(Number(item.querySelector(".qtd-desejada").value) || 0.001, 0.001);
-            await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
-        });
+        }
+    } catch (error) {
+        console.error('[RECEITAS] Erro ao carregar lista:', error);
+        const div = document.getElementById("listaReceitas");
+        div.innerHTML = '<p>Erro ao carregar receitas.</p>';
     }
 }
 
 async function toggleFavorita(nome, favorita) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
-        const response = await fetch(`${API}/receitas/favoritar?game=${encodeURIComponent(currentGame)}`, {
+        const data = await safeApi(`/receitas/favoritar?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ nome, favorita }),
-            credentials: 'include'
+            body: JSON.stringify({ nome, favorita })
         });
-        const data = await response.json();
         if (data.sucesso) {
             await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az");
         } else {
@@ -1494,7 +1613,7 @@ async function arquivarReceita(receitaNome) {
 
     try {
         // Carregar receitas atuais
-        const receitasAtuais = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+        const receitasAtuais = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
         console.log(`[ARQUIVAR] Receitas atuais carregadas:`, receitasAtuais);
         const receitaIndex = receitasAtuais.findIndex(r => r.nome === receitaNome);
         if (receitaIndex === -1) {
@@ -1506,13 +1625,11 @@ async function arquivarReceita(receitaNome) {
         // Remover receita de receitas.json
         const receitaArquivada = receitasAtuais.splice(receitaIndex, 1)[0];
         console.log(`[ARQUIVAR] Removendo receita "${receitaNome}" de receitas.json`);
-        const receitasResponse = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, {
+        const receitasData = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(receitasAtuais),
-            credentials: 'include'
+            body: JSON.stringify(receitasAtuais)
         });
-        const receitasData = await receitasResponse.json();
         console.log(`[ARQUIVAR] Resposta do servidor (receitas):`, receitasData);
         if (!receitasData.sucesso) {
             console.error(`[ARQUIVAR] Erro ao salvar receitas.json:`, receitasData.erro);
@@ -1521,17 +1638,15 @@ async function arquivarReceita(receitaNome) {
         }
 
         // Adicionar receita a arquivados.json
-        const arquivados = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
+        let arquivados = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`).catch(() => []);
         console.log(`[ARQUIVAR] Arquivados atuais:`, arquivados);
         arquivados.push(receitaArquivada);
         console.log(`[ARQUIVAR] Adicionando receita "${receitaNome}" a arquivados.json`);
-        const arquivadosResponse = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, {
+        const arquivadosData = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(arquivados),
-            credentials: 'include'
+            body: JSON.stringify(arquivados)
         });
-        const arquivadosData = await arquivadosResponse.json();
         console.log(`[ARQUIVAR] Resposta do servidor (arquivados):`, arquivadosData);
         if (!arquivadosData.sucesso) {
             console.error(`[ARQUIVAR] Erro ao salvar arquivados.json:`, arquivadosData.erro);
@@ -1547,11 +1662,14 @@ async function arquivarReceita(receitaNome) {
         console.log(`[ARQUIVAR] Atualizando interface do usuário para receita: ${receitaNome}`);
         await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az");
         await carregarArquivados();
-        await carregarListaFarmar(
-            document.getElementById("buscaFarmar")?.value || "",
-            document.getElementById("ordemFarmar")?.value || "pendente-desc",
-            document.getElementById("filtroReceitaFarmar")?.value || ""
-        );
+        // Correção: Só recarregar farmar se a seção existir (evita erro de null.innerHTML)
+        if (document.getElementById("listaFarmar")) {
+            await carregarListaFarmar(
+                document.getElementById("buscaFarmar")?.value || "",
+                document.getElementById("ordemFarmar")?.value || "pendente-desc",
+                document.getElementById("filtroReceitaFarmar")?.value || ""
+            );
+        }
         console.log(`[ARQUIVAR] Receita "${receitaNome}" arquivada com sucesso.`);
     } catch (error) {
         console.error(`[ARQUIVAR] Erro ao arquivar receita "${receitaNome}":`, error);
@@ -1561,75 +1679,79 @@ async function arquivarReceita(receitaNome) {
 
 async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, collapsible = false, hidePrefix = false) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const receita = receitas.find(r => r.nome === receitaNome);
-    if (!receita) {
-        console.error(`[DETALHES] Receita "${receitaNome}" não encontrada`);
-        return;
-    }
-
-    const detalhes = document.querySelector(`[data-receita="${receitaNome}"] .detalhes`);
-    if (!detalhes) {
-        console.error(`[DETALHES] Elemento detalhes para receita "${receitaNome}" não encontrado`);
-        return;
-    }
-
-    let requisitos = {};
-    receita.componentes.forEach(comp => {
-        const quantidadeNecessaria = comp.quantidade * qtd;
-        mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
-    });
-
-    let html = "<ul>";
-    let counter = 1;
-    for (const comp of receita.componentes) {
-        const quantidadeNecessaria = comp.quantidade * qtd;
-        const disp = estoque[comp.nome] !== undefined ? estoque[comp.nome] : 0;
-        const falta = Math.max(0, quantidadeNecessaria - disp);
-
-        let classeLinha = '';
-        if (disp >= quantidadeNecessaria) {
-            classeLinha = 'comp-verde'; // Verde e negrito
-        } else if (falta <= quantidadeNecessaria * 0.5) {
-            classeLinha = 'comp-amarelo'; // Amarelo e negrito
-        } else {
-            classeLinha = 'comp-vermelho'; // Vermelho, sem negrito
+    try {
+        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
+        const receita = receitas.find(r => r.nome === receitaNome);
+        if (!receita) {
+            console.error(`[DETALHES] Receita "${receitaNome}" não encontrada`);
+            return;
         }
 
-        const component = componentesData.find(c => c.nome === comp.nome);
-        const hasSubs = component && component.associados && component.associados.length > 0;
-        let toggleHtml = '';
-        if (collapsible && hasSubs) {
-            toggleHtml = `<button class="toggle-sub">▶</button>`;
+        const detalhes = document.querySelector(`[data-receita="${receitaNome}"] .detalhes`);
+        if (!detalhes) {
+            console.error(`[DETALHES] Elemento detalhes para receita "${receitaNome}" não encontrado`);
+            return;
         }
 
-        html += `
-        <li class="${classeLinha}">
-          ${toggleHtml}
-          ${!hidePrefix ? `<span class="prefix">${counter}-</span> ` : ''}${comp.nome} (Nec: ${formatQuantity(quantidadeNecessaria)}, Disp: ${formatQuantity(disp)}, Falta: ${formatQuantity(falta)})
-          ${getComponentChain(comp.nome, quantidadeNecessaria, componentesData, estoque, `${counter}.`, collapsible, hidePrefix)}
-        </li>`;
-        counter++;
-    }
-    html += "</ul>";
-    detalhes.innerHTML = html;
-
-    if (collapsible) {
-        detalhes.querySelectorAll('.toggle-sub').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const li = btn.closest('li');
-                const ul = li.querySelector('ul');
-                if (ul) {
-                    if (ul.style.display === 'none') {
-                        ul.style.display = 'block';
-                        btn.textContent = '▼';
-                    } else {
-                        ul.style.display = 'none';
-                        btn.textContent = '▶';
-                    }
-                }
-            });
+        let requisitos = {};
+        receita.componentes.forEach(comp => {
+            const quantidadeNecessaria = comp.quantidade * qtd;
+            mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
         });
+
+        let html = "<ul>";
+        let counter = 1;
+        for (const comp of receita.componentes) {
+            const quantidadeNecessaria = comp.quantidade * qtd;
+            const disp = estoque[comp.nome] !== undefined ? estoque[comp.nome] : 0;
+            const falta = Math.max(0, quantidadeNecessaria - disp);
+
+            let classeLinha = '';
+            if (disp >= quantidadeNecessaria) {
+                classeLinha = 'comp-verde'; // Verde e negrito
+            } else if (falta <= quantidadeNecessaria * 0.5) {
+                classeLinha = 'comp-amarelo'; // Amarelo e negrito
+            } else {
+                classeLinha = 'comp-vermelho'; // Vermelho, sem negrito
+            }
+
+            const component = componentesData.find(c => c.nome === comp.nome);
+            const hasSubs = component && component.associados && component.associados.length > 0;
+            let toggleHtml = '';
+            if (collapsible && hasSubs) {
+                toggleHtml = `<button class="toggle-sub">▶</button>`;
+            }
+
+            html += `
+            <li class="${classeLinha}">
+              ${toggleHtml}
+              ${!hidePrefix ? `<span class="prefix">${counter}-</span> ` : ''}${comp.nome} (Nec: ${formatQuantity(quantidadeNecessaria)}, Disp: ${formatQuantity(disp)}, Falta: ${formatQuantity(falta)})
+              ${getComponentChain(comp.nome, quantidadeNecessaria, componentesData, estoque, `${counter}.`, collapsible, hidePrefix)}
+            </li>`;
+            counter++;
+        }
+        html += "</ul>";
+        detalhes.innerHTML = html;
+
+        if (collapsible) {
+            detalhes.querySelectorAll('.toggle-sub').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const li = btn.closest('li');
+                    const ul = li.querySelector('ul');
+                    if (ul) {
+                        if (ul.style.display === 'none') {
+                            ul.style.display = 'block';
+                            btn.textContent = '▼';
+                        } else {
+                            ul.style.display = 'none';
+                            btn.textContent = '▶';
+                        }
+                    }
+                });
+            });
+        }
+    } catch (error) {
+        console.error(`[DETALHES] Erro ao atualizar detalhes para ${receitaNome}:`, error);
     }
 }
 
@@ -1719,32 +1841,36 @@ function mergeReq(target, source) {
 
 async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const receita = receitas.find(r => r.nome === receitaNome);
-    if (!receita) {
-        console.error(`[CONCLUIR] Receita "${receitaNome}" não encontrada`);
-        return;
+    try {
+        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
+        const receita = receitas.find(r => r.nome === receitaNome);
+        if (!receita) {
+            console.error(`[CONCLUIR] Receita "${receitaNome}" não encontrada`);
+            return;
+        }
+
+        let requisitos = {};
+        receita.componentes.forEach(comp => {
+            const quantidadeNecessaria = comp.quantidade * qtd;
+            mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
+        });
+
+        const btn = document.querySelector(`[data-receita="${receitaNome}"] .btn-concluir`);
+        if (!btn) return;
+
+        const estoqueAtualizado = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
+        const estoqueMap = {};
+        estoqueAtualizado.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
+
+        const podeConcluir = Object.entries(requisitos).every(([nome, nec]) => {
+            const disp = estoqueMap[nome] !== undefined ? estoqueMap[nome] : 0;
+            return disp >= nec;
+        });
+
+        btn.disabled = !podeConcluir;
+    } catch (error) {
+        console.error(`[CONCLUIR] Erro ao atualizar botão para ${receitaNome}:`, error);
     }
-
-    let requisitos = {};
-    receita.componentes.forEach(comp => {
-        const quantidadeNecessaria = comp.quantidade * qtd;
-        mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
-    });
-
-    const btn = document.querySelector(`[data-receita="${receitaNome}"] .btn-concluir`);
-    if (!btn) return;
-
-    const estoqueAtualizado = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const estoqueMap = {};
-    estoqueAtualizado.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
-
-    const podeConcluir = Object.entries(requisitos).every(([nome, nec]) => {
-        const disp = estoqueMap[nome] !== undefined ? estoqueMap[nome] : 0;
-        return disp >= nec;
-    });
-
-    btn.disabled = !podeConcluir;
 }
 
 async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
@@ -1754,42 +1880,40 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     let quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
 
-    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    console.log("[CONCLUIR] Receitas recebidas do servidor:", receitas);
-    const receita = receitas.find(r => r.nome === receitaNome);
-    if (!receita) {
-        console.error(`[CONCLUIR] Receita "${receitaNome}" não encontrada`);
-        mostrarErro("Receita não encontrada.");
-        return;
-    }
-
-    let requisitos = {};
-    receita.componentes.forEach(comp => {
-        const quantidadeNecessaria = comp.quantidade * qtd;
-        mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
-    });
-
-    const podeConcluir = Object.entries(requisitos).every(([nome, nec]) => {
-        const disp = estoque[nome] !== undefined ? estoque[nome] : 0;
-        return disp >= nec;
-    });
-
-    if (!podeConcluir) {
-        mostrarErro("Estoque insuficiente para concluir a receita.");
-        return;
-    }
-
     try {
+        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
+        console.log("[CONCLUIR] Receitas recebidas do servidor:", receitas);
+        const receita = receitas.find(r => r.nome === receitaNome);
+        if (!receita) {
+            console.error(`[CONCLUIR] Receita "${receitaNome}" não encontrada`);
+            mostrarErro("Receita não encontrada.");
+            return;
+        }
+
+        let requisitos = {};
+        receita.componentes.forEach(comp => {
+            const quantidadeNecessaria = comp.quantidade * qtd;
+            mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
+        });
+
+        const podeConcluir = Object.entries(requisitos).every(([nome, nec]) => {
+            const disp = estoque[nome] !== undefined ? estoque[nome] : 0;
+            return disp >= nec;
+        });
+
+        if (!podeConcluir) {
+            mostrarErro("Estoque insuficiente para concluir a receita.");
+            return;
+        }
+
         // Debitar do estoque
         for (const [componente, quantidade] of Object.entries(requisitos)) {
             console.log(`[CONCLUIR] Debitando ${quantidade} de ${componente} do estoque`);
-            const response = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, {
+            const data = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ componente, quantidade, operacao: "debitar" }),
-                credentials: 'include'
+                body: JSON.stringify({ componente, quantidade, operacao: "debitar" })
             });
-            const data = await response.json();
             if (!data.sucesso) {
                 mostrarErro(data.erro || `Erro ao debitar ${componente} do estoque.`);
                 return;
@@ -1808,20 +1932,18 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             user: userEmail  // Novo: Adicionar usuário
         }));
         console.log("[CONCLUIR] Registrando no log:", logEntries);
-        const logResponse = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, {
+        const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(logEntries),
-            credentials: 'include'
+            body: JSON.stringify(logEntries)
         });
-        const logData = await logResponse.json();
         if (!logData.sucesso) {
             mostrarErro("Erro ao registrar log.");
             return;
         }
 
         // Arquivar a receita e remover de receitas
-        const receitasAtuais = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+        let receitasAtuais = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
         console.log("[CONCLUIR] Receitas atuais antes da remoção:", receitasAtuais);
         const receitaIndex = receitasAtuais.findIndex(r => r.nome === receitaNome);
         if (receitaIndex === -1) {
@@ -1833,13 +1955,11 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
         const receitaArquivada = receitasAtuais.splice(receitaIndex, 1)[0];
         console.log(`[CONCLUIR] Removendo receita "${receitaNome}" de receitas.json`);
         console.log("[CONCLUIR] Receitas após remoção:", receitasAtuais);
-        const receitasResponse = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, {
+        const receitasData = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(receitasAtuais),
-            credentials: 'include'
+            body: JSON.stringify(receitasAtuais)
         });
-        const receitasData = await receitasResponse.json();
         console.log("[CONCLUIR] Resposta do servidor (receitas):", receitasData);
         if (!receitasData.sucesso) {
             console.error(`[CONCLUIR] Erro ao salvar receitas.json:`, receitasData.erro);
@@ -1847,16 +1967,14 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             return;
         }
 
-        const arquivados = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
+        let arquivados = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`).catch(() => []);
         arquivados.push(receitaArquivada);
         console.log(`[CONCLUIR] Adicionando receita "${receitaNome}" a arquivados.json`);
-        const arquivadosResponse = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, {
+        const arquivadosData = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(arquivados),
-            credentials: 'include'
+            body: JSON.stringify(arquivados)
         });
-        const arquivadosData = await arquivadosResponse.json();
         console.log("[CONCLUIR] Resposta do servidor (arquivados):", arquivadosData);
         if (!arquivadosData.sucesso) {
             console.error(`[CONCLUIR] Erro ao salvar arquivados.json:`, arquivadosData.erro);
@@ -1870,17 +1988,20 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
 
         // Atualizar UI
         console.log("[CONCLUIR] Atualizando interface do usuário");
-        const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+        const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
         estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
         await carregarListaReceitas();
         await carregarEstoque();
         await carregarLog();
         await carregarArquivados();
-        await carregarListaFarmar(
-            document.getElementById("buscaFarmar")?.value || "",
-            document.getElementById("ordemFarmar")?.value || "pendente-desc",
-            document.getElementById("filtroReceitaFarmar")?.value || ""
-        );
+        // Correção: Só recarregar farmar se a seção existir (evita erro de null.innerHTML)
+        if (document.getElementById("listaFarmar")) {
+            await carregarListaFarmar(
+                document.getElementById("buscaFarmar")?.value || "",
+                document.getElementById("ordemFarmar")?.value || "pendente-desc",
+                document.getElementById("filtroReceitaFarmar")?.value || ""
+            );
+        }
     } catch (error) {
         console.error("[CONCLUIR] Erro ao concluir receita:", error);
         mostrarErro("Erro ao concluir receita: " + error.message);
@@ -1895,23 +2016,28 @@ async function editarReceita(nome) {
 async function duplicarReceita(nome) {
     console.log(`[DUPLICAR] Iniciando duplicação da receita: ${nome}`);
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const receita = receitas.find(r => r.nome === nome);
-    if (!receita) {
-        console.error(`[DUPLICAR] Receita "${nome}" não encontrada`);
-        mostrarErro("Receita não encontrada para duplicação.");
-        return;
-    }
+    try {
+        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
+        const receita = receitas.find(r => r.nome === nome);
+        if (!receita) {
+            console.error(`[DUPLICAR] Receita "${nome}" não encontrada`);
+            mostrarErro("Receita não encontrada para duplicação.");
+            return;
+        }
 
-    // Gerar um nome único sugerido
-    let nomeSugerido = `${nome} 1`;
-    let contador = 1;
-    while (receitas.some(r => r.nome === nomeSugerido)) {
-        contador++;
-        nomeSugerido = `${nome} ${contador}`;
-    }
+        // Gerar um nome único sugerido
+        let nomeSugerido = `${nome} 1`;
+        let contador = 1;
+        while (receitas.some(r => r.nome === nomeSugerido)) {
+            contador++;
+            nomeSugerido = `${nome} ${contador}`;
+        }
 
-    abrirPopupReceita(nome, true, nomeSugerido);
+        abrirPopupReceita(nome, true, nomeSugerido);
+    } catch (error) {
+        console.error(`[DUPLICAR] Erro ao duplicar receita ${nome}:`, error);
+        mostrarErro("Erro ao duplicar receita.");
+    }
 }
 
 function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
@@ -1937,7 +2063,7 @@ function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
 
     if (nome) {
         titulo.textContent = duplicar ? "Duplicar Receita" : "Editar Receita";
-        fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).then(list => {
+        safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`).then(list => {
             const receita = list.find(r => r.nome === nome);
             if (!receita) {
                 console.error(`[POPUP] Receita "${nome}" não encontrada`);
@@ -1951,6 +2077,10 @@ function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
             }
             (receita.componentes || []).forEach(c => adicionarLinhaReceita(c));
             popup.style.display = "flex";
+        }).catch(error => {
+            console.error(`[POPUP] Erro ao carregar receita ${nome}:`, error);
+            mostrarErro("Erro ao carregar receita.");
+            popup.style.display = "none";
         });
     } else {
         titulo.textContent = "Nova Receita";
@@ -1978,29 +2108,25 @@ function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
         const payload = { nome: nomeVal, componentes };
         console.log("[FORM] Payload enviado:", payload);
 
-        let endpoint = `${API}/receitas?game=${encodeURIComponent(currentGame)}`;
+        let endpoint = `/receitas?game=${encodeURIComponent(currentGame)}`;
         try {
             if (inputNomeOriginal.value && !duplicar) {
-                const response = await fetch(`${API}/receitas/editar?game=${encodeURIComponent(currentGame)}`, {
+                const data = await safeApi(`/receitas/editar?game=${encodeURIComponent(currentGame)}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ nomeOriginal: inputNomeOriginal.value, ...payload }),
-                    credentials: 'include'
+                    body: JSON.stringify({ nomeOriginal: inputNomeOriginal.value, ...payload })
                 });
-                const data = await response.json();
                 console.log("[FORM] Resposta do servidor (edição):", data);
                 if (!data.sucesso) {
                     mostrarErro(data.erro || "Erro ao editar receita");
                     return;
                 }
             } else {
-                const response = await fetch(endpoint, {
+                const data = await safeApi(endpoint, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload),
-                    credentials: 'include'
+                    body: JSON.stringify(payload)
                 });
-                const data = await response.json();
                 console.log("[FORM] Resposta do servidor (nova receita):", data);
                 if (!data.sucesso) {
                     mostrarErro(data.erro || "Erro ao salvar receita");
@@ -2023,8 +2149,9 @@ async function adicionarLinhaReceita(dados = {}) {
     row.className = "associado-row";
     const rowId = Math.random().toString(36).substring(7); // ID único para o datalist
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const comps = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    row.innerHTML = `
+    try {
+        const comps = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
+        row.innerHTML = `
       <input type="text" class="assoc-nome" list="assoc-datalist-${rowId}" value="${dados.nome || ''}" placeholder="Digite para buscar..." />
       <datalist id="assoc-datalist-${rowId}">
         ${comps.map(c => `<option value="${c.nome}">`).join("")}
@@ -2032,6 +2159,15 @@ async function adicionarLinhaReceita(dados = {}) {
       <input type="number" class="assoc-qtd" min="0.001" step="any" placeholder="Qtd" value="${formatQuantity(dados.quantidade || 0.001)}" />
       <button type="button">❌</button>
     `;
+    } catch (error) {
+        console.error('[ADICIONAR LINHA] Erro ao carregar componentes:', error);
+        row.innerHTML = `
+      <input type="text" class="assoc-nome" list="assoc-datalist-${rowId}" value="${dados.nome || ''}" placeholder="Digite para buscar..." />
+      <datalist id="assoc-datalist-${rowId}"></datalist>
+      <input type="number" class="assoc-qtd" min="0.001" step="any" placeholder="Qtd" value="${formatQuantity(dados.quantidade || 0.001)}" />
+      <button type="button">❌</button>
+    `;
+    }
     row.querySelector("button").addEventListener("click", () => row.remove());
     container.appendChild(row);
 }
@@ -2096,37 +2232,42 @@ async function montarComponentes() {
 
 async function carregarCategoriasSelect() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const categorias = await fetch(`${API}/categorias?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const select = document.getElementById("filtroCategoriaComponentes");
-    if (select) {
-        select.innerHTML = '<option value="">Todas as categorias</option>' + categorias.map(cat => `<option value="${cat}">${cat}</option>`).join("");
+    try {
+        const categorias = await safeApi(`/categorias?game=${encodeURIComponent(currentGame)}`);
+        const select = document.getElementById("filtroCategoriaComponentes");
+        if (select) {
+            select.innerHTML = '<option value="">Todas as categorias</option>' + categorias.map(cat => `<option value="${cat}">${cat}</option>`).join("");
+        }
+    } catch (error) {
+        console.error('[CATEGORIAS SELECT] Erro ao carregar categorias:', error);
     }
 }
 
 async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria = "") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    let url = `${API}/componentes?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
+    let url = `/componentes?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
     if (termoBusca) {
         url += `&search=${encodeURIComponent(termoBusca)}`;
     } else {
         url += `&limit=10`;
     }
-    let comps = await fetch(url, { credentials: 'include' }).then(r => r.json());
+    try {
+        let comps = await safeApi(url);
 
-    if (categoria) {
-        comps = comps.filter(c => c.categoria === categoria);
-    }
+        if (categoria) {
+            comps = comps.filter(c => c.categoria === categoria);
+        }
 
-    const isAdmin = isUserAdmin();
-    const btnEditarDisabled = !isAdmin ? 'disabled' : '';
-    const btnExcluirDisabled = !isAdmin ? 'disabled' : '';
+        const isAdmin = isUserAdmin();
+        const btnEditarDisabled = !isAdmin ? 'disabled' : '';
+        const btnExcluirDisabled = !isAdmin ? 'disabled' : '';
 
-    const div = document.getElementById("lista-componentes");
-    div.innerHTML = comps.map(c => {
-        const assoc = (c.associados || []).map(a => `${formatQuantity(a.quantidade)} x ${a.nome}`).join(", ");
-        const btnEditarHtml = isAdmin ? `<button onclick="abrirPopupComponente('${escapeJsString(c.nome)}')" class="primary" ${btnEditarDisabled}>Editar</button>` : '';
-        const btnExcluirHtml = isAdmin ? `<button onclick="excluirComponente('${escapeJsString(c.nome)}')" class="warn" ${btnExcluirDisabled}>Excluir</button>` : '';
-        return `
+        const div = document.getElementById("lista-componentes");
+        div.innerHTML = comps.map(c => {
+            const assoc = (c.associados || []).map(a => `${formatQuantity(a.quantidade)} x ${a.nome}`).join(", ");
+            const btnEditarHtml = isAdmin ? `<button onclick="abrirPopupComponente('${escapeJsString(c.nome)}')" class="primary" ${btnEditarDisabled}>Editar</button>` : '';
+            const btnExcluirHtml = isAdmin ? `<button onclick="excluirComponente('${escapeJsString(c.nome)}')" class="warn" ${btnExcluirDisabled}>Excluir</button>` : '';
+            return `
       <div class="item">
         <div>
           <strong>${c.nome}</strong> <span class="categoria">(${c.categoria || "—"})</span>
@@ -2139,7 +2280,12 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria
           ${btnExcluirHtml}
         </div>
       </div>`;
-    }).join("");
+        }).join("");
+    } catch (error) {
+        console.error('[COMPONENTES] Erro ao carregar lista:', error);
+        const div = document.getElementById("lista-componentes");
+        div.innerHTML = '<p>Erro ao carregar componentes.</p>';
+    }
 }
 
 function escapeHtml(s) {
@@ -2178,16 +2324,19 @@ function abrirPopupComponente(nome = null) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
 
     if (nome) {
-        fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).then(list => {
+        titulo.textContent = "Editar Componente";
+        safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`).then(list => {
             const comp = list.find(c => c.nome === nome);
             if (!comp) return;
-            titulo.textContent = "Editar Componente";
             inputNome.value = comp.nome;
             inputCategoria.value = comp.categoria || "";
             inputQuantidadeProduzida.value = formatQuantity(comp.quantidadeProduzida || 0.001);
             inputNomeOriginal.value = comp.nome;
             (comp.associados || []).forEach(a => adicionarAssociadoRow(a.nome, a.quantidade));
             carregarCategoriasDatalist();
+        }).catch(error => {
+            console.error('[POPUP COMPONENTE] Erro ao carregar componente:', error);
+            mostrarErro("Erro ao carregar componente.");
         });
     } else {
         titulo.textContent = "Novo Componente";
@@ -2209,37 +2358,40 @@ function abrirPopupComponente(nome = null) {
         if (!nomeVal) return mostrarErro("Nome inválido");
 
         const payload = { nome: nomeVal, categoria: categoriaVal, associados, quantidadeProduzida: qtdProd };
-        let endpoint = `${API}/componentes?game=${encodeURIComponent(currentGame)}`;
+        let endpoint = `/componentes?game=${encodeURIComponent(currentGame)}`;
         if (inputNomeOriginal.value) {
             payload.nomeOriginal = inputNomeOriginal.value;
-            endpoint = `${API}/componentes/editar?game=${encodeURIComponent(currentGame)}`;
+            endpoint = `/componentes/editar?game=${encodeURIComponent(currentGame)}`;
         }
 
-        const res = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            credentials: 'include'
-        });
-        const data = await res.json();
-        if (!data.sucesso) return mostrarErro(data.erro || "Erro ao salvar componente");
+        try {
+            const data = await safeApi(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            if (!data.sucesso) return mostrarErro(data.erro || "Erro ao salvar componente");
 
-        popup.style.display = "none";
-        await carregarComponentesLista(document.getElementById("buscaComponentes")?.value || "", document.getElementById("ordemComponentes")?.value || "az");
-        await carregarCategoriasDatalist();
+            popup.style.display = "none";
+            await carregarComponentesLista(document.getElementById("buscaComponentes")?.value || "", document.getElementById("ordemComponentes")?.value || "az");
+            await carregarCategoriasDatalist();
+        } catch (error) {
+            mostrarErro("Erro ao salvar componente: " + error.message);
+        }
     };
 
     document.getElementById("btnCancelarComponente").onclick = () => popup.style.display = "none";
     popup.style.display = "flex";
 }
 
-function adicionarAssociadoRow(nome = "", quantidade = "") {
+async function adicionarAssociadoRow(nome = "", quantidade = "") {
     const container = document.getElementById("associadosContainer");
     const row = document.createElement("div");
     row.className = "associado-row";
     const rowId = Math.random().toString(36).substring(7); // ID único para o datalist
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).then(comps => {
+    try {
+        const comps = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
         row.innerHTML = `
       <input type="text" class="assoc-nome" list="assoc-datalist-${rowId}" value="${nome}" placeholder="Digite para buscar..." />
       <datalist id="assoc-datalist-${rowId}">
@@ -2248,9 +2400,17 @@ function adicionarAssociadoRow(nome = "", quantidade = "") {
       <input class="assoc-qtd" type="number" min="0.001" step="any" value="${formatQuantity(quantidade || 0.001)}" />
       <button type="button">❌</button>
     `;
-        row.querySelector("button").addEventListener("click", () => row.remove());
-        container.appendChild(row);
-    });
+    } catch (error) {
+        console.error('[ADICIONAR ASSOCIADO] Erro ao carregar componentes:', error);
+        row.innerHTML = `
+      <input type="text" class="assoc-nome" list="assoc-datalist-${rowId}" value="${nome}" placeholder="Digite para buscar..." />
+      <datalist id="assoc-datalist-${rowId}"></datalist>
+      <input class="assoc-qtd" type="number" min="0.001" step="any" value="${formatQuantity(quantidade || 0.001)}" />
+      <button type="button">❌</button>
+    `;
+    }
+    row.querySelector("button").addEventListener("click", () => row.remove());
+    container.appendChild(row);
 }
 
 async function excluirComponente(nome) {
@@ -2260,23 +2420,29 @@ async function excluirComponente(nome) {
     }
     if (!confirm(`Confirmar exclusão de "${nome}"?`)) return;
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const res = await fetch(`${API}/componentes/excluir?game=${encodeURIComponent(currentGame)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome }),
-        credentials: 'include'
-    });
-    const data = await res.json();
-    if (!data.sucesso) return mostrarErro(data.erro || "Erro ao excluir");
-    await carregarComponentesLista(document.getElementById("buscaComponentes")?.value || "", document.getElementById("ordemComponentes")?.value || "az");
-    await carregarCategoriasDatalist();
+    try {
+        const data = await safeApi(`/componentes/excluir?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nome })
+        });
+        if (!data.sucesso) return mostrarErro(data.erro || "Erro ao excluir");
+        await carregarComponentesLista(document.getElementById("buscaComponentes")?.value || "", document.getElementById("ordemComponentes")?.value || "az");
+        await carregarCategoriasDatalist();
+    } catch (error) {
+        mostrarErro("Erro ao excluir componente: " + error.message);
+    }
 }
 
 async function carregarCategoriasDatalist() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const categorias = await fetch(`${API}/categorias?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const datalist = document.getElementById("categoriasDatalist");
-    if (datalist) datalist.innerHTML = categorias.map(x => `<option value="${x}">`).join("");
+    try {
+        const categorias = await safeApi(`/categorias?game=${encodeURIComponent(currentGame)}`);
+        const datalist = document.getElementById("categoriasDatalist");
+        if (datalist) datalist.innerHTML = categorias.map(x => `<option value="${x}">`).join("");
+    } catch (error) {
+        console.error('[CATEGORIAS DATALIST] Erro ao carregar categorias:', error);
+    }
 }
 
 /* ------------------ ESTOQUE ------------------ */
@@ -2333,17 +2499,20 @@ async function montarEstoque() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
 
     // Carregar componentes para o datalist do estoque
-    const comps = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const datalist = document.getElementById("componentesDatalist");
-    datalist.innerHTML = comps.map(c => `<option value="${c.nome}">`).join("");
+    safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`).then(comps => {
+        const datalist = document.getElementById("componentesDatalist");
+        datalist.innerHTML = comps.map(c => `<option value="${c.nome}">`).join("");
 
-    // Atualizar datalist dinamicamente enquanto digita no estoque
-    const inputComponente = document.getElementById("selectComponenteEstoque");
-    inputComponente.addEventListener("input", () => {
-        const termo = inputComponente.value.toLowerCase();
-        const filteredOptions = comps.filter(c => c.nome.toLowerCase().includes(termo))
-            .map(c => `<option value="${c.nome}">`);
-        datalist.innerHTML = filteredOptions.join("");
+        // Atualizar datalist dinamicamente enquanto digita no estoque
+        const inputComponente = document.getElementById("selectComponenteEstoque");
+        inputComponente.addEventListener("input", () => {
+            const termo = inputComponente.value.toLowerCase();
+            const filteredOptions = comps.filter(c => c.nome.toLowerCase().includes(termo))
+                .map(c => `<option value="${c.nome}">`);
+            datalist.innerHTML = filteredOptions.join("");
+        });
+    }).catch(error => {
+        console.error('[ESTOQUE DATALIST] Erro ao carregar componentes:', error);
     });
 
     const buscaEstoque = document.getElementById("buscaEstoque");
@@ -2383,33 +2552,36 @@ async function montarEstoque() {
     });
 
     // Carregar componentes únicos para o datalist do log
-    const logs = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const componentesUnicos = [...new Set(logs.map(log => log.componente).filter(Boolean))];
-    const logDatalist = document.getElementById("logComponentesDatalist");
-    logDatalist.innerHTML = componentesUnicos.map(c => `<option value="${c}">`).join("");
+    safeApi(`/log?game=${encodeURIComponent(currentGame)}`).then(logs => {
+        const componentesUnicos = [...new Set(logs.map(log => log.componente).filter(Boolean))];
+        const logDatalist = document.getElementById("logComponentesDatalist");
+        logDatalist.innerHTML = componentesUnicos.map(c => `<option value="${c}">`).join("");
 
-    // Carregar usuários únicos para o datalist do log
-    const usuariosUnicos = [...new Set(logs.map(log => log.user).filter(Boolean))];
-    const logUsersDatalist = document.getElementById("logUsersDatalist");
-    logUsersDatalist.innerHTML = usuariosUnicos.map(u => `<option value="${u}">`).join("");
+        // Carregar usuários únicos para o datalist do log
+        const usuariosUnicos = [...new Set(logs.map(log => log.user).filter(Boolean))];
+        const logUsersDatalist = document.getElementById("logUsersDatalist");
+        logUsersDatalist.innerHTML = usuariosUnicos.map(u => `<option value="${u}">`).join("");
 
-    // Atualizar datalist dinamicamente enquanto digita no log
-    buscaLogComponente.addEventListener("input", () => {
-        const termo = buscaLogComponente.value.toLowerCase();
-        const filteredOptions = componentesUnicos.filter(c => c.toLowerCase().includes(termo))
-            .map(c => `<option value="${c}">`);
-        logDatalist.innerHTML = filteredOptions.join("");
-        debouncedCarregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
-        saveFilters();
-    });
+        // Atualizar datalist dinamicamente enquanto digita no log
+        buscaLogComponente.addEventListener("input", () => {
+            const termo = buscaLogComponente.value.toLowerCase();
+            const filteredOptions = componentesUnicos.filter(c => c.toLowerCase().includes(termo))
+                .map(c => `<option value="${c}">`);
+            logDatalist.innerHTML = filteredOptions.join("");
+            debouncedCarregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
+            saveFilters();
+        });
 
-    filtroLogUser.addEventListener("input", () => {
-        const termo = filtroLogUser.value.toLowerCase();
-        const filteredOptions = usuariosUnicos.filter(u => u.toLowerCase().includes(termo))
-            .map(u => `<option value="${u}">`);
-        logUsersDatalist.innerHTML = filteredOptions.join("");
-        debouncedCarregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
-        saveFilters();
+        filtroLogUser.addEventListener("input", () => {
+            const termo = filtroLogUser.value.toLowerCase();
+            const filteredOptions = usuariosUnicos.filter(u => u.toLowerCase().includes(termo))
+                .map(u => `<option value="${u}">`);
+            logUsersDatalist.innerHTML = filteredOptions.join("");
+            debouncedCarregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
+            saveFilters();
+        });
+    }).catch(error => {
+        console.error('[LOG DATALIST] Erro ao carregar log:', error);
     });
 
     filtroLogData.addEventListener("change", () => {
@@ -2434,46 +2606,50 @@ async function montarEstoque() {
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
         const userEmail = sessionStorage.getItem('userEmail');
 
-        const res = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ componente, quantidade, operacao }),
-            credentials: 'include'
-        });
-        const data = await res.json();
-        if (!data.sucesso) return mostrarErro(data.erro || "Erro ao movimentar estoque");
+        try {
+            const data = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ componente, quantidade, operacao })
+            });
+            if (!data.sucesso) return mostrarErro(data.erro || "Erro ao movimentar estoque");
 
-        const logEntry = {
-            dataHora,
-            componente,
-            quantidade,
-            operacao,
-            origem: "Movimentação manual",
-            user: userEmail  // Novo: Adicionar usuário
-        };
-        const logResponse = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify([logEntry]),
-            credentials: 'include'
-        });
-        const logData = await logResponse.json();
-        if (!logData.sucesso) return mostrarErro("Erro ao registrar log.");
+            const logEntry = {
+                dataHora,
+                componente,
+                quantidade,
+                operacao,
+                origem: "Movimentação manual",
+                user: userEmail  // Novo: Adicionar usuário
+            };
+            const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify([logEntry])
+            });
+            if (!logData.sucesso) return mostrarErro("Erro ao registrar log.");
 
-        await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
-        await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
+            await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
+            await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
+        } catch (error) {
+            mostrarErro("Erro ao movimentar estoque: " + error.message);
+        }
     };
 
     // Novo: Exportar Estoque
     if (isAdmin) {
         const btnExportEstoque = document.getElementById("btnExportEstoque");
         btnExportEstoque.addEventListener("click", async () => {
-            const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-            const data = [['Componente', 'Quantidade'], ...estoqueList.map(e => [e.componente, e.quantidade])];
-            const ws = XLSX.utils.aoa_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Estoque');
-            XLSX.writeFile(wb, `estoque_${currentGame}_${new Date().toISOString().split('T')[0]}.xlsx`);
+            try {
+                const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
+                const data = [['Componente', 'Quantidade'], ...estoqueList.map(e => [e.componente, e.quantidade])];
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Estoque');
+                XLSX.writeFile(wb, `estoque_${currentGame}_${new Date().toISOString().split('T')[0]}.xlsx`);
+            } catch (error) {
+                mostrarErro("Erro ao exportar estoque: " + error.message);
+            }
         });
 
         // Novo: Importar Estoque
@@ -2504,13 +2680,11 @@ async function montarEstoque() {
                     novaQuantidade: parseFloat(row[quantidadeIndex]) || 0
                 })).filter(u => u.componente && !isNaN(u.novaQuantidade));
                 try {
-                    const response = await fetch(`${API}/estoque/import?game=${encodeURIComponent(currentGame)}`, {
+                    const data = await safeApi(`/estoque/import?game=${encodeURIComponent(currentGame)}`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(updates),
-                        credentials: 'include'
+                        body: JSON.stringify(updates)
                     });
-                    const data = await response.json();
                     if (data.sucesso) {
                         mostrarSucesso(`Estoque importado com sucesso! ${data.updated} itens atualizados.`);
                         await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
@@ -2536,12 +2710,10 @@ async function montarEstoque() {
             }
             if (confirm("Tem certeza que deseja zerar todo o estoque? Essa ação não pode ser desfeita.")) {
                 try {
-                    const response = await fetch(`${API}/estoque/zerar?game=${encodeURIComponent(currentGame)}`, {
+                    const data = await safeApi(`/estoque/zerar?game=${encodeURIComponent(currentGame)}`, {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        credentials: 'include'
+                        headers: { "Content-Type": "application/json" }
                     });
-                    const data = await response.json();
                     if (data.sucesso) {
                         await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
                         await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
@@ -2561,20 +2733,26 @@ async function montarEstoque() {
 
 async function carregarEstoque(termoBusca = "", ordem = "az") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    let url = `${API}/estoque?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
+    let url = `/estoque?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
     if (termoBusca) {
         url += `&search=${encodeURIComponent(termoBusca)}`;
     } else {
         url += `&limit=10`;
     }
-    const estoque = await fetch(url, { credentials: 'include' }).then(r => r.json());
+    try {
+        const estoque = await safeApi(url);
 
-    const isAdmin = isUserAdmin();
-    const listaEstoque = document.getElementById("listaEstoque");
-    if (listaEstoque) {
-        listaEstoque.innerHTML = estoque.map(e =>
-            `<div class = "estoque-item-container"><div class="item"><strong>${e.componente || "(Sem nome)"}</strong> - ${formatQuantity(e.quantidade)}x</div> <button class="primary" onclick="editarEstoqueItem('${escapeJsString(e.componente)}', ${e.quantidade})">Editar</button> ${isAdmin ? `<button class="warn" onclick="excluirEstoqueItem('${escapeJsString(e.componente)}')">Excluir</button>` : ''}</div>`
-        ).join("");
+        const isAdmin = isUserAdmin();
+        const listaEstoque = document.getElementById("listaEstoque");
+        if (listaEstoque) {
+            listaEstoque.innerHTML = estoque.map(e =>
+                `<div class = "estoque-item-container"><div class="item"><strong>${e.componente || "(Sem nome)"}</strong> - ${formatQuantity(e.quantidade)}x</div> <button class="primary" onclick="editarEstoqueItem('${escapeJsString(e.componente)}', ${e.quantidade})">Editar</button> ${isAdmin ? `<button class="warn" onclick="excluirEstoqueItem('${escapeJsString(e.componente)}')">Excluir</button>` : ''}</div>`
+            ).join("");
+        }
+    } catch (error) {
+        console.error('[ESTOQUE] Erro ao carregar:', error);
+        const listaEstoque = document.getElementById("listaEstoque");
+        if (listaEstoque) listaEstoque.innerHTML = '<p>Erro ao carregar estoque.</p>';
     }
 }
 
@@ -2619,13 +2797,11 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
         const userEmail = sessionStorage.getItem('userEmail');
         try {
-            const response = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, {
+            const data = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ componente, quantidade: qtd, operacao }),
-                credentials: 'include'
+                body: JSON.stringify({ componente, quantidade: qtd, operacao })
             });
-            const data = await response.json();
             if (!data.sucesso) {
                 mostrarErro(data.erro || "Erro ao atualizar estoque");
                 return;
@@ -2639,13 +2815,11 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
                 origem: "Edição manual",
                 user: userEmail  // Novo: Adicionar usuário
             };
-            const logResponse = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, {
+            const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify([logEntry]),
-                credentials: 'include'
+                body: JSON.stringify([logEntry])
             });
-            const logData = await logResponse.json();
             if (!logData.sucesso) {
                 mostrarErro("Erro ao registrar log.");
                 return;
@@ -2669,53 +2843,61 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
 async function excluirEstoqueItem(nome) {
     if (!confirm(`Confirmar exclusão do item "${nome}" do estoque? Isso também excluirá o componente e afetará receitas e outros módulos.`)) return;
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const res = await fetch(`${API}/componentes/excluir?game=${encodeURIComponent(currentGame)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome }),
-        credentials: 'include'
-    });
-    const data = await res.json();
-    if (!data.sucesso) return mostrarErro(data.erro || "Erro ao excluir item do estoque");
-    await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
-    await carregarComponentesLista();
-    await carregarListaReceitas();
-    await carregarListaFarmar();
+    try {
+        const data = await safeApi(`/componentes/excluir?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nome })
+        });
+        if (!data.sucesso) return mostrarErro(data.erro || "Erro ao excluir item do estoque");
+        await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
+        await carregarComponentesLista();
+        await carregarListaReceitas();
+        await carregarListaFarmar();
+    } catch (error) {
+        mostrarErro("Erro ao excluir item do estoque: " + error.message);
+    }
 }
 
 async function carregarLog(componenteFiltro = "", userFiltro = "", dataFiltro = "") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const logs = await fetch(`${API}/log?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    let logsFiltrados = logs.reverse();
+    try {
+        const logs = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`);
+        let logsFiltrados = logs.reverse();
 
-    // Filtro por componente
-    if (componenteFiltro) {
-        logsFiltrados = logsFiltrados.filter(l => l.componente && l.componente.toLowerCase().includes(componenteFiltro.toLowerCase()));
-    }
+        // Filtro por componente
+        if (componenteFiltro) {
+            logsFiltrados = logsFiltrados.filter(l => l.componente && l.componente.toLowerCase().includes(componenteFiltro.toLowerCase()));
+        }
 
-    // Filtro por usuário
-    if (userFiltro) {
-        logsFiltrados = logsFiltrados.filter(l => l.user && l.user.toLowerCase().includes(userFiltro.toLowerCase()));
-    }
+        // Filtro por usuário
+        if (userFiltro) {
+            logsFiltrados = logsFiltrados.filter(l => l.user && l.user.toLowerCase().includes(userFiltro.toLowerCase()));
+        }
 
-    // Filtro por data (convertendo dataFiltro de YYYY-MM-DD para DD/MM/YYYY para matching com dataHora)
-    if (dataFiltro) {
-        const [ano, mes, dia] = dataFiltro.split('-');
-        const dataFormatada = `${dia}/${mes}/${ano}`;  // Novo: Converter para formato DD/MM/YYYY
-        logsFiltrados = logsFiltrados.filter(l => l.dataHora && l.dataHora.startsWith(dataFormatada));
-    }
+        // Filtro por data (convertendo dataFiltro de YYYY-MM-DD para DD/MM/YYYY para matching com dataHora)
+        if (dataFiltro) {
+            const [ano, mes, dia] = dataFiltro.split('-');
+            const dataFormatada = `${dia}/${mes}/${ano}`;  // Novo: Converter para formato DD/MM/YYYY
+            logsFiltrados = logsFiltrados.filter(l => l.dataHora && l.dataHora.startsWith(dataFormatada));
+        }
 
-    const div = document.getElementById("logMovimentacoes");
-    if (div) {
-        div.innerHTML = logsFiltrados.map(l => {
-            const simb = l.operacao === "debitar" ? "-" : "+";
-            const qtd = l.quantidade ?? 0;
-            const nome = l.componente ?? "(Sem nome)";
-            const hora = l.dataHora ?? "(Sem data)";
-            const user = l.user ? ` por ${l.user}` : '';  // Novo: Exibir usuário
-            const origem = l.origem ? ` (Origem: ${l.origem})` : "";
-            return `<div class="item"><span>[${hora}]</span> ${simb}${formatQuantity(qtd)} x ${nome}${user}${origem}</div>`;
-        }).join("");
+        const div = document.getElementById("logMovimentacoes");
+        if (div) {
+            div.innerHTML = logsFiltrados.map(l => {
+                const simb = l.operacao === "debitar" ? "-" : "+";
+                const qtd = l.quantidade ?? 0;
+                const nome = l.componente ?? "(Sem nome)";
+                const hora = l.dataHora ?? "(Sem data)";
+                const user = l.user ? ` por ${l.user}` : '';  // Novo: Exibir usuário
+                const origem = l.origem ? ` (Origem: ${l.origem})` : "";
+                return `<div class="item"><span>[${hora}]</span> ${simb}${formatQuantity(qtd)} x ${nome}${user}${origem}</div>`;
+            }).join("");
+        }
+    } catch (error) {
+        console.error('[LOG] Erro ao carregar:', error);
+        const div = document.getElementById("logMovimentacoes");
+        if (div) div.innerHTML = '<p>Erro ao carregar log.</p>';
     }
 }
 
@@ -2730,23 +2912,28 @@ async function montarArquivados() {
 
 async function carregarArquivados() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const arquivados = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
-    const isAdmin = isUserAdmin();
-    const btnExcluirDisabled = !isAdmin ? 'disabled' : '';
-    const div = document.getElementById("listaArquivados");
-    if (div) {
-        div.innerHTML = arquivados.map(r => {
-            const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
-            const btnExcluirHtml = isAdmin ? `<button class="warn" onclick="excluirArquivado('${escapeJsString(r.nome)}')" ${btnExcluirDisabled}>Excluir</button>` : '';
-            return `
-            <div class="item">
-              <div>
-                <strong>${r.nome}</strong>
-                ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
-              </div>
-              ${btnExcluirHtml}
-            </div>`;
-        }).join("");
+    try {
+        const arquivados = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`).catch(() => []);
+        const isAdmin = isUserAdmin();
+        const div = document.getElementById("listaArquivados");
+        if (div) {
+            div.innerHTML = arquivados.map(r => {
+                const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
+                const btnExcluirHtml = isAdmin ? `<button class="warn" onclick="excluirArquivado('${escapeJsString(r.nome)}')">Excluir</button>` : '';
+                return `
+                <div class="item">
+                  <div>
+                    <strong>${r.nome}</strong>
+                    ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
+                  </div>
+                  ${btnExcluirHtml}
+                </div>`;
+            }).join("");
+        }
+    } catch (error) {
+        console.error('[ARQUIVADOS] Erro ao carregar:', error);
+        const div = document.getElementById("listaArquivados");
+        if (div) div.innerHTML = '<p>Erro ao carregar arquivados.</p>';
     }
 }
 
@@ -2758,20 +2945,18 @@ async function excluirArquivado(nome) {
     if (!confirm(`Confirmar exclusão da receita arquivada "${nome}"?`)) return;
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
-        const arquivados = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
+        let arquivados = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`).catch(() => []);
         const index = arquivados.findIndex(r => r.nome === nome);
         if (index === -1) {
             mostrarErro("Receita arquivada não encontrada.");
             return;
         }
         arquivados.splice(index, 1);
-        const res = await fetch(`${API}/arquivados?game=${encodeURIComponent(currentGame)}`, {
+        const data = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(arquivados),
-            credentials: 'include'
+            body: JSON.stringify(arquivados)
         });
-        const data = await res.json();
         if (!data.sucesso) {
             mostrarErro(data.erro || "Erro ao excluir receita arquivada");
             return;
@@ -2785,307 +2970,324 @@ async function excluirArquivado(nome) {
 /* ------------------ O QUE FARMAR? ------------------ */
 async function montarFarmar() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const categorias = await fetch(`${API}/categorias?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const receitasFavoritas = receitas.filter(r => r.favorita);
+    try {
+        const categorias = await safeApi(`/categorias?game=${encodeURIComponent(currentGame)}`);
+        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
+        const receitasFavoritas = receitas.filter(r => r.favorita);
 
-    conteudo.innerHTML = `
-    <h2>Favoritos</h2>
-    <div id="suggestedSequence">
-        <h3>Sequência Sugerida</h3>
-        <ol id="sequenceList"></ol>
-    </div>
-    <div class="filtros">
-        <input type="text" id="buscaFarmar" placeholder="Buscar por matéria prima...">
-        <div class="multi-select-wrapper">
-            <div id="filtroReceitaFarmar" class="dropdown-checkbox">
-                <input type="text" id="searchReceitaFarmar" placeholder="Filtrar receitas...">
-                <ul id="listaReceitasFarmar"></ul>
-            </div>
-            <span id="selectedBadge" class="badge green">0</span>
-            <span id="unselectedBadge" class="badge red">${receitasFavoritas.length}</span>
+        conteudo.innerHTML = `
+        <h2>Favoritos</h2>
+        <div id="suggestedSequence">
+            <h3>Sequência Sugerida</h3>
+            <ol id="sequenceList"></ol>
         </div>
-        <select id="filtroCategoriaFarmar">
-            <option value="">Todas as categorias</option>
-            ${categorias.map(cat => `<option value="${cat}">${cat}</option>`).join("")}
-        </select>
-        <select id="ordemFarmar">
-            <option value="pendente-desc">Pendente Maior-Menor</option>
-            <option value="pendente-asc">Pendente Menor-Maior</option>
-            <option value="az">Alfabética A-Z</option>
-            <option value="za">Alfabética Z-A</option>
-        </select>
-        <button id="limparFiltrosFarmar" class="secondary">Limpar Filtros</button>
-    </div>
-    <div id="listaFarmar" class="lista"></div>
-    `;
-
-    const buscaInput = document.getElementById("buscaFarmar");
-    const filtroReceitaContainer = document.getElementById("filtroReceitaFarmar");
-    const searchReceita = document.getElementById("searchReceitaFarmar");
-    const listaReceitas = document.getElementById("listaReceitasFarmar");
-    const selectedBadge = document.getElementById("selectedBadge");
-    const unselectedBadge = document.getElementById("unselectedBadge");
-    const categoriaSelect = document.getElementById("filtroCategoriaFarmar");
-    const ordemSelect = document.getElementById("ordemFarmar");
-    const limparFiltrosFarmar = document.getElementById("limparFiltrosFarmar");
-
-    const savedFilters = JSON.parse(localStorage.getItem(`farmarFilters_${currentGame}`)) || {};
-    buscaInput.value = savedFilters.termoBusca || "";
-    ordemSelect.value = savedFilters.ordem || "pendente-desc";
-    categoriaSelect.value = savedFilters.categoria || "";
-
-    // Popular a lista de receitas com checkboxes
-    receitasFavoritas.forEach(receita => {
-        const li = document.createElement("li");
-        li.innerHTML = `
-            <label>
-                <input type="checkbox" value="${receita.nome}">
-                ${receita.nome}
-            </label>
+        <div class="filtros">
+            <input type="text" id="buscaFarmar" placeholder="Buscar por matéria prima...">
+            <div class="multi-select-wrapper">
+                <div id="filtroReceitaFarmar" class="dropdown-checkbox">
+                    <input type="text" id="searchReceitaFarmar" placeholder="Filtrar receitas...">
+                    <ul id="listaReceitasFarmar"></ul>
+                </div>
+                <span id="selectedBadge" class="badge green">0</span>
+                <span id="unselectedBadge" class="badge red">${receitasFavoritas.length}</span>
+            </div>
+            <select id="filtroCategoriaFarmar">
+                <option value="">Todas as categorias</option>
+                ${categorias.map(cat => `<option value="${cat}">${cat}</option>`).join("")}
+            </select>
+            <select id="ordemFarmar">
+                <option value="pendente-desc">Pendente Maior-Menor</option>
+                <option value="pendente-asc">Pendente Menor-Maior</option>
+                <option value="az">Alfabética A-Z</option>
+                <option value="za">Alfabética Z-A</option>
+            </select>
+            <button id="limparFiltrosFarmar" class="secondary">Limpar Filtros</button>
+        </div>
+        <div id="listaFarmar" class="lista"></div>
         `;
-        listaReceitas.appendChild(li);
-    });
 
-    // Aplicar seleções salvas
-    const savedSelected = savedFilters.selectedReceitas || [];
-    Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
-        cb.checked = savedSelected.includes(cb.value);
-    });
+        const buscaInput = document.getElementById("buscaFarmar");
+        const filtroReceitaContainer = document.getElementById("filtroReceitaFarmar");
+        const searchReceita = document.getElementById("searchReceitaFarmar");
+        const listaReceitas = document.getElementById("listaReceitasFarmar");
+        const selectedBadge = document.getElementById("selectedBadge");
+        const unselectedBadge = document.getElementById("unselectedBadge");
+        const categoriaSelect = document.getElementById("filtroCategoriaFarmar");
+        const ordemSelect = document.getElementById("ordemFarmar");
+        const limparFiltrosFarmar = document.getElementById("limparFiltrosFarmar");
 
-    const updateBadges = () => {
-        const total = receitasFavoritas.length;
-        const selected = listaReceitas.querySelectorAll('input[type="checkbox"]:checked').length;
-        selectedBadge.textContent = selected;
-        unselectedBadge.textContent = total - selected;
-    };
+        const savedFilters = JSON.parse(localStorage.getItem(`farmarFilters_${currentGame}`)) || {};
+        buscaInput.value = savedFilters.termoBusca || "";
+        ordemSelect.value = savedFilters.ordem || "pendente-desc";
+        categoriaSelect.value = savedFilters.categoria || "";
 
-    updateBadges();
-
-    const saveFilters = () => {
-        const selected = Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-        localStorage.setItem(`farmarFilters_${currentGame}`, JSON.stringify({
-            termoBusca: buscaInput.value,
-            ordem: ordemSelect.value,
-            categoria: categoriaSelect.value,
-            selectedReceitas: selected
-        }));
-    };
-
-    // Toggle dropdown ao clicar no input de busca
-    searchReceita.addEventListener("focus", () => {
-        listaReceitas.style.display = "block";
-    });
-
-    // Fechar dropdown ao clicar fora
-    document.addEventListener("click", (e) => {
-        if (!filtroReceitaContainer.contains(e.target)) {
-            listaReceitas.style.display = "none";
-        }
-    });
-
-    // Filtrar itens ao digitar
-    searchReceita.addEventListener("input", () => {
-        const termo = searchReceita.value.toLowerCase();
-        Array.from(listaReceitas.children).forEach(li => {
-            const text = li.textContent.toLowerCase();
-            li.style.display = text.includes(termo) ? "block" : "none";
+        // Popular a lista de receitas com checkboxes
+        receitasFavoritas.forEach(receita => {
+            const li = document.createElement("li");
+            li.innerHTML = `
+                <label>
+                    <input type="checkbox" value="${receita.nome}">
+                    ${receita.nome}
+                </label>
+            `;
+            listaReceitas.appendChild(li);
         });
-    });
 
-    // Atualizar ao mudar checkboxes
-    listaReceitas.addEventListener("change", () => {
+        // Aplicar seleções salvas
+        const savedSelected = savedFilters.selectedReceitas || [];
+        Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
+            cb.checked = savedSelected.includes(cb.value);
+        });
+
+        const updateBadges = () => {
+            const total = receitasFavoritas.length;
+            const selected = listaReceitas.querySelectorAll('input[type="checkbox"]:checked').length;
+            selectedBadge.textContent = selected;
+            unselectedBadge.textContent = total - selected;
+        };
+
         updateBadges();
-        carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
-        saveFilters();
-    });
 
-    const debouncedCarregarListaFarmar = debounce(carregarListaFarmar, 300);
+        const saveFilters = () => {
+            const selected = Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            localStorage.setItem(`farmarFilters_${currentGame}`, JSON.stringify({
+                termoBusca: buscaInput.value,
+                ordem: ordemSelect.value,
+                categoria: categoriaSelect.value,
+                selectedReceitas: selected
+            }));
+        };
 
-    buscaInput.addEventListener("input", () => {
-        debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
-        saveFilters();
-    });
-    categoriaSelect.addEventListener("change", () => {
-        debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
-        saveFilters();
-    });
-    ordemSelect.addEventListener("change", () => {
-        debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
-        saveFilters();
-    });
+        // Toggle dropdown ao clicar no input de busca
+        searchReceita.addEventListener("focus", () => {
+            listaReceitas.style.display = "block";
+        });
 
-    limparFiltrosFarmar.addEventListener("click", () => {
-        buscaInput.value = "";
-        searchReceita.value = "";
-        Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]')).forEach(cb => cb.checked = false);
-        updateBadges();
-        categoriaSelect.value = "";
-        ordemSelect.value = "pendente-desc";
-        carregarListaFarmar("", "pendente-desc", '', "");
-        saveFilters();
-    });
+        // Fechar dropdown ao clicar fora
+        document.addEventListener("click", (e) => {
+            if (!filtroReceitaContainer.contains(e.target)) {
+                listaReceitas.style.display = "none";
+            }
+        });
 
-    await carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+        // Filtrar itens ao digitar
+        searchReceita.addEventListener("input", () => {
+            const termo = searchReceita.value.toLowerCase();
+            Array.from(listaReceitas.children).forEach(li => {
+                const text = li.textContent.toLowerCase();
+                li.style.display = text.includes(termo) ? "block" : "none";
+            });
+        });
+
+        // Atualizar ao mudar checkboxes
+        listaReceitas.addEventListener("change", () => {
+            updateBadges();
+            carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+            saveFilters();
+        });
+
+        const debouncedCarregarListaFarmar = debounce(carregarListaFarmar, 300);
+
+        buscaInput.addEventListener("input", () => {
+            debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+            saveFilters();
+        });
+        categoriaSelect.addEventListener("change", () => {
+            debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+            saveFilters();
+        });
+        ordemSelect.addEventListener("change", () => {
+            debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+            saveFilters();
+        });
+
+        limparFiltrosFarmar.addEventListener("click", () => {
+            buscaInput.value = "";
+            searchReceita.value = "";
+            Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]')).forEach(cb => cb.checked = false);
+            updateBadges();
+            categoriaSelect.value = "";
+            ordemSelect.value = "pendente-desc";
+            carregarListaFarmar("", "pendente-desc", '', "");
+            saveFilters();
+        });
+
+        await carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+    } catch (error) {
+        console.error('[FARMAR] Erro ao montar:', error);
+        conteudo.innerHTML = '<h2>Favoritos</h2><p>Erro ao carregar dados.</p>';
+    }
 }
 
 async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", receitaFiltro = "", categoriaFiltro = "") {
+    // Correção: Verificar se a seção farmar existe antes de prosseguir (evita chamadas desnecessárias de outras seções)
+    if (!document.getElementById("listaFarmar")) {
+        console.log("[FARMAR] Seção não encontrada, pulando atualização.");
+        return;
+    }
+
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     const quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
-    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const receitasFavoritas = receitas.filter(r => r.favorita);
-    const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+    try {
+        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
+        const receitasFavoritas = receitas.filter(r => r.favorita);
+        const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
+        const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
 
-    const selectedReceitas = Array.from(document.querySelectorAll('#listaReceitasFarmar input[type="checkbox"]:checked')).map(cb => cb.value);
+        const selectedReceitas = Array.from(document.querySelectorAll('#listaReceitasFarmar input[type="checkbox"]:checked')).map(cb => cb.value);
 
-    const receitasFiltradas = selectedReceitas.length > 0 ? receitasFavoritas.filter(r => selectedReceitas.includes(r.nome)) : receitasFavoritas;
+        const receitasFiltradas = selectedReceitas.length > 0 ? receitasFavoritas.filter(r => selectedReceitas.includes(r.nome)) : receitasFavoritas;
 
-    const bases = new Map();
+        const bases = new Map();
 
 
-    const estoqueMap = {};
-    estoqueList.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
+        const estoqueMap = {};
+        estoqueList.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
 
-    for (const receita of receitasFiltradas) {
-        if (!receita.nome) continue;
-        const recipeQuantity = quantities[receita.nome] || 1;
-        let req = {};
-        receita.componentes.forEach(comp => {
-            const qtdNec = comp.quantidade * recipeQuantity;
-            mergeReq(req, calculateComponentRequirements(comp.nome, qtdNec, componentes, estoqueMap));
-        });
-        for (const [baseNome, baseQtd] of Object.entries(req)) {
-            if (!bases.has(baseNome)) {
-                bases.set(baseNome, { nec: 0, receitas: new Set() });
-            }
-            bases.get(baseNome).nec += baseQtd;
-            bases.get(baseNome).receitas.add(receita.nome);
-        }
-    }
-
-    let listaMaterias = Array.from(bases.entries()).map(([nome, data]) => {
-        const disp = estoqueMap[nome] || 0;
-        const pendente = Math.max(0, data.nec - disp);
-        return { nome, nec: data.nec, disp, pendente, receitas: Array.from(data.receitas) };
-    });
-
-    listaMaterias = filtrarItens(listaMaterias, termoBusca, "nome");
-
-    if (categoriaFiltro) {
-        listaMaterias = listaMaterias.filter(m => {
-            const comp = componentes.find(c => c.nome === m.nome);
-            return comp && comp.categoria === categoriaFiltro;
-        });
-    }
-
-    if (ordem === "pendente-desc") {
-        listaMaterias.sort((a, b) => b.pendente - a.pendente);
-    } else if (ordem === "pendente-asc") {
-        listaMaterias.sort((a, b) => a.pendente - b.pendente);
-    } else {
-        listaMaterias = ordenarItens(listaMaterias, ordem, "nome");
-    }
-
-    const isAdmin = isUserAdmin();
-    const div = document.getElementById("listaFarmar");
-    if (div) {
-        div.innerHTML = listaMaterias.map(m => {
-            const percentage = (m.disp / m.nec) * 100 || 0;
-            let color = 'darkred';
-            if (percentage >= 100) color = 'darkgreen';
-            else if (percentage >= 50) color = 'darkgoldenrod';
-            const id = `farmar-${m.nome.replace(/\s/g, '-')}`;
-            const component = componentes.find(c => c.nome === m.nome);
-            const hasSubs = component && component.associados && component.associados.length > 0;
-            const btnFabricarHtml = isAdmin && hasSubs ? `<button class="btn-fabricar" data-componente="${m.nome}" data-pendente="${m.pendente}" data-qtdprod="${component.quantidadeProduzida || 1}">Fabricar Tudo</button>` : '';
-            return `
-            <div class="item" style="background-color: ${color}; color: white;" data-componente="${m.nome}">
-                <div class="comp-item">
-                    <span class="comp-nome">${m.nome}</span>
-                    <span class="comp-nec">Nec: ${formatQuantity(m.nec)}</span>
-                    <span class="comp-disp">Disp: ${formatQuantity(m.disp)}</span>
-                    <span class="comp-falta">Pendente: ${formatQuantity(m.pendente)}</span>
-                </div>
-                <select class="receitas-dropdown">
-                    <option>Receitas (${m.receitas.length})</option>
-                    ${m.receitas.sort().map(r => `<option>${r}</option>`).join("")}
-                </select>
-                ${hasSubs ? `<button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>` : ''}
-                <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
-                ${btnFabricarHtml}
-            </div>
-        `}).join("");
-
-        // Adicionar event listeners para toggles em farmar
-        document.querySelectorAll("#listaFarmar .toggle-detalhes").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                const targetId = btn.dataset.target;
-                const detalhes = document.getElementById(targetId);
-                if (!detalhes) return;
-                const isVisible = detalhes.style.display !== "none";
-                detalhes.style.display = isVisible ? "none" : "block";
-                btn.textContent = isVisible ? "▼" : "▲";
-                if (!isVisible) {
-                    const itemElement = btn.closest(".item");
-                    const componenteNome = itemElement.dataset.componente;
-                    const m = listaMaterias.find(mat => mat.nome === componenteNome);
-                    if (m) {
-                        detalhes.innerHTML = `<ul>${getComponentChain(m.nome, m.nec, componentes, estoqueMap)}</ul>`;
-                    }
-                }
+        for (const receita of receitasFiltradas) {
+            if (!receita.nome) continue;
+            const recipeQuantity = quantities[receita.nome] || 1;
+            let req = {};
+            receita.componentes.forEach(comp => {
+                const qtdNec = comp.quantidade * recipeQuantity;
+                mergeReq(req, calculateComponentRequirements(comp.nome, qtdNec, componentes, estoqueMap));
             });
+            for (const [baseNome, baseQtd] of Object.entries(req)) {
+                if (!bases.has(baseNome)) {
+                    bases.set(baseNome, { nec: 0, receitas: new Set() });
+                }
+                bases.get(baseNome).nec += baseQtd;
+                bases.get(baseNome).receitas.add(receita.nome);
+            }
+        }
+
+        let listaMaterias = Array.from(bases.entries()).map(([nome, data]) => {
+            const disp = estoqueMap[nome] || 0;
+            const pendente = Math.max(0, data.nec - disp);
+            return { nome, nec: data.nec, disp, pendente, receitas: Array.from(data.receitas) };
         });
 
-        // Verificar botões fabricar inicialmente
-        if (isAdmin) {
-            document.querySelectorAll("#listaFarmar .item").forEach(async item => {
-                const componenteNome = item.dataset.componente;
-                const componente = componentes.find(c => c.nome === componenteNome);
-                if (componente && componente.associados && componente.associados.length > 0) {
-                    let qtdProd = componente.quantidadeProduzida || 1;
-                    const m = listaMaterias.find(mat => mat.nome === componenteNome);
-                    let pendente = m ? m.pendente : 0;
-                    let numCrafts = Math.ceil(pendente / qtdProd);
-                    let canFabricate = pendente > 0;
-                    if (canFabricate) {
-                        for (const assoc of componente.associados) {
-                            const subDisp = estoqueMap[assoc.nome] || 0;
-                            if (subDisp < assoc.quantidade * numCrafts) {
-                                canFabricate = false;
-                                break;
-                            }
+        listaMaterias = filtrarItens(listaMaterias, termoBusca, "nome");
+
+        if (categoriaFiltro) {
+            listaMaterias = listaMaterias.filter(m => {
+                const comp = componentes.find(c => c.nome === m.nome);
+                return comp && comp.categoria === categoriaFiltro;
+            });
+        }
+
+        if (ordem === "pendente-desc") {
+            listaMaterias.sort((a, b) => b.pendente - a.pendente);
+        } else if (ordem === "pendente-asc") {
+            listaMaterias.sort((a, b) => a.pendente - b.pendente);
+        } else {
+            listaMaterias = ordenarItens(listaMaterias, ordem, "nome");
+        }
+
+        const isAdmin = isUserAdmin();
+        const div = document.getElementById("listaFarmar");
+        if (div) {
+            div.innerHTML = listaMaterias.map(m => {
+                const percentage = (m.disp / m.nec) * 100 || 0;
+                let color = 'darkred';
+                if (percentage >= 100) color = 'darkgreen';
+                else if (percentage >= 50) color = 'darkgoldenrod';
+                const id = `farmar-${m.nome.replace(/\s/g, '-')}`;
+                const component = componentes.find(c => c.nome === m.nome);
+                const hasSubs = component && component.associados && component.associados.length > 0;
+                const btnFabricarHtml = isAdmin && hasSubs ? `<button class="btn-fabricar" data-componente="${m.nome}" data-pendente="${m.pendente}" data-qtdprod="${component.quantidadeProduzida || 1}">Fabricar Tudo</button>` : '';
+                return `
+                <div class="item" style="background-color: ${color}; color: white;" data-componente="${m.nome}">
+                    <div class="comp-item">
+                        <span class="comp-nome">${m.nome}</span>
+                        <span class="comp-nec">Nec: ${formatQuantity(m.nec)}</span>
+                        <span class="comp-disp">Disp: ${formatQuantity(m.disp)}</span>
+                        <span class="comp-falta">Pendente: ${formatQuantity(m.pendente)}</span>
+                    </div>
+                    <select class="receitas-dropdown">
+                        <option>Receitas (${m.receitas.length})</option>
+                        ${m.receitas.sort().map(r => `<option>${r}</option>`).join("")}
+                    </select>
+                    ${hasSubs ? `<button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>` : ''}
+                    <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
+                    ${btnFabricarHtml}
+                </div>
+            `}).join("");
+
+            // Adicionar event listeners para toggles em farmar
+            document.querySelectorAll("#listaFarmar .toggle-detalhes").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const targetId = btn.dataset.target;
+                    const detalhes = document.getElementById(targetId);
+                    if (!detalhes) return;
+                    const isVisible = detalhes.style.display !== "none";
+                    detalhes.style.display = isVisible ? "none" : "block";
+                    btn.textContent = isVisible ? "▼" : "▲";
+                    if (!isVisible) {
+                        const itemElement = btn.closest(".item");
+                        const componenteNome = itemElement.dataset.componente;
+                        const m = listaMaterias.find(mat => mat.nome === componenteNome);
+                        if (m) {
+                            detalhes.innerHTML = `<ul>${getComponentChain(m.nome, m.nec, componentes, estoqueMap)}</ul>`;
                         }
                     }
-                    const btn = item.querySelector(".btn-fabricar");
-                    if (btn) btn.disabled = !canFabricate;
-                }
-            });
-
-            // Adicionar event listeners para botões fabricar
-            document.querySelectorAll("#listaFarmar .btn-fabricar").forEach(btn => {
-                btn.addEventListener("click", async () => {
-                    const componenteNome = btn.dataset.componente;
-                    const pendente = parseFloat(btn.dataset.pendente);
-                    const qtdProd = parseFloat(btn.dataset.qtdprod);
-                    const numCrafts = Math.ceil(pendente / qtdProd);
-                    await fabricarComponente(componenteNome, numCrafts);
-                    btn.disabled = true;
                 });
             });
-        }
-    } else {
-        console.log("[FARMAR] Skip updating farmar list as div not found.");
-    }
 
-    // Computar e exibir sequência sugerida
-    let listaMateriasPendentes = listaMaterias.filter(m => m.pendente > 0);
-    if (listaMateriasPendentes.length > 0) {
-        const sequence = getSuggestedSequence(componentes, listaMateriasPendentes);
-        renderSequence(sequence, listaMateriasPendentes, componentes);
-    } else {
-        document.getElementById("sequenceList").innerHTML = "<li>Nenhuma sequência sugerida disponível.</li>";
+            // Verificar botões fabricar inicialmente
+            if (isAdmin) {
+                document.querySelectorAll("#listaFarmar .item").forEach(async item => {
+                    const componenteNome = item.dataset.componente;
+                    const componente = componentes.find(c => c.nome === componenteNome);
+                    if (componente && componente.associados && componente.associados.length > 0) {
+                        let qtdProd = componente.quantidadeProduzida || 1;
+                        const m = listaMaterias.find(mat => mat.nome === componenteNome);
+                        let pendente = m ? m.pendente : 0;
+                        let numCrafts = Math.ceil(pendente / qtdProd);
+                        let canFabricate = pendente > 0;
+                        if (canFabricate) {
+                            for (const assoc of componente.associados) {
+                                const subDisp = estoqueMap[assoc.nome] || 0;
+                                if (subDisp < assoc.quantidade * numCrafts) {
+                                    canFabricate = false;
+                                    break;
+                                }
+                            }
+                        }
+                        const btn = item.querySelector(".btn-fabricar");
+                        if (btn) btn.disabled = !canFabricate;
+                    }
+                });
+
+                // Adicionar event listeners para botões fabricar
+                document.querySelectorAll("#listaFarmar .btn-fabricar").forEach(btn => {
+                    btn.addEventListener("click", async () => {
+                        const componenteNome = btn.dataset.componente;
+                        const pendente = parseFloat(btn.dataset.pendente);
+                        const qtdProd = parseFloat(btn.dataset.qtdprod);
+                        const numCrafts = Math.ceil(pendente / qtdProd);
+                        await fabricarComponente(componenteNome, numCrafts);
+                        btn.disabled = true;
+                    });
+                });
+            }
+        } else {
+            console.log("[FARMAR] Skip updating farmar list as div not found.");
+        }
+
+        // Computar e exibir sequência sugerida
+        let listaMateriasPendentes = listaMaterias.filter(m => m.pendente > 0);
+        if (listaMateriasPendentes.length > 0) {
+            const sequence = getSuggestedSequence(componentes, listaMateriasPendentes);
+            renderSequence(sequence, listaMateriasPendentes, componentes);
+        } else {
+            document.getElementById("sequenceList").innerHTML = "<li>Nenhuma sequência sugerida disponível.</li>";
+        }
+    } catch (error) {
+        console.error('[FARMAR LISTA] Erro ao carregar:', error);
+        const div = document.getElementById("listaFarmar");
+        if (div) div.innerHTML = '<p>Erro ao carregar favoritos.</p>';
     }
 }
 
@@ -3118,12 +3320,12 @@ function renderSequence(sequence, listaMateriasPendentes, componentes, isAdmin =
     sequenceList.innerHTML = sequence.map((item, index) => {
         const pendente = listaMateriasPendentes.find(m => m.nome === item.nome)?.pendente || 0;
         const action = item.hasSubs ? "Fabricar" : "Coletar";
-        const buttons = isAdmin ? `<button class="btn-seq-up" data-index="${index}">↑</button><button class="btn-seq-down" data-index="${index}">↓</button>` : '';
+        const buttons = true ? `<button class="btn-seq-up" data-index="${index}">↑</button><button class="btn-seq-down" data-index="${index}">↓</button>` : '';  // Modificado: Sempre mostrar botões para usuários logados
         return `<li data-nome="${item.nome}" data-index="${index}">${index + 1}. ${action} ${item.nome} (Pendente: ${formatQuantity(pendente)})${buttons}</li>`;
     }).join("");
 
     // Adicionar event listeners para reordenação se admin
-    if (isAdmin) {
+    if (true) {  // Modificado: Sempre adicionar listeners para usuários logados
         sequenceList.querySelectorAll('.btn-seq-up').forEach(btn => {
             btn.addEventListener('click', () => handleSequenceReorder('up', btn, sequence, listaMateriasPendentes, componentes));
         });
@@ -3202,13 +3404,11 @@ function computeSuggestedSequence(componentes, listaMaterias) {
 async function fabricarComponente(nome, numCrafts = 1) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
-        const response = await fetch(`${API}/fabricar?game=${encodeURIComponent(currentGame)}`, {
+        const data = await safeApi(`/fabricar?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ componente: nome, numCrafts }),
-            credentials: 'include'
+            body: JSON.stringify({ componente: nome, numCrafts })
         });
-        const data = await response.json();
         if (data.sucesso) {
             // Atualizar listas
             await carregarListaFarmar(
@@ -3264,132 +3464,205 @@ async function carregarListaRoadmap(onlyCompleted = false) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     let quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
-    const roadmap = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
-    const receitas = await fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const componentes = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const estoqueList = await fetch(`${API}/estoque?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const estoque = {};
-    estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
+    try {
+        const roadmap = await safeApi(`/roadmap?game=${encodeURIComponent(currentGame)}`).catch(() => []);
+        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
+        const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
+        const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
+        const estoque = {};
+        estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
 
-    const isAdmin = isUserAdmin();
-    const btnExcluirDisabled = !isAdmin ? 'disabled' : '';
+        const isAdmin = isUserAdmin();
+        const btnExcluirDisabled = !isAdmin ? 'disabled' : '';
 
-    const div = document.getElementById("listaRoadmap");
-    div.innerHTML = roadmap.map((item, index) => {
-        if (onlyCompleted && !item.completed) return '';
-        const receita = receitas.find(r => r.nome === item.name);
-        if (!receita) return '';
-        const id = `roadmap-${item.name.replace(/\s/g, '-')}-${index}`;
-        const comps = (receita.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
-        const savedQtd = quantities[item.name] || 1;
-        const checkboxHtml = isAdmin ? `<label><input type="checkbox" class="checkbox-completed" ${item.completed ? 'checked' : ''}> Pronto</label>` : '';
-        const reordenacaoHtml = isAdmin ? `<button class="btn-move-up">↑</button><button class="btn-move-down">↓</button>` : '';
-        const btnExcluirHtml = isAdmin ? `<button class="btn-excluir-roadmap" ${btnExcluirDisabled}>Excluir</button>` : '';
-        return `
-        <div class="item" style="${item.completed ? 'background-color: green;' : ''}" data-receita="${item.name}" data-index="${index}">
-          <div class="receita-header">
-            <div class="receita-header--container1">
-              <div style="margin-right: 15px;">
-                <strong class="receita-header--titulo">${item.name}</strong>
-                ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
-                <input type="number" class="qtd-desejada" min="0.001" step="any" value="${savedQtd}" data-receita="${item.name}">
+        let roadmapToRender = roadmap;
+        if (onlyCompleted) {
+            roadmapToRender = roadmap.filter(item => item.completed);
+        }
+
+        const div = document.getElementById("listaRoadmap");
+        div.innerHTML = roadmapToRender.map((item, visualIndex) => {
+            if (onlyCompleted && !item.completed) return '';
+            const receita = receitas.find(r => r.nome === item.name);
+            if (!receita) return '';
+            const index = roadmap.findIndex(r => r.name === item.name); // Usar findIndex para garantir índice correto
+            const id = `roadmap-${item.name.replace(/\s/g, '-')}-${visualIndex}`;
+            const comps = (receita.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
+            const savedQtd = quantities[item.name] || 1;
+            const checkboxHtml = isAdmin ? `<label><input type="checkbox" class="checkbox-completed" ${item.completed ? 'checked' : ''}> Pronto</label>` : '';
+            const btnUpDisabled = visualIndex === 0 ? 'disabled' : '';
+            const btnDownDisabled = visualIndex === (roadmapToRender.length - 1) ? 'disabled' : '';
+            const reordenacaoHtml = isAdmin ? `<button class="btn-move-up" ${btnUpDisabled}>↑</button><button class="btn-move-down" ${btnDownDisabled}>↓</button>` : '';
+            const btnExcluirHtml = isAdmin ? `<button class="btn-excluir-roadmap" ${btnExcluirDisabled}>Excluir</button>` : '';
+            return `
+            <div class="item" style="${item.completed ? 'background-color: green;' : ''}" data-receita="${item.name}">
+              <div class="receita-header">
+                <div class="receita-header--container1">
+                  <div style="margin-right: 15px;">
+                    <strong class="receita-header--titulo">${item.name}</strong>
+                    ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
+                    <input type="number" class="qtd-desejada" min="0.001" step="any" value="${savedQtd}" data-receita="${item.name}">
+                  </div>
+                  <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>
+                </div>
+                <div>
+                  ${checkboxHtml}
+                  ${reordenacaoHtml}
+                  ${btnExcluirHtml}
+                </div>
               </div>
-              <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>
-            </div>
-            <div>
-              ${checkboxHtml}
-              ${reordenacaoHtml}
-              ${btnExcluirHtml}
-            </div>
-          </div>
-          <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
-        </div>`;
-    }).join("");
+              <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
+            </div>`;
+        }).join("");
 
-    document.querySelectorAll("#listaRoadmap .toggle-detalhes").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const targetId = btn.dataset.target;
-            const detalhes = document.getElementById(targetId);
-            const isVisible = detalhes.style.display !== "none";
-            detalhes.style.display = isVisible ? "none" : "block";
-            btn.textContent = isVisible ? "▼" : "▲";
-            if (!isVisible) {
-                const itemElement = btn.closest(".item");
+        document.querySelectorAll("#listaRoadmap .toggle-detalhes").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const targetId = btn.dataset.target;
+                const detalhes = document.getElementById(targetId);
+                const isVisible = detalhes.style.display !== "none";
+                detalhes.style.display = isVisible ? "none" : "block";
+                btn.textContent = isVisible ? "▼" : "▲";
+                if (!isVisible) {
+                    const itemElement = btn.closest(".item");
+                    const receitaNome = itemElement.dataset.receita;
+                    const qtd = Math.max(Number(itemElement.querySelector(".qtd-desejada").value) || 0.001, 0.001);
+                    await atualizarDetalhes(receitaNome, qtd, componentes, estoque, true, true);
+                }
+            });
+        });
+
+        document.querySelectorAll("#listaRoadmap .qtd-desejada").forEach(input => {
+            input.addEventListener("input", async () => {
+                const itemElement = input.closest(".item");
                 const receitaNome = itemElement.dataset.receita;
-                const qtd = Math.max(Number(itemElement.querySelector(".qtd-desejada").value) || 0.001, 0.001);
-                await atualizarDetalhes(receitaNome, qtd, componentes, estoque, true, true);
-            }
-        });
-    });
-
-    document.querySelectorAll("#listaRoadmap .qtd-desejada").forEach(input => {
-        input.addEventListener("input", async () => {
-            const itemElement = input.closest(".item");
-            const receitaNome = itemElement.dataset.receita;
-            const qtd = Math.max(Number(input.value) || 0.001, 0.001);
-            quantities[receitaNome] = qtd;
-            localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
-            const detalhes = itemElement.querySelector(".detalhes");
-            if (detalhes && detalhes.style.display !== "none") {
-                await atualizarDetalhes(receitaNome, qtd, componentes, estoque, true, true);
-            }
-        });
-    });
-
-    if (isAdmin) {
-        document.querySelectorAll("#listaRoadmap .checkbox-completed").forEach(cb => {
-            cb.addEventListener("change", async () => {
-                const itemElement = cb.closest(".item");
-                const index = parseInt(itemElement.dataset.index);
-                const completed = cb.checked;
-                await atualizarRoadmapItem(index, { completed });
-                itemElement.style.backgroundColor = completed ? 'green' : '';
-            });
-        });
-
-        document.querySelectorAll("#listaRoadmap .btn-move-up").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                const itemElement = btn.closest(".item");
-                const index = parseInt(itemElement.dataset.index);
-                if (index > 0) {
-                    await reordenarRoadmap(index, index - 1);
+                const qtd = Math.max(Number(input.value) || 0.001, 0.001);
+                quantities[receitaNome] = qtd;
+                localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
+                const detalhes = itemElement.querySelector(".detalhes");
+                if (detalhes && detalhes.style.display !== "none") {
+                    await atualizarDetalhes(receitaNome, qtd, componentes, estoque, true, true);
                 }
             });
         });
 
-        document.querySelectorAll("#listaRoadmap .btn-move-down").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                const itemElement = btn.closest(".item");
-                const index = parseInt(itemElement.dataset.index);
-                if (index < roadmap.length - 1) {
-                    await reordenarRoadmap(index, index + 1);
-                }
+        if (isAdmin) {
+            document.querySelectorAll("#listaRoadmap .checkbox-completed").forEach(cb => {
+                cb.addEventListener("change", async () => {
+                    const itemElement = cb.closest(".item");
+                    const name = itemElement.dataset.receita;
+                    const completed = cb.checked;
+                    await atualizarRoadmapByName(name, { completed });
+                    itemElement.style.backgroundColor = completed ? 'green' : '';
+                });
             });
-        });
 
-        document.querySelectorAll("#listaRoadmap .btn-excluir-roadmap").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                const itemElement = btn.closest(".item");
-                const index = parseInt(itemElement.dataset.index);
-                await excluirRoadmapItem(index);
+            document.querySelectorAll("#listaRoadmap .btn-move-up").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const itemElement = btn.closest(".item");
+                    const name = itemElement.dataset.receita;
+                    const onlyCompleted = document.getElementById("filtroProntasRoadmap")?.checked || false;
+                    await reordenarRoadmapVisual(name, 'up', onlyCompleted);
+                });
             });
-        });
+
+            document.querySelectorAll("#listaRoadmap .btn-move-down").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const itemElement = btn.closest(".item");
+                    const name = itemElement.dataset.receita;
+                    const onlyCompleted = document.getElementById("filtroProntasRoadmap")?.checked || false;
+                    await reordenarRoadmapVisual(name, 'down', onlyCompleted);
+                });
+            });
+
+            document.querySelectorAll("#listaRoadmap .btn-excluir-roadmap").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const itemElement = btn.closest(".item");
+                    const name = itemElement.dataset.receita;
+                    await excluirRoadmapItemByName(name);
+                });
+            });
+        }
+    } catch (error) {
+        console.error('[ROADMAP] Erro ao carregar lista:', error);
+        const div = document.getElementById("listaRoadmap");
+        if (div) div.innerHTML = '<p>Erro ao carregar roadmap.</p>';
     }
 }
 
-async function excluirRoadmapItem(index) {
+// Nova função para reordenar visualmente no roadmap (considera filtro de completas)
+async function reordenarRoadmapVisual(name, direction, onlyCompleted) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    try {
+        const roadmap = await safeApi(`/roadmap?game=${encodeURIComponent(currentGame)}`);
+        let filtered = onlyCompleted ? roadmap.filter(i => i.completed) : roadmap;
+        const visualIndex = filtered.findIndex(i => i.name === name);
+        if (visualIndex === -1) return;
+        let swapVisualIndex;
+        if (direction === 'up') {
+            if (visualIndex === 0) return;
+            swapVisualIndex = visualIndex - 1;
+        } else {
+            if (visualIndex === filtered.length - 1) return;
+            swapVisualIndex = visualIndex + 1;
+        }
+        const name1 = filtered[visualIndex].name;
+        const name2 = filtered[swapVisualIndex].name;
+        const index1 = roadmap.findIndex(i => i.name === name1);
+        const index2 = roadmap.findIndex(i => i.name === name2);
+        if (index1 === -1 || index2 === -1) return;
+        // Swap
+        [roadmap[index1], roadmap[index2]] = [roadmap[index2], roadmap[index1]];
+        // Save
+        await safeApi(`/roadmap?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(roadmap)
+        });
+        await carregarListaRoadmap(onlyCompleted);
+    } catch (error) {
+        console.error('[REORDENAR ROADMAP] Erro:', error);
+        mostrarErro("Erro ao reordenar roadmap: " + error.message);
+    }
+}
+
+// Nova função para atualizar item do roadmap por nome
+async function atualizarRoadmapByName(name, updates) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    try {
+        const roadmap = await safeApi(`/roadmap?game=${encodeURIComponent(currentGame)}`);
+        const index = roadmap.findIndex(item => item.name === name);
+        if (index !== -1) {
+            Object.assign(roadmap[index], updates);
+            await safeApi(`/roadmap?game=${encodeURIComponent(currentGame)}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(roadmap)
+            });
+            await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
+        }
+    } catch (error) {
+        console.error('[ATUALIZAR ROADMAP] Erro:', error);
+        mostrarErro("Erro ao atualizar roadmap: " + error.message);
+    }
+}
+
+// Nova função para excluir item do roadmap por nome
+async function excluirRoadmapItemByName(name) {
     if (!confirm("Confirmar exclusão da receita do Roadmap?")) return;
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
-        const roadmap = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
+        const roadmap = await safeApi(`/roadmap?game=${encodeURIComponent(currentGame)}`);
+        const index = roadmap.findIndex(item => item.name === name);
+        if (index === -1) {
+            mostrarErro("Item não encontrado no roadmap.");
+            return;
+        }
         roadmap.splice(index, 1);
-        const response = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, {
+        const data = await safeApi(`/roadmap?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(roadmap),
-            credentials: 'include'
+            body: JSON.stringify(roadmap)
         });
-        const data = await response.json();
         if (data.sucesso) {
             await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
         } else {
@@ -3397,37 +3670,6 @@ async function excluirRoadmapItem(index) {
         }
     } catch (error) {
         mostrarErro("Erro ao excluir do roadmap: " + error.message);
-    }
-}
-
-async function atualizarRoadmapItem(index, updates) {
-    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const roadmap = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    if (roadmap[index]) {
-        Object.assign(roadmap[index], updates);
-        await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(roadmap),
-            credentials: 'include'
-        });
-        await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
-    }
-}
-
-async function reordenarRoadmap(fromIndex, toIndex) {
-    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    const roadmap = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    if (toIndex >= 0 && toIndex < roadmap.length) {
-        const [moved] = roadmap.splice(fromIndex, 1);
-        roadmap.splice(toIndex, 0, moved);
-        await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(roadmap),
-            credentials: 'include'
-        });
-        await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
     }
 }
 
@@ -3458,7 +3700,7 @@ function mostrarPopupAdicionarReceitaRoadmap() {
     document.body.appendChild(popup);
 
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    fetch(`${API}/receitas?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).then(receitas => {
+    safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`).then(receitas => {
         const datalist = document.getElementById("receitasDatalistRoadmap");
         datalist.innerHTML = receitas.map(r => `<option value="${r.nome}">`).join("");
 
@@ -3468,6 +3710,8 @@ function mostrarPopupAdicionarReceitaRoadmap() {
             const filtered = receitas.filter(r => r.nome.toLowerCase().includes(termo));
             datalist.innerHTML = filtered.map(r => `<option value="${r.nome}">`).join("");
         });
+    }).catch(error => {
+        console.error('[ROADMAP DATALIST] Erro ao carregar receitas:', error);
     });
 
     document.getElementById("formAdicionarRoadmap").addEventListener("submit", async (e) => {
@@ -3478,22 +3722,30 @@ function mostrarPopupAdicionarReceitaRoadmap() {
             mostrarErro("Selecione uma receita");
             return;
         }
-        const roadmap = await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json()).catch(() => []);
-        const newItem = { name: nome, completed: false };
-        if (posicao === "start") {
-            roadmap.unshift(newItem);
-        } else {
-            roadmap.push(newItem);
+        // Verificar duplicata
+        try {
+            const roadmap = await safeApi(`/roadmap?game=${encodeURIComponent(currentGame)}`).catch(() => []);
+            if (roadmap.some(item => item.name === nome)) {
+                mostrarErro("Esta receita já existe no roadmap. Não é possível adicionar duplicatas.");
+                return;
+            }
+            const newItem = { name: nome, completed: false };
+            if (posicao === "start") {
+                roadmap.unshift(newItem);
+            } else {
+                roadmap.push(newItem);
+            }
+            await safeApi(`/roadmap?game=${encodeURIComponent(currentGame)}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(roadmap)
+            });
+            popup.remove();
+            overlay.remove();
+            await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
+        } catch (error) {
+            mostrarErro("Erro ao adicionar ao roadmap: " + error.message);
         }
-        await fetch(`${API}/roadmap?game=${encodeURIComponent(currentGame)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(roadmap),
-            credentials: 'include'
-        });
-        popup.remove();
-        overlay.remove();
-        await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
     });
 
     document.getElementById("btnCancelarAdicionarRoadmap").addEventListener("click", () => {
@@ -3550,31 +3802,35 @@ async function montarCategorias() {
 
 async function carregarCategoriasLista(termoBusca = "", ordem = "az") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    let categorias = await fetch(`${API}/categorias?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const comps = await fetch(`${API}/componentes?game=${encodeURIComponent(currentGame)}`, { credentials: 'include' }).then(r => r.json());
-    const counts = {};
-    comps.forEach(c => {
-        if (c.categoria) {
-            counts[c.categoria] = (counts[c.categoria] || 0) + 1;
+    try {
+        const catRes = await safeApi(`/categorias?game=${encodeURIComponent(currentGame)}`);
+        const categorias = Array.isArray(catRes) ? catRes : [];
+        const compRes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
+        const comps = Array.isArray(compRes) ? compRes : [];
+
+        const counts = {};
+        comps.forEach(c => {
+            if (c.categoria) {
+                counts[c.categoria] = (counts[c.categoria] || 0) + 1;
+            }
+        });
+
+        if (termoBusca) {
+            categorias = categorias.filter(c => c.toLowerCase().includes(termoBusca.toLowerCase()));
         }
-    });
 
-    if (termoBusca) {
-        categorias = categorias.filter(c => c.toLowerCase().includes(termoBusca.toLowerCase()));
-    }
+        if (ordem === "az") {
+            categorias.sort((a, b) => a.localeCompare(b));
+        } else if (ordem === "za") {
+            categorias.sort((a, b) => b.localeCompare(a));
+        }
 
-    if (ordem === "az") {
-        categorias.sort((a, b) => a.localeCompare(b));
-    } else if (ordem === "za") {
-        categorias.sort((a, b) => b.localeCompare(a));
-    }
-
-    const isAdmin = isUserAdmin();
-    const div = document.getElementById("lista-categorias");
-    div.innerHTML = categorias.map(cat => {
-        const count = counts[cat] || 0;
-        const btnExcluirHtml = isAdmin && count === 0 ? `<button onclick="excluirCategoria('${escapeJsString(cat)}')" class="warn">Excluir</button>` : '';
-        return `
+        const isAdmin = isUserAdmin();
+        const div = document.getElementById("lista-categorias");
+        div.innerHTML = categorias.map(cat => {
+            const count = counts[cat] || 0;
+            const btnExcluirHtml = isAdmin && count === 0 ? `<button onclick="excluirCategoria('${escapeJsString(cat)}')" class="warn">Excluir</button>` : '';
+            return `
       <div class="item">
         <div>
           <strong>${cat}</strong> (${count} componentes)
@@ -3583,7 +3839,11 @@ async function carregarCategoriasLista(termoBusca = "", ordem = "az") {
           ${btnExcluirHtml}
         </div>
       </div>`;
-    }).join("");
+        }).join("");
+    } catch (error) {
+        console.error('[CATEGORIAS] Erro ao carregar dados:', error);
+        document.getElementById("lista-categorias").innerHTML = '<p>Erro ao carregar categorias.</p>';
+    }
 }
 
 function abrirPopupCategoria() {
@@ -3619,13 +3879,11 @@ function abrirPopupCategoria() {
             return;
         }
         try {
-            const response = await fetch(`${API}/categorias?game=${encodeURIComponent(currentGame)}`, {
+            const data = await safeApi(`/categorias?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ nome }),
-                credentials: 'include'
+                body: JSON.stringify({ nome })
             });
-            const data = await response.json();
             if (data.sucesso) {
                 popup.remove();
                 overlay.remove();
@@ -3651,13 +3909,11 @@ async function excluirCategoria(nome) {
     if (!confirm(`Confirmar exclusão da categoria "${nome}"?`)) return;
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
-        const response = await fetch(`${API}/categorias/excluir?game=${encodeURIComponent(currentGame)}`, {
+        const data = await safeApi(`/categorias/excluir?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ nome }),
-            credentials: 'include'
+            body: JSON.stringify({ nome })
         });
-        const data = await response.json();
         if (data.sucesso) {
             await carregarCategoriasLista(document.getElementById("buscaCategorias")?.value || "", document.getElementById("ordemCategorias")?.value || "az");
             await carregarCategoriasDatalist();
