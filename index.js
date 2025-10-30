@@ -3082,16 +3082,77 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
     // Computar e exibir sequência sugerida
     let listaMateriasPendentes = listaMaterias.filter(m => m.pendente > 0);
     if (listaMateriasPendentes.length > 0) {
-        const sequence = computeSuggestedSequence(componentes, listaMateriasPendentes);
-        const sequenceList = document.getElementById("sequenceList");
-        sequenceList.innerHTML = sequence.map((item, index) => {
-            const pendente = listaMateriasPendentes.find(m => m.nome === item.nome)?.pendente || 0;
-            const action = item.hasSubs ? "Fabricar" : "Coletar";
-            return `<li>${index + 1}. ${action} ${item.nome} (Pendente: ${formatQuantity(pendente)})</li>`;
-        }).join("");
+        const sequence = getSuggestedSequence(componentes, listaMateriasPendentes);
+        renderSequence(sequence, listaMateriasPendentes, componentes);
     } else {
         document.getElementById("sequenceList").innerHTML = "<li>Nenhuma sequência sugerida disponível.</li>";
     }
+}
+
+function getSuggestedSequence(componentes, listaMateriasPendentes) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const savedKey = `suggestedSequence_${currentGame}`;
+    const saved = localStorage.getItem(savedKey);
+    if (saved) {
+        try {
+            const savedNames = JSON.parse(saved);
+            // Validate that all saved names are in current pendentes
+            const validSaved = savedNames.filter(name => listaMateriasPendentes.some(m => m.nome === name));
+            if (validSaved.length > 0) {
+                // Map to full objects
+                return validSaved.map(name => {
+                    const comp = componentes.find(c => c.nome === name);
+                    return { nome: name, hasSubs: comp && comp.associados && comp.associados.length > 0 };
+                });
+            }
+        } catch (error) {
+            console.error('[SUGGESTED SEQUENCE] Erro ao carregar sequência salva:', error);
+        }
+    }
+    // Fallback to compute
+    return computeSuggestedSequence(componentes, listaMateriasPendentes);
+}
+
+function renderSequence(sequence, listaMateriasPendentes, componentes, isAdmin = isUserAdmin()) {
+    const sequenceList = document.getElementById("sequenceList");
+    sequenceList.innerHTML = sequence.map((item, index) => {
+        const pendente = listaMateriasPendentes.find(m => m.nome === item.nome)?.pendente || 0;
+        const action = item.hasSubs ? "Fabricar" : "Coletar";
+        const buttons = isAdmin ? `<button class="btn-seq-up" data-index="${index}">↑</button><button class="btn-seq-down" data-index="${index}">↓</button>` : '';
+        return `<li data-nome="${item.nome}" data-index="${index}">${index + 1}. ${action} ${item.nome} (Pendente: ${formatQuantity(pendente)})${buttons}</li>`;
+    }).join("");
+
+    // Adicionar event listeners para reordenação se admin
+    if (isAdmin) {
+        sequenceList.querySelectorAll('.btn-seq-up').forEach(btn => {
+            btn.addEventListener('click', () => handleSequenceReorder('up', btn, sequence, listaMateriasPendentes, componentes));
+        });
+        sequenceList.querySelectorAll('.btn-seq-down').forEach(btn => {
+            btn.addEventListener('click', () => handleSequenceReorder('down', btn, sequence, listaMateriasPendentes, componentes));
+        });
+    }
+}
+
+function handleSequenceReorder(direction, btn, currentSequence, listaMateriasPendentes, componentes) {
+    const li = btn.closest('li');
+    const index = parseInt(li.dataset.index);
+    let newSequence = [...currentSequence];
+
+    if (direction === 'up' && index > 0) {
+        [newSequence[index - 1], newSequence[index]] = [newSequence[index], newSequence[index - 1]];
+    } else if (direction === 'down' && index < newSequence.length - 1) {
+        [newSequence[index], newSequence[index + 1]] = [newSequence[index + 1], newSequence[index]];
+    } else {
+        return; // Não pode mover
+    }
+
+    // Salvar nova ordem no localStorage
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const savedKey = `suggestedSequence_${currentGame}`;
+    localStorage.setItem(savedKey, JSON.stringify(newSequence.map(s => s.nome)));
+
+    // Re-renderizar com nova sequência
+    renderSequence(newSequence, listaMateriasPendentes, componentes);
 }
 
 function computeSuggestedSequence(componentes, listaMaterias) {

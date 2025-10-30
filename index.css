@@ -2160,3 +2160,12 @@ body.bright-mode .manual-dropdown-content p.manual-item {
     border-radius: 7px;
     background: rgba(45, 55, 72, 0.95);
 }
+
+.btn-seq-up {
+    margin: 0px 5px 0px 5px;
+    border-radius: 16px;
+}
+
+.btn-seq-down {
+    border-radius: 16px;
+}
