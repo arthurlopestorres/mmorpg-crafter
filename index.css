@@ -2169,3 +2169,82 @@ body.bright-mode .manual-dropdown-content p.manual-item {
 .btn-seq-down {
     border-radius: 16px;
 }
+
+/* ========================================================================
+   MINHA CONTA DROPDOWN - NOVOS ESTILOS
+   ======================================================================== */
+#popupMinhaConta {
+    border: 1px solid #e2e8f0;
+    animation: slideDown 0.2s ease-out;
+}
+
+#popupMinhaConta select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.9rem;
+}
+
+#popupMinhaConta button {
+    transition: all var(--transition-fast);
+}
+
+#popupMinhaConta button:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+/* Dark mode for dropdown */
+body.dark-mode #popupMinhaConta {
+    background: #2d3748;
+    color: #e2e8f0;
+    border-color: #4a5568;
+}
+
+body.dark-mode #popupMinhaConta p {
+    color: #cbd5e0;
+}
+
+body.dark-mode #popupMinhaConta select {
+    background: #1a202c;
+    color: #e2e8f0;
+    border-color: #4a5568;
+}
+
+body.dark-mode #popupMinhaConta button#btnMudarSenha {
+    background: #4a5568;
+    color: #e2e8f0;
+}
+
+body.dark-mode #popupMinhaConta button#btnLogout {
+    background: #f56565;
+    color: white;
+}
+
+/* Bright mode for dropdown (default light) */
+body.bright-mode #popupMinhaConta {
+    background: white;
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+body.bright-mode #popupMinhaConta p {
+    color: #718096;
+}
+
+body.bright-mode #popupMinhaConta select {
+    background: white;
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+body.bright-mode #popupMinhaConta button#btnMudarSenha {
+    background: #e2e8f0;
+    color: var(--text-primary);
+}
+
+body.bright-mode #popupMinhaConta button#btnLogout {
+    background: #f56565;
+    color: white;
+}

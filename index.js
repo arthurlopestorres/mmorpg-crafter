@@ -166,50 +166,79 @@ function mostrarBotaoMinhaConta() {
     document.body.appendChild(botaoMinhaConta);
 }
 
-// Novo: Popup para "Minha Conta"
+// Novo: Dropdown para "Minha Conta"
 async function mostrarPopupMinhaConta() {
-    const overlay = criarOverlay();
+    // Remover dropdown existente se houver
+    const existingPopup = document.getElementById("popupMinhaConta");
+    if (existingPopup) existingPopup.remove();
+
+    const botaoMinhaConta = document.getElementById("botaoMinhaConta");
+    const rect = botaoMinhaConta.getBoundingClientRect();
+
     const popup = document.createElement("div");
     popup.id = "popupMinhaConta";
-    popup.style.position = "fixed";
-    popup.style.top = "50%";
-    popup.style.left = "50%";
-    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.position = "absolute";
+    popup.style.top = `${rect.bottom + 8}px`;
+    popup.style.right = "20px";
     popup.style.backgroundColor = "white";
-    popup.style.padding = "20px";
-    popup.style.zIndex = "1000";
+    popup.style.padding = "0";
+    popup.style.zIndex = "1001";
     popup.style.borderRadius = "var(--border-radius-xl)";
     popup.style.boxShadow = "var(--shadow-xl)";
     popup.style.minWidth = "300px";
+    popup.style.maxWidth = "400px";
+    popup.style.overflow = "hidden";
 
     // Buscar dados do usuário do servidor via endpoint /me
     try {
         const usuario = await safeApi(`/me`);
+        const games = await safeApi(`/games`);
+
         popup.innerHTML = `
-            <h2>Minha Conta</h2>
-            <p><strong>Nome:</strong> #${usuario.id}${usuario.nome}</p>
-            <p><strong>Email:</strong> ${usuario.email}</p>
-            <button id="btnMudarSenha">Mudar Senha</button>
-            <button id="btnLogout">Logout</button>
-            <button type="button" id="btnFecharMinhaConta">Fechar</button>
+            <div style="padding: 20px; border-bottom: 1px solid #e2e8f0;">
+                <h3 style="margin: 0 0 12px 0; font-size: 1.1rem;">Minha Conta</h3>
+                <p style="margin: 0 0 8px 0; font-size: 0.9rem;"><strong>Nome:</strong> #${usuario.id}${usuario.nome}</p>
+                <p style="margin: 0 0 16px 0; font-size: 0.9rem;"><strong>Email:</strong> ${usuario.email}</p>
+            </div>
+            <div style="padding: 16px 20px;">
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Jogo Atual</label>
+                    <select id="gameSelectorDropdown">
+                        ${games.map(g => `<option value="${g}" ${g === localStorage.getItem("currentGame") ? 'selected' : ''}>${g}</option>`).join("")}
+                    </select>
+                </div>
+                <button id="btnNovoJogoDropdown" style="width: 100%; margin-bottom: 12px; padding: 10px; background: var(--primary-gradient); color: white; border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-weight: 500;">Novo Jogo</button>
+                <button id="btnMudarSenha" style="width: 100%; margin-bottom: 12px; padding: 10px; background: #e2e8f0; color: #2d3748; border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-weight: 500;">Mudar Senha</button>
+                <button id="btnLogout" style="width: 100%; margin-bottom: 12px; padding: 10px; background: #f56565; color: white; border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-weight: 500;">Logout</button>
+            </div>
         `;
     } catch (error) {
         console.error('[MINHA CONTA] Erro ao carregar dados:', error);
         popup.innerHTML = `
-            <h2>Minha Conta</h2>
-            <p>Erro ao carregar dados: ${error.message}</p>
-            <button type="button" id="btnFecharMinhaConta">Fechar</button>
+            <div style="padding: 20px;">
+                <h3 style="margin: 0 0 12px 0; font-size: 1.1rem;">Minha Conta</h3>
+                <p style="margin: 0; color: #f56565;">Erro ao carregar dados: ${error.message}</p>
+                <button id="btnLogout" style="width: 100%; margin-top: 16px; padding: 10px; background: #f56565; color: white; border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-weight: 500;">Logout</button>
+            </div>
         `;
     }
 
     document.body.appendChild(popup);
 
-    // Adicionar event listeners após appendChild para garantir que os elementos estejam no DOM
+    // Fechar dropdown ao clicar fora
+    const fecharDropdown = (e) => {
+        if (!popup.contains(e.target) && e.target !== botaoMinhaConta) {
+            popup.remove();
+            document.removeEventListener('click', fecharDropdown);
+        }
+    };
+    document.addEventListener('click', fecharDropdown);
+
+    // Event listeners
     const btnMudarSenha = document.getElementById("btnMudarSenha");
     if (btnMudarSenha) {
         btnMudarSenha.addEventListener("click", () => {
             popup.remove();
-            overlay.remove();
             mostrarPopupMudarSenha();
         });
     }
@@ -220,16 +249,29 @@ async function mostrarPopupMinhaConta() {
             sessionStorage.removeItem("loggedIn");
             sessionStorage.removeItem("userEmail");
             popup.remove();
-            overlay.remove();
             window.location.reload(); // Recarrega para mostrar popup login
         });
     }
 
-    const btnFecharMinhaConta = document.getElementById("btnFecharMinhaConta");
-    if (btnFecharMinhaConta) {
-        btnFecharMinhaConta.addEventListener("click", () => {
+    const gameSelector = document.getElementById("gameSelectorDropdown");
+    if (gameSelector) {
+        gameSelector.addEventListener("change", async (e) => {
+            const newGame = e.target.value;
+            localStorage.setItem("currentGame", newGame);
+            await carregarUserStatus();
+            const currentSecao = localStorage.getItem("ultimaSecao") || "receitas";
+            await carregarSecao(currentSecao);
+            // Atualizar seletor no dropdown
+            const games = await safeApi(`/games`);
+            gameSelector.innerHTML = games.map(g => `<option value="${g}" ${g === newGame ? 'selected' : ''}>${g}</option>`).join("");
+        });
+    }
+
+    const btnNovoJogo = document.getElementById("btnNovoJogoDropdown");
+    if (btnNovoJogo) {
+        btnNovoJogo.addEventListener("click", () => {
             popup.remove();
-            overlay.remove();
+            mostrarPopupNovoJogo();
         });
     }
 }
@@ -342,44 +384,7 @@ async function initGames() {
         currentGame = "Pax Dei";
         localStorage.setItem("currentGame", currentGame);
     }
-    await carregarGamesSelector();
-}
-
-async function carregarGamesSelector() {
-    const games = await safeApi(`/games`);
-    const menu = document.querySelector(".menu");
-    if (!menu) return;
-
-    // Remove existing selector and new game if any
-    const existingSelector = document.getElementById("gameSelectorLi");
-    if (existingSelector) existingSelector.remove();
-    const existingNewGame = document.getElementById("newGameLi");
-    if (existingNewGame) existingNewGame.remove();
-
-    // Adicionar seletor de jogos
-    const gameSelectorLi = document.createElement("li");
-    gameSelectorLi.id = "gameSelectorLi";
-    gameSelectorLi.innerHTML = `
-        <select id="gameSelector">
-            ${games.map(g => `<option value="${g}" ${g === localStorage.getItem("currentGame") ? 'selected' : ''}>${g}</option>`).join("")}
-        </select>
-    `;
-    menu.prepend(gameSelectorLi);
-
-    document.getElementById("gameSelector").addEventListener("change", async (e) => {
-        const newGame = e.target.value;
-        localStorage.setItem("currentGame", newGame);
-        await carregarUserStatus();
-        const currentSecao = localStorage.getItem("ultimaSecao") || "receitas";
-        await carregarSecao(currentSecao);
-    });
-
-    // Adicionar botão Novo Jogo
-    const newGameLi = document.createElement("li");
-    newGameLi.id = "newGameLi";
-    newGameLi.textContent = "Novo Jogo";
-    newGameLi.addEventListener("click", mostrarPopupNovoJogo);
-    menu.prepend(newGameLi);
+    // Não renderizar no menu mais; será renderizado no dropdown de Minha Conta
 }
 
 function mostrarPopupNovoJogo() {
@@ -422,7 +427,7 @@ function mostrarPopupNovoJogo() {
                 localStorage.setItem("currentGame", nome);
                 popup.remove();
                 overlay.remove();
-                await carregarGamesSelector();
+                await carregarUserStatus();
                 const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
                 carregarSecao(ultimaSecao);
             } else {
