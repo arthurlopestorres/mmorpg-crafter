@@ -302,15 +302,20 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ sucesso: false, erro: 'Usuário ou senha não encontrados' });
         }
 
+        // Verificar senha
+        if (!await bcrypt.compare(senha, usuario.senhaHash)) {
+            return res.status(401).json({ sucesso: false, erro: 'Senha incorreta' });
+        }
+
         // Gerar OTP e enviar
         const otp = generateOTP();
         if (!await sendOTP(email, otp, 'login')) {
             return res.status(500).json({ sucesso: false, erro: 'Erro ao enviar código de verificação' });
         }
 
-        // Armazenar OTP e dados temporários
+        // Armazenar OTP (sem tempData, pois senha já foi validada)
         const expire = Date.now() + OTP_EXPIRE_MINUTES * 60 * 1000;
-        otps.set(email, { code: otp, expire, type: 'login', tempData: { senhaHash: usuario.senhaHash } });
+        otps.set(email, { code: otp, expire, type: 'login' });
 
         res.json({ sucesso: 'otp_sent' });
     } catch (error) {
@@ -328,10 +333,7 @@ app.post('/verify-otp-login', async (req, res) => {
             return res.status(400).json({ sucesso: false, erro: 'Código inválido ou expirado' });
         }
 
-        // Verificar senha (armazenada temporariamente como hash)
-        // Nota: Como senha não foi enviada novamente, assumimos que foi validada antes, mas para segurança, armazenamos hash temp
-        // Mas no fluxo, client envia senha na primeira chamada, server armazena hash, aqui só verifica OTP
-        // Para completar login, set session
+        // Como a senha já foi validada na etapa anterior, prosseguir com o login
         req.session.user = email;
 
         // Limpar OTP

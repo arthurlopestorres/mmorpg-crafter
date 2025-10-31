@@ -1631,7 +1631,7 @@ form select:focus {
 }
 
 #listaArquivados .warn {
-    margin-top: 12px;
+    margin-top: 8px;
 }
 
 #receitaAssociadosContainer .associado-row,
@@ -2241,4 +2241,12 @@ body.bright-mode #popupMinhaConta button#btnLogout {
 
 #popupMudarSenha h2 {
     color: #2d3748;
+}
+
+#btnExportEstoque.primary {
+    text-align: left;
+}
+
+#lista-categorias .acoes {
+    margin-top: 8px;
 }
