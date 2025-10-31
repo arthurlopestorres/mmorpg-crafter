@@ -1196,23 +1196,22 @@ form select:focus {
    THEME TOGGLE & MENU TOGGLE
    ======================================================================== */
 #botaoDeMinimizarMenu {
-    cursor: pointer;
-    position: fixed;
-    top: 20px;
-    left: calc(var(--sidebar-width) + 20px);
-    z-index: 998;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    color: var(--text-primary);
-    padding: 12px 20px;
-    border-radius: var(--border-radius-lg);
-    font-weight: 600;
-    box-shadow: var(--shadow-lg);
-    transition: all var(--transition-base);
     display: flex;
     align-items: center;
-    gap: 8px;
+    z-index: 998;
+    height: calc(100vh - 40px);
+    width: 20px;
+    padding-left: 1px;
+    position: fixed;
+    top: 20px;
+    left: calc(var(--sidebar-width) + 0px);
+    border-radius: var(--border-radius-lg);
     border: 2px solid rgba(102, 126, 234, 0.3);
+    cursor: pointer;
+    backdrop-filter: blur(20px);
+    font-weight: 600;
+    transition: all var(--transition-base);
+    gap: 8px;
 }
 
 #botaoDeMinimizarMenu:hover {
@@ -2004,7 +2003,7 @@ html {
 }
 
 #conteudo {
-    margin-top: 74px;
+    /* margin-top: 74px; */
     height: 100vh;
     overflow: scroll;
     scrollbar-width: none;

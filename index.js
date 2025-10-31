@@ -525,13 +525,15 @@ function minimizarOmenu() {
     let listaDeClasseDoMenu = menuLateral.classList;
     if (listaDeClasseDoMenu.length < 1) {
         menuLateral.classList.add('menulateralMinimizado')
-        botaoDeMinimizar.style = 'left: 56px!important;'
-        botaoDeMinimizar.innerHTML = 'Maximizar ▶'
+        botaoDeMinimizar.style = 'left: 80px!important;'
+        //maximizar:
+        botaoDeMinimizar.innerHTML = '▶'
         itensDoMenu.forEach(item => item.style.display = "none")
     } else {
         menuLateral.classList.remove('menulateralMinimizado')
-        botaoDeMinimizar.style = 'left: 316px!important;'
-        botaoDeMinimizar.innerHTML = '◀ Minimizar'
+        botaoDeMinimizar.style = 'left: 280px!important;'
+        //minimizar:
+        botaoDeMinimizar.innerHTML = '◀';
         itensDoMenu.forEach(item => item.style.removeProperty('display'))
     }
 }
