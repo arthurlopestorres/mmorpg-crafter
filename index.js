@@ -3625,8 +3625,7 @@ function getSuggestedSequence(componentes, listaMateriasPendentes) {
             const savedNames = JSON.parse(saved);
             // Validate that all saved names are in current pendentes
             const validSaved = savedNames.filter(name => listaMateriasPendentes.some(m => m.nome === name));
-            if (validSaved.length > 0) {
-                // Map to full objects
+            if (validSaved.length === listaMateriasPendentes.length) {
                 return validSaved.map(name => {
                     const comp = componentes.find(c => c.nome === name);
                     return { nome: name, hasSubs: comp && comp.associados && comp.associados.length > 0 };
