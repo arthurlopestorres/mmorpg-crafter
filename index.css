@@ -394,11 +394,11 @@ h2::before {
 h3 {
     font-size: 1.25rem;
     margin-bottom: 16px;
-    color: #ffffff;
+    color: #2d3748;
 }
 
 p {
-    color: #ffffff;
+    color: #2d3748;
     line-height: 1.7;
     margin-bottom: 12px;
 }
@@ -1276,7 +1276,7 @@ form select:focus {
 #popupEditarEstoque h2,
 #popupCategoria h2,
 #popupAdicionarRoadmap h2 {
-    color: var(--text-primary);
+    color: #2d3748;
     margin-bottom: 24px;
     text-shadow: none;
 }
@@ -1704,7 +1704,7 @@ body.dark-mode #popupNovoJogo h2,
 body.dark-mode #popupEditarEstoque h2,
 body.dark-mode #popupCategoria h2,
 body.dark-mode #popupAdicionarRoadmap h2 {
-    color: #e2e8f0;
+    color: #2d3748;
 }
 
 body.dark-mode .home.lista-de-recomendacoes a {
@@ -2033,7 +2033,7 @@ html {
 }
 
 #popupMinhaConta p {
-    color: darkgray;
+    color: #2d3748;
 }
 
 .receitas-dropdown option {
@@ -2195,15 +2195,15 @@ body.bright-mode .manual-dropdown-content p.manual-item {
     box-shadow: var(--shadow-md);
 }
 
+#popupMinhaConta h3 {
+    color: #2d3748;
+}
+
 /* Dark mode for dropdown */
 body.dark-mode #popupMinhaConta {
     background: #2d3748;
-    color: #e2e8f0;
+    color: #2d3748;
     border-color: #4a5568;
-}
-
-body.dark-mode #popupMinhaConta p {
-    color: #cbd5e0;
 }
 
 body.dark-mode #popupMinhaConta select {
@@ -2225,12 +2225,16 @@ body.dark-mode #popupMinhaConta button#btnLogout {
 /* Bright mode for dropdown (default light) */
 body.bright-mode #popupMinhaConta {
     background: white;
-    color: var(--text-primary);
+    color: #2d3748;
     border-color: var(--border-color);
 }
 
 body.bright-mode #popupMinhaConta p {
-    color: #718096;
+    color: #2d3748;
+}
+
+body.bright-mode #popupMinhaConta h3 {
+    color: #2d3748;
 }
 
 body.bright-mode #popupMinhaConta select {
@@ -2247,4 +2251,16 @@ body.bright-mode #popupMinhaConta button#btnMudarSenha {
 body.bright-mode #popupMinhaConta button#btnLogout {
     background: #f56565;
     color: white;
+}
+
+#gameSelectorDropdown option {
+    border-radius: 7px;
+}
+
+.popupDeErro403 p {
+    color: #2d3748 !important;
+}
+
+#popupMudarSenha h2 {
+    color: #2d3748;
 }

@@ -55,7 +55,7 @@ function mostrarPopupAcessoNegado() {
     popup.style.borderRadius = "5px";
     popup.style.boxShadow = "0 2px 10px rgba(0,0,0,0.1)";
     popup.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div id="popupDeErro403" style="display: flex; justify-content: space-between; align-items: center;">
       <h3>Acesso Negado</h3>
       <button id="fecharAcessoNegado" style="background: none; border: none; font-size: 16px; cursor: pointer;">❌</button>
     </div>
