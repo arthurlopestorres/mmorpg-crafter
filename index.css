@@ -206,7 +206,9 @@ body>* {
 
 .container {
     display: flex;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
+    scrollbar-width: none;
 }
 
 /* ========================================================================
@@ -222,6 +224,9 @@ aside {
     transition: width var(--transition-base), transform var(--transition-base);
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
 }
 
 aside::before {
@@ -265,6 +270,9 @@ aside::before {
     list-style: none;
     padding: 0 12px;
     margin: 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 .menu li {
@@ -348,7 +356,7 @@ aside::before {
    ======================================================================== */
 main {
     flex: 1;
-    padding: 32px 40px;
+    padding: 0px 40px 0px 40px;
     overflow-y: auto;
     animation: fadeIn 0.4s ease-out;
 }
@@ -546,6 +554,21 @@ button.warn:hover {
     box-shadow: 0 6px 16px rgba(252, 70, 107, 0.4);
 }
 
+.receitas-ButtonContainer {
+    display: flex;
+    flex-direction: row;
+    max-width: 1000px;
+    flex-wrap: wrap;
+    justify-content: space-around;
+}
+
+.receitas-ButtonContainer button {
+    height: 50px;
+    width: 120px;
+    margin: 0px 5px;
+    border-radius: 7px;
+}
+
 button.btn-arquivar {
     background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
     color: white;
@@ -572,6 +595,7 @@ button.btn-arquivar:hover {
 .btn-duplicar:hover,
 .btn-editar:hover {
     background: var(--primary-gradient-hover);
+    transform: translateY(-2px);
 }
 
 .btn-concluir {
@@ -584,6 +608,7 @@ button.btn-arquivar:hover {
 
 .btn-concluir:hover {
     background: linear-gradient(135deg, #0e8074 0%, #2dd96b 100%);
+    transform: translateY(-2px);
 }
 
 .btn-concluir:disabled {
@@ -595,6 +620,12 @@ button.btn-arquivar:hover {
 .btn-favoritar {
     background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);
     color: white;
+}
+
+.btn-favoritar:hover {
+    background: linear-gradient(135deg, #bb9f73 0%, #123a55 100%);
+    color: white;
+    transform: translateY(-2px);
 }
 
 .btn-fabricar {
@@ -706,6 +737,7 @@ button.btn-arquivar:hover {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    height: 100%;
 }
 
 .item {
@@ -724,14 +756,15 @@ button.btn-arquivar:hover {
 .item::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
+    top: -2px;
+    left: 11px;
+    right: 11px;
     height: 3px;
     background: var(--primary-gradient);
     transform: scaleX(0);
     transform-origin: left;
     transition: transform var(--transition-base);
+    border-radius: 7px;
 }
 
 .item:hover::before {
@@ -1162,40 +1195,6 @@ form select:focus {
 /* ========================================================================
    THEME TOGGLE & MENU TOGGLE
    ======================================================================== */
-#themeToggle {
-    position: fixed;
-    top: 20px;
-    right: 200px;
-    padding: 12px 20px;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    border: 2px solid rgba(102, 126, 234, 0.3);
-    border-radius: var(--border-radius-lg);
-    cursor: pointer;
-    z-index: 1000;
-    font-weight: 600;
-    box-shadow: var(--shadow-lg);
-    transition: all var(--transition-base);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--text-primary);
-}
-
-#themeToggle:hover {
-    background: white;
-    box-shadow: var(--shadow-xl);
-    transform: translateY(-2px);
-}
-
-.theme-icon {
-    font-size: 1.2rem;
-}
-
-.theme-text {
-    font-size: 0.9rem;
-}
-
 #botaoDeMinimizarMenu {
     cursor: pointer;
     position: fixed;
@@ -1604,6 +1603,7 @@ form select:focus {
    COMPONENTES ESPECÍFICO
    ======================================================================== */
 #lista-componentes {
+    padding-top: 10px;
     max-height: 720px;
     overflow-y: auto;
     padding-right: 12px;
@@ -1743,15 +1743,6 @@ body.dark-mode .comp-falta {
 
 body.dark-mode .receita-header--titulo {
     color: #e2e8f0;
-}
-
-body.dark-mode #themeToggle {
-    background: rgba(45, 55, 72, 0.95);
-    color: #e2e8f0;
-}
-
-body.dark-mode #themeToggle:hover {
-    background: #4a5568;
 }
 
 body.dark-mode #botaoDeMinimizarMenu {
@@ -1914,15 +1905,6 @@ body.bright-mode .receita-header--titulo {
     color: var(--text-primary);
 }
 
-body.bright-mode #themeToggle {
-    background: rgba(255, 255, 255, 0.95);
-    color: var(--text-primary);
-}
-
-body.bright-mode #themeToggle:hover {
-    background: white;
-}
-
 body.bright-mode #botaoDeMinimizarMenu {
     background: rgba(255, 255, 255, 0.95);
     color: var(--text-primary);
@@ -1971,12 +1953,10 @@ body.bright-mode #botaoDeMinimizarMenu:hover {
         padding: 24px;
     }
 
-    #themeToggle,
     #botaoDeMinimizarMenu {
         padding: 10px 16px;
     }
 
-    .theme-text,
     .menu-text {
         display: none;
     }
@@ -2024,7 +2004,10 @@ html {
 }
 
 #conteudo {
-    margin-top: 60px;
+    margin-top: 74px;
+    height: 100vh;
+    overflow: scroll;
+    scrollbar-width: none;
 }
 
 .filtros {
@@ -2142,10 +2125,6 @@ body.bright-mode .manual-dropdown-content {
 body.bright-mode .manual-dropdown-content p.manual-item {
     color: var(--text-primary);
     border-bottom-color: var(--border-color);
-}
-
-#botaoMinhaConta {
-    top: 22px !important;
 }
 
 #btnImportEstoque:hover {

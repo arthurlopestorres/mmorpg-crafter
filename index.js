@@ -142,10 +142,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const savedMode = localStorage.getItem("themeMode") || "bright";
     document.body.classList.remove("bright-mode", "dark-mode");
     document.body.classList.add(savedMode + "-mode");
-    updateToggleButtonText(savedMode);
 
     if (sessionStorage.getItem("loggedIn")) {
-        mostrarBotaoMinhaConta(); // Movido para antes do await para garantir visibilidade imediata
         initMenu();
         await initGames();
         await carregarUserStatus(); // Novo: Carregar status do usuário incluindo isAdmin
@@ -181,49 +179,23 @@ function isUserFounder() {
     return sessionStorage.getItem('isFounder') === 'true';
 }
 
-// Novo: Função para mostrar botão "Minha Conta"
-function mostrarBotaoMinhaConta() {
-    const botaoMinhaConta = document.createElement("button");
-    botaoMinhaConta.id = "botaoMinhaConta";
-    botaoMinhaConta.textContent = "Minha Conta";
-    botaoMinhaConta.style.position = "fixed";
-    botaoMinhaConta.style.top = "20px";
-    botaoMinhaConta.style.right = "20px";
-    botaoMinhaConta.style.padding = "12px 20px";
-    botaoMinhaConta.style.background = "var(--primary-gradient)";
-    botaoMinhaConta.style.color = "white";
-    botaoMinhaConta.style.borderRadius = "var(--border-radius-lg)";
-    botaoMinhaConta.style.cursor = "pointer";
-    botaoMinhaConta.style.zIndex = "1000";
-    botaoMinhaConta.style.fontWeight = "600";
-    botaoMinhaConta.style.boxShadow = "var(--shadow-lg)";
-    botaoMinhaConta.style.transition = "all var(--transition-base)";
-    botaoMinhaConta.addEventListener("mouseover", () => {
-        botaoMinhaConta.style.background = "var(--primary-gradient-hover)";
-        botaoMinhaConta.style.transform = "translateY(-2px)";
-    });
-    botaoMinhaConta.addEventListener("mouseout", () => {
-        botaoMinhaConta.style.background = "var(--primary-gradient)";
-        botaoMinhaConta.style.transform = "translateY(0)";
-    });
-    botaoMinhaConta.addEventListener("click", mostrarPopupMinhaConta);
-    document.body.appendChild(botaoMinhaConta);
-}
-
 // Novo: Dropdown para "Minha Conta"
 async function mostrarPopupMinhaConta() {
     // Remover dropdown existente se houver
     const existingPopup = document.getElementById("popupMinhaConta");
     if (existingPopup) existingPopup.remove();
 
-    const botaoMinhaConta = document.getElementById("botaoMinhaConta");
-    const rect = botaoMinhaConta.getBoundingClientRect();
+    const menuItem = document.getElementById("menu-minha-conta");
+    const rect = menuItem.getBoundingClientRect();
 
     const popup = document.createElement("div");
     popup.id = "popupMinhaConta";
-    popup.style.position = "absolute";
-    popup.style.top = `${rect.bottom + 8}px`;
-    popup.style.right = "20px";
+    popup.style.position = "fixed";
+    popup.style.top = "auto";
+    popup.style.bottom = "24px";
+    popup.style.left = `${rect.right + 8}px`;
+    popup.style.right = "auto";
+    popup.style.transform = "none";
     popup.style.backgroundColor = "white";
     popup.style.padding = "0";
     popup.style.zIndex = "1001";
@@ -237,6 +209,8 @@ async function mostrarPopupMinhaConta() {
     try {
         const usuario = await safeApi(`/me`);
         const games = await safeApi(`/games`);
+
+        const isDark = document.body.classList.contains('dark-mode');
 
         popup.innerHTML = `
             <div style="padding: 20px; border-bottom: 1px solid #e2e8f0;">
@@ -253,6 +227,12 @@ async function mostrarPopupMinhaConta() {
                 </div>
                 <button id="btnNovoJogoDropdown" style="width: 100%; margin-bottom: 12px; padding: 10px; background: var(--primary-gradient); color: white; border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-weight: 500;">Novo Jogo</button>
                 <button id="btnMudarSenha" style="width: 100%; margin-bottom: 12px; padding: 10px; background: #e2e8f0; color: #2d3748; border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-weight: 500;">Mudar Senha</button>
+            </div>
+            <div style="padding: 16px 20px; border-top: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 12px 0; font-size: 1rem;">Aparência</h4>
+                <button id="themeToggleDropdown" style="width: 100%; padding: 10px; background: ${isDark ? '#e2e8f0' : 'var(--primary-gradient)'}; color: ${isDark ? '#2d3748' : 'white'}; border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-weight: 500; transition: all var(--transition-fast);">${isDark ? 'Mudar para Light Mode' : 'Mudar para Dark Mode'}</button>
+            </div>
+            <div style="padding: 16px 20px; border-top: 1px solid #e2e8f0;">
                 <button id="btnLogout" style="width: 100%; margin-bottom: 12px; padding: 10px; background: #f56565; color: white; border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-weight: 500;">Logout</button>
             </div>
         `;
@@ -271,7 +251,7 @@ async function mostrarPopupMinhaConta() {
 
     // Fechar dropdown ao clicar fora
     const fecharDropdown = (e) => {
-        if (!popup.contains(e.target) && e.target !== botaoMinhaConta) {
+        if (!popup.contains(e.target) && e.target.id !== 'menu-minha-conta') {
             popup.remove();
             document.removeEventListener('click', fecharDropdown);
         }
@@ -316,6 +296,21 @@ async function mostrarPopupMinhaConta() {
         btnNovoJogo.addEventListener("click", () => {
             popup.remove();
             mostrarPopupNovoJogo();
+        });
+    }
+
+    // Event listener para toggle de tema no dropdown
+    const themeToggle = document.getElementById("themeToggleDropdown");
+    if (themeToggle) {
+        themeToggle.addEventListener("click", (e) => {
+            const currentMode = document.body.classList.contains('dark-mode') ? "dark" : "bright";
+            const newMode = currentMode === "dark" ? "bright" : "dark";
+            document.body.classList.remove("bright-mode", "dark-mode");
+            document.body.classList.add(newMode + "-mode");
+            localStorage.setItem("themeMode", newMode);
+            // Fechar dropdown após mudança
+            popup.remove();
+            document.removeEventListener("click", fecharDropdown);
         });
     }
 }
@@ -500,7 +495,7 @@ function initMenu() {
         { section: "componentes", text: "Componentes" },
         { section: "estoque", text: "Estoque de componentes" },
         { section: "receitas", text: "Receitas" },
-        { section: "farmar", text: "Favoritos" },
+        { section: "farmar", text: "Farmar Receitas Favoritas" },
         { section: "roadmap", text: "Roadmap" },
         { section: "arquivados", text: "Arquivados" },
         { section: "time", text: "Time" },
@@ -512,6 +507,14 @@ function initMenu() {
         li.addEventListener("click", () => carregarSecao(sec.section));
         menu.appendChild(li);
     });
+
+    // Adicionar item "Minha Conta" no final do menu
+    const liMinhaConta = document.createElement("li");
+    liMinhaConta.id = "menu-minha-conta";
+    liMinhaConta.textContent = "Minha Conta";
+    liMinhaConta.style.marginTop = "auto";
+    liMinhaConta.addEventListener("click", mostrarPopupMinhaConta);
+    menu.appendChild(liMinhaConta);
 }
 
 const botaoDeMinimizar = document.querySelector('#botaoDeMinimizarMenu')
@@ -523,13 +526,13 @@ function minimizarOmenu() {
     if (listaDeClasseDoMenu.length < 1) {
         menuLateral.classList.add('menulateralMinimizado')
         botaoDeMinimizar.style = 'left: 56px!important;'
-        botaoDeMinimizar.innerHTML = 'Maximizar Menu'
-        itensDoMenu.forEach(item => item.style = "display: none!important")
+        botaoDeMinimizar.innerHTML = 'Maximizar ▶'
+        itensDoMenu.forEach(item => item.style.display = "none")
     } else {
         menuLateral.classList.remove('menulateralMinimizado')
         botaoDeMinimizar.style = 'left: 316px!important;'
-        botaoDeMinimizar.innerHTML = 'Minimizar Menu'
-        itensDoMenu.forEach(item => item.style = "display: block")
+        botaoDeMinimizar.innerHTML = '◀ Minimizar'
+        itensDoMenu.forEach(item => item.style.removeProperty('display'))
     }
 }
 
@@ -629,7 +632,6 @@ function mostrarPopupLogin() {
                 sessionStorage.setItem("userEmail", email);
                 popup.remove();
                 overlay.remove();
-                mostrarBotaoMinhaConta(); // Garantir que o botão apareça após login
                 initMenu();
                 await initGames();
                 await carregarUserStatus(); // Novo: Carregar status após login
@@ -671,7 +673,6 @@ function mostrarPopupLogin() {
                 sessionStorage.setItem("userEmail", email);
                 popup.remove();
                 overlay.remove();
-                mostrarBotaoMinhaConta(); // Garantir que o botão apareça após login
                 initMenu();
                 await initGames();
                 await carregarUserStatus(); // Novo: Carregar status após login
@@ -1621,12 +1622,11 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
             <div class = "receita-header--container1"><div style="margin-right: 15px;"><strong class= "receita-header--titulo">${r.nome}</strong>
             ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
             <input type="number" class="qtd-desejada" min="0.001" step="any" value="${savedQtd}" data-receita="${r.nome}"></div>
-            <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button></div><div>
+            <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button></div><div class="receitas-ButtonContainer">
             ${btnConcluirHtml}
             ${btnEditarHtml}
-            ${btnArquivarHtml}
             ${btnDuplicarHtml}
-            <button class="btn-favoritar ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desfavoritar' : 'Favoritar'}</button></div>
+            <button class="btn-favoritar ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desfavoritar' : 'Favoritar'}</button>${btnArquivarHtml}</div>
           </div>
           <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
         </div>`;
@@ -3124,7 +3124,7 @@ async function montarFarmar() {
         const receitasFavoritas = receitas.filter(r => r.favorita);
 
         conteudo.innerHTML = `
-        <h2>Favoritos</h2>
+        <h2>O Que farmar?</h2>
         <div id="suggestedSequence">
             <h3>Sequência Sugerida</h3>
             <ol id="sequenceList"></ol>
@@ -4218,25 +4218,3 @@ function mostrarErro(msg) {
         overlay.remove();
     });
 }
-
-// Função para atualizar o texto do botão de toggle
-function updateToggleButtonText(mode) {
-    const toggleButton = document.getElementById("themeToggle");
-    if (toggleButton) {
-        toggleButton.textContent = mode === "bright" ? "Mudar para Dark Mode" : "Mudar para Bright Mode";
-    }
-}
-
-// Event listener para o botão de toggle (adicionado após DOMContentLoaded)
-document.addEventListener("DOMContentLoaded", () => {
-    const toggleButton = document.getElementById("themeToggle");
-    toggleButton.addEventListener("click", () => {
-        const currentMode = document.body.classList.contains("bright-mode") ? "bright" : "dark";
-        const newMode = currentMode === "bright" ? "dark" : "bright";
-
-        document.body.classList.remove(currentMode + "-mode");
-        document.body.classList.add(newMode + "-mode");
-        localStorage.setItem("themeMode", newMode);
-        updateToggleButtonText(newMode);
-    });
-});
