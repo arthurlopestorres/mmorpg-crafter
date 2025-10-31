@@ -527,6 +527,12 @@ function mostrarPopupLogin() {
             <button type="button" id="btnCadastrar">Cadastrar-se</button>
             <p id="erroLogin" style="color: red; display: none;">Usuário ou senha não encontrados</p>
         </form>
+        <div id="otpSectionLogin" style="display: none;">
+            <p>Código de verificação enviado para o seu email.</p>
+            <input type="text" id="otpLogin" placeholder="Código de 6 dígitos" required maxlength="6">
+            <button id="btnVerifyOtpLogin">Confirmar</button>
+            <p id="erroOtpLogin" style="color: red; display: none;">Código inválido</p>
+        </div>
     `;
     document.body.appendChild(popup);
 
@@ -568,7 +574,13 @@ function mostrarPopupLogin() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, senha, recaptchaToken: token })
             });
-            if (data.sucesso) {
+            if (data.sucesso === 'otp_sent') {
+                // Mostrar seção OTP
+                document.getElementById("formLogin").style.display = "none";
+                document.getElementById("otpSectionLogin").style.display = "block";
+                // Limpar erros
+                document.getElementById("erroLogin").style.display = "none";
+            } else if (data.sucesso) {
                 sessionStorage.setItem("loggedIn", "true");
                 sessionStorage.setItem("userEmail", email);
                 popup.remove();
@@ -592,6 +604,42 @@ function mostrarPopupLogin() {
             document.getElementById("emailLogin").style.border = "1px solid red";
             document.getElementById("senhaLogin").style.border = "1px solid red";
             grecaptcha.reset(recaptchaWidgetLogin);
+        }
+    });
+
+    // Listener para verificar OTP
+    document.getElementById("btnVerifyOtpLogin").addEventListener("click", async () => {
+        const email = document.getElementById("emailLogin").value;
+        const code = document.getElementById("otpLogin").value.trim();
+        if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+            document.getElementById("erroOtpLogin").textContent = "Código deve ser 6 dígitos numéricos";
+            document.getElementById("erroOtpLogin").style.display = "block";
+            return;
+        }
+        try {
+            const data = await safeApi(`/verify-otp-login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, code })
+            });
+            if (data.sucesso) {
+                sessionStorage.setItem("loggedIn", "true");
+                sessionStorage.setItem("userEmail", email);
+                popup.remove();
+                overlay.remove();
+                mostrarBotaoMinhaConta(); // Garantir que o botão apareça após login
+                initMenu();
+                await initGames();
+                await carregarUserStatus(); // Novo: Carregar status após login
+                const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
+                carregarSecao(ultimaSecao);
+            } else {
+                document.getElementById("erroOtpLogin").textContent = data.erro || "Código inválido";
+                document.getElementById("erroOtpLogin").style.display = "block";
+            }
+        } catch (error) {
+            document.getElementById("erroOtpLogin").textContent = "Erro ao verificar código";
+            document.getElementById("erroOtpLogin").style.display = "block";
         }
     });
 
@@ -629,6 +677,12 @@ function mostrarPopupCadastro() {
                 <button type="button" id="btnVoltarLoginConfirmacao">Voltar para Login</button>
             </div>
         </form>
+        <div id="otpSectionCadastro" style="display: none;">
+            <p>Código de verificação enviado para o seu email.</p>
+            <input type="text" id="otpCadastro" placeholder="Código de 6 dígitos" required maxlength="6">
+            <button id="btnVerifyOtpCadastro">Confirmar</button>
+            <p id="erroOtpCadastro" style="color: red; display: none;">Código inválido</p>
+        </div>
     `;
     document.body.appendChild(popup);
 
@@ -680,7 +734,13 @@ function mostrarPopupCadastro() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ nome, email, senha, recaptchaToken: token })
             });
-            if (data.sucesso) {
+            if (data.sucesso === 'otp_sent') {
+                // Mostrar seção OTP
+                document.getElementById("formCadastro").style.display = "none";
+                document.getElementById("otpSectionCadastro").style.display = "block";
+                // Limpar erros
+                document.getElementById("erroCadastro").style.display = "none";
+            } else if (data.sucesso) {
                 document.getElementById("formCadastro").querySelectorAll("input, button").forEach(el => el.style.display = "none");
                 document.getElementById("mensagemCadastro").style.display = "block";
                 document.getElementById("voltarConfirmacao").style.display = "block";
@@ -700,6 +760,40 @@ function mostrarPopupCadastro() {
             document.getElementById("erroCadastro").style.display = "block";
             document.getElementById("emailCadastro").style.border = "1px solid red";
             grecaptcha.reset(recaptchaWidgetCadastro);
+        }
+    });
+
+    // Listener para verificar OTP
+    document.getElementById("btnVerifyOtpCadastro").addEventListener("click", async () => {
+        const email = document.getElementById("emailCadastro").value;
+        const code = document.getElementById("otpCadastro").value.trim();
+        if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+            document.getElementById("erroOtpCadastro").textContent = "Código deve ser 6 dígitos numéricos";
+            document.getElementById("erroOtpCadastro").style.display = "block";
+            return;
+        }
+        try {
+            const data = await safeApi(`/verify-otp-cadastro`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, code })
+            });
+            if (data.sucesso) {
+                document.getElementById("otpSectionCadastro").style.display = "none";
+                document.getElementById("mensagemCadastro").style.display = "block";
+                document.getElementById("voltarConfirmacao").style.display = "block";
+                setTimeout(() => {
+                    popup.remove();
+                    overlay.remove();
+                    mostrarPopupLogin();
+                }, 2000);
+            } else {
+                document.getElementById("erroOtpCadastro").textContent = data.erro || "Código inválido";
+                document.getElementById("erroOtpCadastro").style.display = "block";
+            }
+        } catch (error) {
+            document.getElementById("erroOtpCadastro").textContent = "Erro ao verificar código";
+            document.getElementById("erroOtpCadastro").style.display = "block";
         }
     });
 
@@ -1999,7 +2093,7 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
         await carregarEstoque();
         await carregarLog();
         await carregarArquivados();
-        // Correção: Só recarregar farmar se a seção existir (evita erro de null.innerHTML)
+        // Correção: Só recarregar farmar sea seção existir (evita erro de null.innerHTML)
         if (document.getElementById("listaFarmar")) {
             await carregarListaFarmar(
                 document.getElementById("buscaFarmar")?.value || "",
@@ -3188,7 +3282,7 @@ async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
             categoriaSelect.innerHTML = '<option value="">Todas as categorias</option>' +
                 categoriasUnicas.map(cat => `<option value="${cat}">${cat}</option>`).join("");
 
-            // Se o valor atual não está mais disponível, resetar para vazio
+            // Se o valor valor atual não está mais disponível, resetar para vazio
             if (currentValue && !categoriasUnicas.includes(currentValue)) {
                 categoriaSelect.value = "";
             } else {
@@ -3298,7 +3392,7 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
 
             // Adicionar event listeners para toggles em farmar
             document.querySelectorAll("#listaFarmar .toggle-detalhes").forEach(btn => {
-                btn.addEventListener("click", async () => {
+                btn.addEventListener('click', async () => {
                     const targetId = btn.dataset.target;
                     const detalhes = document.getElementById(targetId);
                     if (!detalhes) return;

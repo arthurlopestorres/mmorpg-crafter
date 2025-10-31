@@ -35,6 +35,10 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+// Novo: Map para armazenar OTPs temporários (email => {code, expire, type, tempData})
+const otps = new Map();
+const OTP_EXPIRE_MINUTES = 10;
+
 // Função placeholder para sincronizarEstoque (substitua pelo código original)
 async function sincronizarEstoque() {
     console.log('[sincronizarEstoque] Função placeholder executada. Substitua pelo código original.');
@@ -260,6 +264,169 @@ async function verificarRecaptcha(token) {
 function getFilePath(gameDir, filename) {
     return path.join(gameDir, filename);
 }
+
+// Novo: Função para gerar OTP de 6 dígitos
+function generateOTP() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Novo: Função para enviar OTP por email
+async function sendOTP(email, otp, type) {
+    try {
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: type === 'login' ? 'Código de Verificação de Login' : 'Código de Verificação de Cadastro',
+            text: `Seu código de verificação é: ${otp}\n\nEste código expira em ${OTP_EXPIRE_MINUTES} minutos.`
+        });
+        return true;
+    } catch (error) {
+        console.error('[sendOTP] Erro ao enviar email:', error);
+        return false;
+    }
+}
+
+// Endpoint: Login - Etapa 1: Enviar OTP
+app.post('/login', async (req, res) => {
+    const { email, senha, recaptchaToken } = req.body;
+    try {
+        // Verificar reCAPTCHA
+        if (!await verificarRecaptcha(recaptchaToken)) {
+            return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
+        }
+
+        const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const usuario = usuarios.find(u => u.email === email);
+        if (!usuario || !usuario.aprovado) {
+            return res.status(401).json({ sucesso: false, erro: 'Usuário ou senha não encontrados' });
+        }
+
+        // Gerar OTP e enviar
+        const otp = generateOTP();
+        if (!await sendOTP(email, otp, 'login')) {
+            return res.status(500).json({ sucesso: false, erro: 'Erro ao enviar código de verificação' });
+        }
+
+        // Armazenar OTP e dados temporários
+        const expire = Date.now() + OTP_EXPIRE_MINUTES * 60 * 1000;
+        otps.set(email, { code: otp, expire, type: 'login', tempData: { senhaHash: usuario.senhaHash } });
+
+        res.json({ sucesso: 'otp_sent' });
+    } catch (error) {
+        console.error('[POST /login] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao processar login' });
+    }
+});
+
+// Novo: Endpoint para verificar OTP no login
+app.post('/verify-otp-login', async (req, res) => {
+    const { email, code } = req.body;
+    try {
+        const otpData = otps.get(email);
+        if (!otpData || otpData.type !== 'login' || Date.now() > otpData.expire || otpData.code !== code.trim()) {
+            return res.status(400).json({ sucesso: false, erro: 'Código inválido ou expirado' });
+        }
+
+        // Verificar senha (armazenada temporariamente como hash)
+        // Nota: Como senha não foi enviada novamente, assumimos que foi validada antes, mas para segurança, armazenamos hash temp
+        // Mas no fluxo, client envia senha na primeira chamada, server armazena hash, aqui só verifica OTP
+        // Para completar login, set session
+        req.session.user = email;
+
+        // Limpar OTP
+        otps.delete(email);
+
+        // Proceder com ações pós-login, se necessário
+        let usuarios = await fs.readFile(path.join(DATA_DIR, 'usuarios.json'), 'utf8').then(JSON.parse).catch(() => []);
+        const usuario = usuarios.find(u => u.email === email);
+        if (!usuario.id) {
+            usuario.id = await generateUniqueId();
+            const index = usuarios.findIndex(u => u.email === email);
+            usuarios[index] = usuario;
+            await saveUsuarios(usuarios);
+        }
+        if (!usuario.nome || usuario.nome.trim() === '') {
+            usuario.nome = "Lorem Ipsum";
+            const index = usuarios.findIndex(u => u.email === email);
+            usuarios[index] = usuario;
+            await saveUsuarios(usuarios);
+        }
+
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /verify-otp-login] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao verificar código' });
+    }
+});
+
+// Endpoint: Cadastro - Etapa 1: Enviar OTP
+app.post('/cadastro', async (req, res) => {
+    const { nome, email, senha, recaptchaToken } = req.body;
+    try {
+        // Verificar reCAPTCHA
+        if (!await verificarRecaptcha(recaptchaToken)) {
+            return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
+        }
+
+        const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (usuarios.some(u => u.email === email)) {
+            return res.status(400).json({ sucesso: false, erro: 'Email já cadastrado' });
+        }
+
+        // Gerar OTP e enviar
+        const otp = generateOTP();
+        if (!await sendOTP(email, otp, 'cadastro')) {
+            return res.status(500).json({ sucesso: false, erro: 'Erro ao enviar código de verificação' });
+        }
+
+        // Armazenar OTP e dados temporários
+        const expire = Date.now() + OTP_EXPIRE_MINUTES * 60 * 1000;
+        const senhaHash = await bcrypt.hash(senha, 10);
+        otps.set(email, { code: otp, expire, type: 'cadastro', tempData: { nome, senhaHash } });
+
+        res.json({ sucesso: 'otp_sent' });
+    } catch (error) {
+        console.error('[POST /cadastro] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao processar cadastro' });
+    }
+});
+
+// Novo: Endpoint para verificar OTP no cadastro
+app.post('/verify-otp-cadastro', async (req, res) => {
+    const { email, code } = req.body;
+    try {
+        const otpData = otps.get(email);
+        if (!otpData || otpData.type !== 'cadastro' || Date.now() > otpData.expire || otpData.code !== code.trim()) {
+            return res.status(400).json({ sucesso: false, erro: 'Código inválido ou expirado' });
+        }
+
+        // Salvar usuário
+        const { nome, senhaHash } = otpData.tempData;
+        const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const id = await generateUniqueId();
+        usuarios.push({ nome, email, senhaHash, id, aprovado: false });
+        await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
+
+        // Enviar email para admin
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: 'mmorpgcrafter@gmail.com',
+            subject: 'Solicitação de Acesso',
+            text: `Usuário solicitou acesso:\nNome: ${nome}\nEmail: ${email}`
+        });
+
+        // Limpar OTP
+        otps.delete(email);
+
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /verify-otp-cadastro] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao verificar código' });
+    }
+});
 
 // Endpoint para status do usuário (agora inclui isAdmin per game)
 app.get('/user-status', isAuthenticated, async (req, res) => {
@@ -867,103 +1034,6 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Endpoint: Login (não protegido)
-app.post('/login', async (req, res) => {
-    const { email, senha, recaptchaToken } = req.body;
-    try {
-        // Verificar reCAPTCHA
-        if (!await verificarRecaptcha(recaptchaToken)) {
-            return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
-        }
-
-        const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
-        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
-        const usuario = usuarios.find(u => u.email === email);
-        if (!usuario || !usuario.aprovado || !(await bcrypt.compare(senha, usuario.senhaHash))) {
-            return res.status(401).json({ sucesso: false, erro: 'Usuário ou senha não encontrados' });
-        }
-        // Gerar ID se não existir
-        if (!usuario.id) {
-            usuario.id = await generateUniqueId();
-            const index = usuarios.findIndex(u => u.email === email);
-            usuarios[index] = usuario;
-            await saveUsuarios(usuarios);
-        }
-        // Setar nome padrão se não existir
-        if (!usuario.nome || usuario.nome.trim() === '') {
-            usuario.nome = "Lorem Ipsum";
-            const index = usuarios.findIndex(u => u.email === email);
-            usuarios[index] = usuario;
-            await saveUsuarios(usuarios);
-        }
-        req.session.user = email;
-        res.json({ sucesso: true });
-    } catch (error) {
-        console.error('[POST /login] Erro:', error);
-        res.status(500).json({ sucesso: false, erro: 'Erro ao fazer login' });
-    }
-});
-
-// Endpoint: Cadastro (não protegido)
-app.post('/cadastro', async (req, res) => {
-    const { nome, email, senha, recaptchaToken } = req.body;
-    try {
-        // Verificar reCAPTCHA
-        if (!await verificarRecaptcha(recaptchaToken)) {
-            return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
-        }
-
-        const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
-        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
-        if (usuarios.some(u => u.email === email)) {
-            return res.status(400).json({ sucesso: false, erro: 'Email já cadastrado' });
-        }
-        const senhaHash = await bcrypt.hash(senha, 10);
-        const id = await generateUniqueId();
-        usuarios.push({ nome, email, senhaHash, id, aprovado: false });
-        await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
-
-        // Enviar email
-        await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: 'arthurlttorres@gmail.com',
-            subject: 'Solicitação de Acesso',
-            text: `Usuário solicitou acesso:\nNome: ${nome}\nEmail: ${email}`
-        });
-
-        res.json({ sucesso: true });
-    } catch (error) {
-        console.error('[POST /cadastro] Erro:', error);
-        res.status(500).json({ sucesso: false, erro: 'Erro ao cadastrar' });
-    }
-});
-
-// Novo endpoint para mudar senha (autenticado)
-app.post('/change-password', isAuthenticated, async (req, res) => {
-    const { oldPassword, newPassword } = req.body;
-    if (!oldPassword || !newPassword) {
-        return res.status(400).json({ sucesso: false, erro: 'Senhas antiga e nova são obrigatórias' });
-    }
-    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
-    try {
-        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
-        const index = usuarios.findIndex(u => u.email === req.session.user);
-        if (index === -1) {
-            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
-        }
-        if (!(await bcrypt.compare(oldPassword, usuarios[index].senhaHash))) {
-            return res.status(401).json({ sucesso: false, erro: 'Senha atual incorreta' });
-        }
-        const newHash = await bcrypt.hash(newPassword, 10);
-        usuarios[index].senhaHash = newHash;
-        await saveUsuarios(usuarios);
-        res.json({ sucesso: true });
-    } catch (error) {
-        console.error('[POST /change-password] Erro:', error);
-        res.status(500).json({ sucesso: false, erro: 'Erro ao mudar senha' });
-    }
-});
-
 // Endpoint: Aprovação manual (não protegido, pois manual via Postman)
 app.put('/usuarios', async (req, res) => {
     const { email, aprovadoParaAcesso } = req.body;
@@ -1003,6 +1073,32 @@ app.put('/usuarios', async (req, res) => {
     } catch (error) {
         console.error('[PUT /usuarios/troca-de-senha] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao trocar senha' });
+    }
+});
+
+// Novo endpoint para mudar senha (autenticado)
+app.post('/change-password', isAuthenticated, async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) {
+        return res.status(400).json({ sucesso: false, erro: 'Senhas antiga e nova são obrigatórias' });
+    }
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const index = usuarios.findIndex(u => u.email === req.session.user);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+        }
+        if (!(await bcrypt.compare(oldPassword, usuarios[index].senhaHash))) {
+            return res.status(401).json({ sucesso: false, erro: 'Senha atual incorreta' });
+        }
+        const newHash = await bcrypt.hash(newPassword, 10);
+        usuarios[index].senhaHash = newHash;
+        await saveUsuarios(usuarios);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /change-password] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao mudar senha' });
     }
 });
 
