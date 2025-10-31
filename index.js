@@ -3082,6 +3082,8 @@ async function montarFarmar() {
         // Atualizar ao mudar checkboxes
         listaReceitas.addEventListener("change", () => {
             updateBadges();
+            const selected = Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            updateCategoriaFilterOptions(buscaInput.value, selected);
             carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
             saveFilters();
         });
@@ -3089,6 +3091,8 @@ async function montarFarmar() {
         const debouncedCarregarListaFarmar = debounce(carregarListaFarmar, 300);
 
         buscaInput.addEventListener("input", () => {
+            const selected = Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            updateCategoriaFilterOptions(buscaInput.value, selected);
             debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
             saveFilters();
         });
@@ -3108,14 +3112,86 @@ async function montarFarmar() {
             updateBadges();
             categoriaSelect.value = "";
             ordemSelect.value = "pendente-desc";
+            updateCategoriaFilterOptions("", []);
             carregarListaFarmar("", "pendente-desc", '', "");
             saveFilters();
         });
 
+        // Inicializar opções de categoria
+        const initialSelected = Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        await updateCategoriaFilterOptions("", initialSelected);
         await carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
     } catch (error) {
         console.error('[FARMAR] Erro ao montar:', error);
         conteudo.innerHTML = '<h2>Favoritos</h2><p>Erro ao carregar dados.</p>';
+    }
+}
+
+// Nova função para atualizar opções do filtro de categoria baseado em itens filtrados por busca e receitas
+async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const quantitiesKey = `recipeQuantities_${currentGame}`;
+    const quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
+    try {
+        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
+        const receitasFavoritas = receitas.filter(r => r.favorita);
+        const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
+        const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
+
+        const receitasFiltradas = selectedReceitas.length > 0 ? receitasFavoritas.filter(r => selectedReceitas.includes(r.nome)) : receitasFavoritas;
+
+        const bases = new Map();
+        const estoqueMap = {};
+        estoqueList.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
+
+        for (const receita of receitasFiltradas) {
+            if (!receita.nome) continue;
+            const recipeQuantity = quantities[receita.nome] || 1;
+            let req = {};
+            receita.componentes.forEach(comp => {
+                const qtdNec = comp.quantidade * recipeQuantity;
+                mergeReq(req, calculateComponentRequirements(comp.nome, qtdNec, componentes, estoqueMap));
+            });
+            for (const [baseNome, baseQtd] of Object.entries(req)) {
+                if (!bases.has(baseNome)) {
+                    bases.set(baseNome, { nec: 0, receitas: new Set() });
+                }
+                bases.get(baseNome).nec += baseQtd;
+                bases.get(baseNome).receitas.add(receita.nome);
+            }
+        }
+
+        let listaMateriasTemp = Array.from(bases.entries()).map(([nome, data]) => {
+            const disp = estoqueMap[nome] || 0;
+            const pendente = Math.max(0, data.nec - disp);
+            return { nome, nec: data.nec, disp, pendente, receitas: Array.from(data.receitas) };
+        });
+
+        // Aplicar filtro de busca para determinar itens relevantes
+        listaMateriasTemp = filtrarItens(listaMateriasTemp, termoBusca, "nome");
+
+        // Extrair categorias únicas dos itens relevantes
+        const categoriasUnicas = [...new Set(listaMateriasTemp.map(m => {
+            const comp = componentes.find(c => c.nome === m.nome);
+            return comp ? comp.categoria : null;
+        }).filter(cat => cat))].sort();
+
+        // Atualizar select de categorias
+        const categoriaSelect = document.getElementById("filtroCategoriaFarmar");
+        if (categoriaSelect) {
+            const currentValue = categoriaSelect.value;
+            categoriaSelect.innerHTML = '<option value="">Todas as categorias</option>' +
+                categoriasUnicas.map(cat => `<option value="${cat}">${cat}</option>`).join("");
+
+            // Se o valor atual não está mais disponível, resetar para vazio
+            if (currentValue && !categoriasUnicas.includes(currentValue)) {
+                categoriaSelect.value = "";
+            } else {
+                categoriaSelect.value = currentValue;
+            }
+        }
+    } catch (error) {
+        console.error('[UPDATE CATEGORIA OPTIONS] Erro:', error);
     }
 }
 
