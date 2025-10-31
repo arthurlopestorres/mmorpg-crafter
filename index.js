@@ -1790,7 +1790,7 @@ async function arquivarReceita(receitaNome) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(arquivados)
         });
-        console.log(`[ARQUIVAR] Resposta do servidor (arquivados):`, arquivadosData);
+        console.log("[ARQUIVAR] Resposta do servidor (arquivados):", arquivadosData);
         if (!arquivadosData.sucesso) {
             console.error(`[ARQUIVAR] Erro ao salvar arquivados.json:`, arquivadosData.erro);
             mostrarErro("Erro ao arquivar receita: " + (arquivadosData.erro || "Falha desconhecida"));
@@ -2006,7 +2006,7 @@ async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque
         estoqueAtualizado.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
 
         const podeConcluir = Object.entries(requisitos).every(([nome, nec]) => {
-            const disp = estoqueMap[nome] !== undefined ? estoqueMap[nome] : 0;
+            const disp = estoqueMap[nome] || 0;
             return disp >= nec;
         });
 
@@ -2183,7 +2183,7 @@ async function duplicarReceita(nome) {
     }
 }
 
-function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
+function abrirPopupReceita(nome = null, duplicar = false, nomeSugerido = null) {
     const popup = document.getElementById("popupReceita");
     const titulo = document.getElementById("tituloPopupReceita");
     const form = document.getElementById("formReceita");
@@ -2299,7 +2299,7 @@ async function adicionarLinhaReceita(dados = {}) {
       <datalist id="assoc-datalist-${rowId}">
         ${comps.map(c => `<option value="${c.nome}">`).join("")}
       </datalist>
-      <input type="number" class="assoc-qtd" min="0.001" step="any" placeholder="Qtd" value="${formatQuantity(dados.quantidade || 0.001)}" />
+      <input type="number" class="assoc-qtd" min="0.001" step="any" value="${formatQuantity(dados.quantidade || 0.001)}" />
       <button type="button">❌</button>
     `;
     } catch (error) {
@@ -2307,7 +2307,7 @@ async function adicionarLinhaReceita(dados = {}) {
         row.innerHTML = `
       <input type="text" class="assoc-nome" list="assoc-datalist-${rowId}" value="${dados.nome || ''}" placeholder="Digite para buscar..." />
       <datalist id="assoc-datalist-${rowId}"></datalist>
-      <input type="number" class="assoc-qtd" min="0.001" step="any" placeholder="Qtd" value="${formatQuantity(dados.quantidade || 0.001)}" />
+      <input type="number" class="assoc-qtd" min="0.001" step="any" value="${formatQuantity(dados.quantidade || 0.001)}" />
       <button type="button">❌</button>
     `;
     }
@@ -2475,14 +2475,16 @@ function abrirPopupComponente(nome = null) {
             inputQuantidadeProduzida.value = formatQuantity(comp.quantidadeProduzida || 0.001);
             inputNomeOriginal.value = comp.nome;
             (comp.associados || []).forEach(a => adicionarAssociadoRow(a.nome, a.quantidade));
-            carregarCategoriasDatalist();
+            popup.style.display = "flex";
         }).catch(error => {
             console.error('[POPUP COMPONENTE] Erro ao carregar componente:', error);
             mostrarErro("Erro ao carregar componente.");
+            popup.style.display = "none";
         });
     } else {
         titulo.textContent = "Novo Componente";
         carregarCategoriasDatalist();
+        popup.style.display = "flex";
     }
 
     document.getElementById("btnAddAssociado").onclick = () => adicionarAssociadoRow();
@@ -2553,38 +2555,6 @@ async function adicionarAssociadoRow(nome = "", quantidade = "") {
     }
     row.querySelector("button").addEventListener("click", () => row.remove());
     container.appendChild(row);
-}
-
-async function excluirComponente(nome) {
-    if (!isUserAdmin()) {
-        alert('Apenas fundadores ou co-fundadores podem excluir componentes.');
-        return;
-    }
-    if (!confirm(`Confirmar exclusão de "${nome}"?`)) return;
-    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    try {
-        const data = await safeApi(`/componentes/excluir?game=${encodeURIComponent(currentGame)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ nome })
-        });
-        if (!data.sucesso) return mostrarErro(data.erro || "Erro ao excluir");
-        await carregarComponentesLista(document.getElementById("buscaComponentes")?.value || "", document.getElementById("ordemComponentes")?.value || "az");
-        await carregarCategoriasDatalist();
-    } catch (error) {
-        mostrarErro("Erro ao excluir componente: " + error.message);
-    }
-}
-
-async function carregarCategoriasDatalist() {
-    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-    try {
-        const categorias = await safeApi(`/categorias?game=${encodeURIComponent(currentGame)}`);
-        const datalist = document.getElementById("categoriasDatalist");
-        if (datalist) datalist.innerHTML = categorias.map(x => `<option value="${x}">`).join("");
-    } catch (error) {
-        console.error('[CATEGORIAS DATALIST] Erro ao carregar categorias:', error);
-    }
 }
 
 /* ------------------ ESTOQUE ------------------ */
@@ -2969,8 +2939,8 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
             popup.remove();
             overlay.remove();
             // Atualizar listas
-            await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
-            await carregarLog(document.getElementById("buscaLogComponente")?.value || "", document.getElementById("filtroLogUser")?.value || "", document.getElementById("filtroLogData")?.value || "");
+            await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
+            await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
         } catch (error) {
             mostrarErro("Erro ao atualizar estoque: " + error.message);
         }
@@ -3105,11 +3075,11 @@ async function excluirArquivado(nome) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(arquivados)
         });
-        if (!data.sucesso) {
+        if (data.sucesso) {
+            await carregarArquivados();
+        } else {
             mostrarErro(data.erro || "Erro ao excluir receita arquivada");
-            return;
         }
-        await carregarArquivados();
     } catch (error) {
         mostrarErro("Erro ao excluir receita arquivada: " + error.message);
     }
@@ -3120,7 +3090,8 @@ async function montarFarmar() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
         const categorias = await safeApi(`/categorias?game=${encodeURIComponent(currentGame)}`);
-        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
+        // Garantir que pegue todas as receitas (evita limite de produção na produção)
+        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}&limit=9999`);
         const receitasFavoritas = receitas.filter(r => r.favorita);
 
         conteudo.innerHTML = `
@@ -3281,10 +3252,11 @@ async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     const quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
     try {
-        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
+        // Solicitar sem paginação para garantir lista completa
+        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}&limit=9999`);
         const receitasFavoritas = receitas.filter(r => r.favorita);
-        const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
-        const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
+        const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}&limit=9999`);
+        const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}&limit=9999`);
 
         const receitasFiltradas = selectedReceitas.length > 0 ? receitasFavoritas.filter(r => selectedReceitas.includes(r.nome)) : receitasFavoritas;
 
@@ -3353,10 +3325,11 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     const quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
     try {
-        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
+        // Buscar as listas completas (evitar limite padrão do servidor em produção)
+        const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}&limit=9999`);
         const receitasFavoritas = receitas.filter(r => r.favorita);
-        const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
-        const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
+        const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}&limit=9999`);
+        const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}&limit=9999`);
 
         const selectedReceitas = Array.from(document.querySelectorAll('#listaReceitasFarmar input[type="checkbox"]:checked')).map(cb => cb.value);
 
@@ -3443,7 +3416,6 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                 btn.addEventListener('click', async () => {
                     const targetId = btn.dataset.target;
                     const detalhes = document.getElementById(targetId);
-                    if (!detalhes) return;
                     const isVisible = detalhes.style.display !== "none";
                     detalhes.style.display = isVisible ? "none" : "block";
                     btn.textContent = isVisible ? "▼" : "▲";
@@ -3817,8 +3789,8 @@ async function reordenarRoadmapVisual(name, direction, onlyCompleted) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
         const roadmap = await safeApi(`/roadmap?game=${encodeURIComponent(currentGame)}`);
-        let filtered = onlyCompleted ? roadmap.filter(i => i.completed) : roadmap;
-        const visualIndex = filtered.findIndex(i => i.name === name);
+        let filtered = onlyCompleted ? roadmap.filter(item => item.completed) : roadmap;
+        const visualIndex = filtered.findIndex(item => item.name === name);
         if (visualIndex === -1) return;
         let swapVisualIndex;
         if (direction === 'up') {
@@ -3830,8 +3802,8 @@ async function reordenarRoadmapVisual(name, direction, onlyCompleted) {
         }
         const name1 = filtered[visualIndex].name;
         const name2 = filtered[swapVisualIndex].name;
-        const index1 = roadmap.findIndex(i => i.name === name1);
-        const index2 = roadmap.findIndex(i => i.name === name2);
+        const index1 = roadmap.findIndex(item => item.name === name1);
+        const index2 = roadmap.findIndex(item => item.name === name2);
         if (index1 === -1 || index2 === -1) return;
         // Swap
         [roadmap[index1], roadmap[index2]] = [roadmap[index2], roadmap[index1]];
