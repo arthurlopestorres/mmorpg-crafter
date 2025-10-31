@@ -2403,28 +2403,30 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria
 
         const isAdmin = isUserAdmin();
         const div = document.getElementById("lista-componentes");
-        div.innerHTML = comps.map(c => {
-            const assoc = (c.associados || []).map(a => `${formatQuantity(a.quantidade)} x ${a.nome}`).join(", ");
-            const btnEditarHtml = isAdmin ? `<button onclick="abrirPopupComponente('${escapeJsString(c.nome)}')" class="primary" ${btnEditarDisabled}>Editar</button>` : '';
-            const btnExcluirHtml = isAdmin ? `<button onclick="excluirComponente('${escapeJsString(c.nome)}')" class="warn" ${btnExcluirDisabled}>Excluir</button>` : '';
-            return `
-      <div class="item">
-        <div>
-          <strong>${c.nome}</strong> <span class="categoria">(${c.categoria || "—"})</span>
-          <div class="comps-lista">
-            Produz: ${formatQuantity(c.quantidadeProduzida)}${assoc ? ` • Materiais: ${assoc}` : ""}
-          </div>
-        </div>
-        <div class="acoes">
-          ${btnEditarHtml}
-          ${btnExcluirHtml}
-        </div>
-      </div>`;
-        }).join("");
+        if (div) {
+            div.innerHTML = comps.map(c => {
+                const assoc = (c.associados || []).map(a => `${formatQuantity(a.quantidade)} x ${a.nome}`).join(", ");
+                const btnEditarHtml = isAdmin ? `<button onclick="abrirPopupComponente('${escapeJsString(c.nome)}')" class="primary">Editar</button>` : '';
+                const btnExcluirHtml = isAdmin ? `<button onclick="excluirComponente('${escapeJsString(c.nome)}')" class="warn">Excluir</button>` : '';
+                return `
+          <div class="item">
+            <div>
+              <strong>${c.nome}</strong> <span class="categoria">(${c.categoria || "—"})</span>
+              <div class="comps-lista">
+                Produz: ${formatQuantity(c.quantidadeProduzida)}${assoc ? ` • Materiais: ${assoc}` : ""}
+              </div>
+            </div>
+            <div class="acoes">
+              ${btnEditarHtml}
+              ${btnExcluirHtml}
+            </div>
+          </div>`;
+            }).join("");
+        }
     } catch (error) {
         console.error('[COMPONENTES] Erro ao carregar lista:', error);
         const div = document.getElementById("lista-componentes");
-        div.innerHTML = '<p>Erro ao carregar componentes.</p>';
+        if (div) div.innerHTML = '<p>Erro ao carregar componentes.</p>';
     }
 }
 
@@ -2991,9 +2993,15 @@ async function excluirEstoqueItem(nome) {
         });
         if (!data.sucesso) return mostrarErro(data.erro || "Erro ao excluir item do estoque");
         await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
-        await carregarComponentesLista();
-        await carregarListaReceitas();
-        await carregarListaFarmar();
+        if (document.getElementById("lista-componentes")) {
+            await carregarComponentesLista(document.getElementById("buscaComponentes")?.value || "", document.getElementById("ordemComponentes")?.value || "az", document.getElementById("filtroCategoriaComponentes")?.value || "");
+        }
+        if (document.getElementById("listaReceitas")) {
+            await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
+        }
+        if (document.getElementById("listaFarmar")) {
+            await carregarListaFarmar(document.getElementById("buscaFarmar")?.value || "", document.getElementById("ordemFarmar")?.value || "pendente-desc", document.getElementById("filtroReceitaFarmar")?.value || "");
+        }
     } catch (error) {
         mostrarErro("Erro ao excluir item do estoque: " + error.message);
     }
@@ -4042,22 +4050,25 @@ async function carregarCategoriasLista(termoBusca = "", ordem = "az") {
 
         const isAdmin = isUserAdmin();
         const div = document.getElementById("lista-categorias");
-        div.innerHTML = categorias.map(cat => {
-            const count = counts[cat] || 0;
-            const btnExcluirHtml = isAdmin && count === 0 ? `<button onclick="excluirCategoria('${escapeJsString(cat)}')" class="warn">Excluir</button>` : '';
-            return `
-      <div class="item">
-        <div>
-          <strong>${cat}</strong> (${count} componentes)
-        </div>
-        <div class="acoes">
-          ${btnExcluirHtml}
-        </div>
-      </div>`;
-        }).join("");
+        if (div) {
+            div.innerHTML = categorias.map(cat => {
+                const count = counts[cat] || 0;
+                const btnExcluirHtml = isAdmin && count === 0 ? `<button onclick="excluirCategoria('${escapeJsString(cat)}')" class="warn">Excluir</button>` : '';
+                return `
+          <div class="item">
+            <div>
+              <strong>${cat}</strong> (${count} componentes)
+            </div>
+            <div class="acoes">
+              ${btnExcluirHtml}
+            </div>
+          </div>`;
+            }).join("");
+        }
     } catch (error) {
         console.error('[CATEGORIAS] Erro ao carregar dados:', error);
-        document.getElementById("lista-categorias").innerHTML = '<p>Erro ao carregar categorias.</p>';
+        const div = document.getElementById("lista-categorias");
+        if (div) div.innerHTML = '<p>Erro ao carregar categorias.</p>';
     }
 }
 
