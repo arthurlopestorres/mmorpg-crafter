@@ -145,14 +145,104 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (sessionStorage.getItem("loggedIn")) {
         initMenu();
-        await initGames();
-        await carregarUserStatus(); // Novo: Carregar status do usuário incluindo isAdmin
-        const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
-        carregarSecao(ultimaSecao);
+        try {
+            const games = await safeApi('/games');
+            if (games.length === 0) {
+                const pendencias = await safeApi('/pendencias');
+                if (pendencias.length > 0) {
+                    mostrarPopupPendencias(pendencias);
+                } else {
+                    mostrarPopupNovoJogo();
+                }
+            } else {
+                await initGames();
+                await carregarUserStatus(); // Novo: Carregar status do usuário incluindo isAdmin
+                const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
+                carregarSecao(ultimaSecao);
+            }
+        } catch (error) {
+            console.error('Error during init after login:', error);
+            if (error.message === 'Acesso negado') {
+                sessionStorage.removeItem("loggedIn");
+                mostrarPopupLogin();
+            } else {
+                mostrarErro("Erro ao inicializar: " + error.message);
+            }
+        }
     } else {
         mostrarPopupLogin();
     }
 });
+
+// Novo: Função para mostrar popup de pendências
+function mostrarPopupPendencias(pendencias) {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupPendencias";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.style.maxHeight = "80vh";
+    popup.style.overflowY = "auto";
+    popup.innerHTML = `
+        <h2>Convites Pendentes</h2>
+        <p>Você tem convites para times. Aceite um para acessar os jogos compartilhados.</p>
+        <ul id="listaPendenciasPopup">
+            ${pendencias.map(p => `
+                <li style="margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                    Convite de <strong>${p.from}</strong>
+                    <div style="margin-top: 8px;">
+                        <button onclick="aceitarConvidar('${p.from}'); document.getElementById('popupPendencias').remove(); document.getElementById('overlay').remove();" style="margin-right: 8px; padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Aceitar</button>
+                        <button onclick="recusarConvidar('${p.from}'); refreshPendenciasPopup();" style="padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">Recusar</button>
+                    </div>
+                </li>
+            `).join("")}
+        </ul>
+        <button onclick="mostrarPopupNovoJogo(); document.getElementById('popupPendencias').remove(); document.getElementById('overlay').remove();" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Criar Meu Próprio Jogo</button>
+        <button id="btnFecharPendencias" style="margin-top: 10px; padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Fechar</button>
+    `;
+    document.body.appendChild(popup);
+
+    document.getElementById("btnFecharPendencias").addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+        mostrarPopupNovoJogo();
+    });
+
+    // Função auxiliar para refresh da lista após recusar
+    window.refreshPendenciasPopup = async () => {
+        try {
+            const novasPendencias = await safeApi('/pendencias');
+            const lista = document.getElementById("listaPendenciasPopup");
+            if (novasPendencias.length === 0) {
+                lista.innerHTML = '<li>Nenhum convite pendente restante.</li>';
+                document.querySelector('button[onclick*="mostrarPopupNovoJogo"]').style.display = 'none';
+                document.getElementById("btnFecharPendencias").textContent = 'Criar Novo Jogo';
+                document.getElementById("btnFecharPendencias").onclick = () => {
+                    popup.remove();
+                    overlay.remove();
+                    mostrarPopupNovoJogo();
+                };
+            } else {
+                lista.innerHTML = novasPendencias.map(p => `
+                    <li style="margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                        Convite de <strong>${p.from}</strong>
+                        <div style="margin-top: 8px;">
+                            <button onclick="aceitarConvidar('${p.from}'); document.getElementById('popupPendencias').remove(); document.getElementById('overlay').remove();" style="margin-right: 8px; padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Aceitar</button>
+                            <button onclick="recusarConvidar('${p.from}'); refreshPendenciasPopup();" style="padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">Recusar</button>
+                        </div>
+                    </li>
+                `).join("");
+            }
+        } catch (error) {
+            console.error('Erro ao recarregar pendências:', error);
+        }
+    };
+}
 
 // Novo: Função para carregar status do usuário (inclui isAdmin)
 async function carregarUserStatus() {
@@ -466,9 +556,7 @@ function mostrarPopupNovoJogo() {
                 localStorage.setItem("currentGame", nome);
                 popup.remove();
                 overlay.remove();
-                await carregarUserStatus();
-                const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
-                carregarSecao(ultimaSecao);
+                window.location.reload();
             } else {
                 document.getElementById("erroNovoJogo").textContent = data.erro || "Erro ao criar jogo";
                 document.getElementById("erroNovoJogo").style.display = "block";
@@ -1371,7 +1459,7 @@ async function recusarConvidar(from) {
             body: JSON.stringify({ from })
         });
         if (data.sucesso) {
-            await carregarPendencias();
+            window.location.reload();
         } else {
             alert(data.erro || 'Erro ao recusar convite');
         }
@@ -2232,7 +2320,7 @@ function abrirPopupReceita(nome = null, duplicar = false, nomeSugerido = null) {
         popup.style.display = "flex";
     }
 
-    document.getElementById("btnAddReceitaAssoc").onclick = () => adicionarLinhaReceitaAssoc();
+    document.getElementById("btnAddReceitaAssoc").onclick = () => adicionarLinhaReceita();
     form.onsubmit = async e => {
         e.preventDefault();
         console.log("[FORM] Formulário submetido");
@@ -2388,6 +2476,20 @@ async function carregarCategoriasSelect() {
     }
 }
 
+async function carregarCategoriasDatalist() {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    try {
+        const categorias = await safeApi(`/categorias?game=${encodeURIComponent(currentGame)}`);
+        // Procurar por datalists com id contendo 'categoriasDatalist'
+        const datalists = document.querySelectorAll('datalist[id*="categoriasDatalist"]');
+        datalists.forEach(datalist => {
+            datalist.innerHTML = categorias.map(cat => `<option value="${cat}">`).join("");
+        });
+    } catch (error) {
+        console.error('[CATEGORIAS DATALIST] Erro ao carregar categorias:', error);
+    }
+}
+
 async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria = "") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     let url = `/componentes?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
@@ -2429,6 +2531,32 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria
         console.error('[COMPONENTES] Erro ao carregar lista:', error);
         const div = document.getElementById("lista-componentes");
         if (div) div.innerHTML = '<p>Erro ao carregar componentes.</p>';
+    }
+}
+
+async function excluirComponente(nome) {
+    if (!confirm(`Confirmar exclusão do componente "${nome}"? Isso removerá referências em receitas e estoque.`)) return;
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    try {
+        const data = await safeApi(`/componentes/excluir?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nome })
+        });
+        if (data.sucesso) {
+            await carregarComponentesLista(
+                document.getElementById("buscaComponentes")?.value || "",
+                document.getElementById("ordemComponentes")?.value || "az",
+                document.getElementById("filtroCategoriaComponentes")?.value || ""
+            );
+            if (document.getElementById("listaEstoque")) await carregarEstoque();
+            if (document.getElementById("listaReceitas")) await carregarListaReceitas();
+            if (document.getElementById("listaFarmar")) await carregarListaFarmar();
+        } else {
+            mostrarErro(data.erro || "Erro ao excluir componente");
+        }
+    } catch (error) {
+        mostrarErro("Erro ao excluir componente: " + error.message);
     }
 }
 
@@ -4074,8 +4202,11 @@ function abrirPopupCategoria() {
         e.preventDefault();
         const nome = document.getElementById("categoriaNome").value.trim();
         if (!nome) {
-            document.getElementById("erroCategoria").textContent = "Nome da categoria é obrigatório";
-            document.getElementById("erroCategoria").style.display = "block";
+            const erroEl = document.getElementById("erroCategoria");
+            if (erroEl) {
+                erroEl.textContent = "Nome da categoria é obrigatório";
+                erroEl.style.display = "block";
+            }
             return;
         }
         try {
@@ -4087,15 +4218,24 @@ function abrirPopupCategoria() {
             if (data.sucesso) {
                 popup.remove();
                 overlay.remove();
-                await carregarCategoriasLista(document.getElementById("buscaCategorias")?.value || "", document.getElementById("ordemCategorias")?.value || "az");
+                await carregarCategoriasLista(
+                    document.getElementById("buscaCategorias")?.value || "",
+                    document.getElementById("ordemCategorias")?.value || "az"
+                );
                 await carregarCategoriasDatalist();
             } else {
-                document.getElementById("erroCategoria").textContent = data.erro || "Erro ao criar categoria";
-                document.getElementById("erroCategoria").style.display = "block";
+                const erroEl = document.getElementById("erroCategoria");
+                if (erroEl) {
+                    erroEl.textContent = data.erro || "Erro ao criar categoria";
+                    erroEl.style.display = "block";
+                }
             }
         } catch (error) {
-            document.getElementById("erroCategoria").textContent = "Erro ao criar categoria";
-            document.getElementById("erroCategoria").style.display = "block";
+            const erroEl = document.getElementById("erroCategoria");
+            if (erroEl) {
+                erroEl.textContent = "Erro ao criar categoria";
+                erroEl.style.display = "block";
+            }
         }
     });
 
@@ -4115,7 +4255,10 @@ async function excluirCategoria(nome) {
             body: JSON.stringify({ nome })
         });
         if (data.sucesso) {
-            await carregarCategoriasLista(document.getElementById("buscaCategorias")?.value || "", document.getElementById("ordemCategorias")?.value || "az");
+            await carregarCategoriasLista(
+                document.getElementById("buscaCategorias")?.value || "",
+                document.getElementById("ordemCategorias")?.value || "az"
+            );
             await carregarCategoriasDatalist();
         } else {
             mostrarErro(data.erro || "Erro ao excluir categoria");
