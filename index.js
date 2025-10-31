@@ -5,24 +5,68 @@ const isLocal = window.location.hostname === 'localhost' || window.location.host
 const API = isLocal ? "http://localhost:10000" : "https://mmorpg-crafter.onrender.com";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
 
+// Nova função para mostrar o loading global
+function showLoading() {
+    // Remover loading existente se houver
+    const existingLoading = document.getElementById("loadingOverlay");
+    if (existingLoading) existingLoading.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "loadingOverlay";
+    overlay.style.position = "fixed";
+    overlay.style.top = "0";
+    overlay.style.left = "0";
+    overlay.style.width = "100%";
+    overlay.style.height = "100%";
+    overlay.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+    overlay.style.zIndex = "10000";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+
+    const spinner = document.createElement("div");
+    spinner.className = "spinner";
+    spinner.style.border = "8px solid #f3f3f3";
+    spinner.style.borderTop = "8px solid #3498db";
+    spinner.style.borderRadius = "50%";
+    spinner.style.width = "60px";
+    spinner.style.height = "60px";
+    spinner.style.animation = "spin 1s linear infinite";
+
+    overlay.appendChild(spinner);
+    document.body.appendChild(overlay);
+}
+
+// Nova função para esconder o loading
+function hideLoading() {
+    const loading = document.getElementById("loadingOverlay");
+    if (loading) loading.remove();
+}
+
+// Função safeApi modificada para incluir loading
 async function safeApi(endpoint, init = {}) {
-    if (!init.credentials) init.credentials = 'include';
-    const url = `${API}${endpoint}`;
-    const response = await fetch(url, init);
-    if (response.status === 403) {
-        mostrarPopupAcessoNegado();
-        throw new Error('Acesso negado');
-    }
-    let data;
+    showLoading(); // Mostrar loading antes da requisição
     try {
-        data = await response.json();
-    } catch (e) {
-        throw new Error('Resposta inválida do servidor');
+        if (!init.credentials) init.credentials = 'include';
+        const url = `${API}${endpoint}`;
+        const response = await fetch(url, init);
+        if (response.status === 403) {
+            mostrarPopupAcessoNegado();
+            throw new Error('Acesso negado');
+        }
+        let data;
+        try {
+            data = await response.json();
+        } catch (e) {
+            throw new Error('Resposta inválida do servidor');
+        }
+        if (!response.ok) {
+            throw new Error(data.erro || `HTTP error! status: ${response.status}`);
+        }
+        return data;
+    } finally {
+        hideLoading(); // Esconder loading após a requisição, independentemente do resultado
     }
-    if (!response.ok) {
-        throw new Error(data.erro || `HTTP error! status: ${response.status}`);
-    }
-    return data;
 }
 
 function mostrarPopupAcessoNegado() {
@@ -1788,7 +1832,7 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, col
 
         const detalhes = document.querySelector(`[data-receita="${receitaNome}"] .detalhes`);
         if (!detalhes) {
-            console.error(`[DETALHES] Elemento detalhes para receita "${receitaNome}" não encontrado`);
+            console.error(`[DETALHES] Elemento com detalhes para receita "${receitaNome}" não encontrado`);
             return;
         }
 
@@ -2186,7 +2230,7 @@ function abrirPopupReceita(nome, duplicar = false, nomeSugerido = null) {
         popup.style.display = "flex";
     }
 
-    document.getElementById("btnAddReceitaAssoc").onclick = () => adicionarLinhaReceita();
+    document.getElementById("btnAddReceitaAssoc").onclick = () => adicionarLinhaReceitaAssoc();
     form.onsubmit = async e => {
         e.preventDefault();
         console.log("[FORM] Formulário submetido");
@@ -2358,9 +2402,6 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria
         }
 
         const isAdmin = isUserAdmin();
-        const btnEditarDisabled = !isAdmin ? 'disabled' : '';
-        const btnExcluirDisabled = !isAdmin ? 'disabled' : '';
-
         const div = document.getElementById("lista-componentes");
         div.innerHTML = comps.map(c => {
             const assoc = (c.associados || []).map(a => `${formatQuantity(a.quantidade)} x ${a.nome}`).join(", ");
@@ -2724,7 +2765,7 @@ async function montarEstoque() {
             const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify([logEntry])
+                body: JSON.stringify(logEntry)
             });
             if (!logData.sucesso) return mostrarErro("Erro ao registrar log.");
 
@@ -3244,7 +3285,6 @@ async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
         estoqueList.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
 
         for (const receita of receitasFiltradas) {
-            if (!receita.nome) continue;
             const recipeQuantity = quantities[receita.nome] || 1;
             let req = {};
             receita.componentes.forEach(comp => {
@@ -3282,7 +3322,7 @@ async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
             categoriaSelect.innerHTML = '<option value="">Todas as categorias</option>' +
                 categoriasUnicas.map(cat => `<option value="${cat}">${cat}</option>`).join("");
 
-            // Se o valor valor atual não está mais disponível, resetar para vazio
+            // Se o valor atual não está mais disponível, resetar para vazio
             if (currentValue && !categoriasUnicas.includes(currentValue)) {
                 categoriaSelect.value = "";
             } else {
