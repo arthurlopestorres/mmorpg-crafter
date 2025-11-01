@@ -603,24 +603,61 @@ function initMenu() {
     const menu = document.querySelector(".menu");
     if (!menu) return;
     menu.innerHTML = ''; // Limpar menu existente para reordenar
-    const sections = [
+
+    // Itens principais fora do dropdown
+    const mainSections = [
         { section: "home", text: "Bem vindo!" },
+        { section: "time", text: "Time" }
+    ];
+
+    let menuItemsCount = 0
+
+    mainSections.forEach(sec => {
+        menuItemsCount++
+        const li = document.createElement("li");
+        li.dataset.section = sec.section;
+        li.textContent = sec.text;
+        li.id = `menuItem${menuItemsCount}`
+        li.addEventListener("click", () => carregarSecao(sec.section));
+        menu.appendChild(li);
+    });
+
+    // Item "Crafting" com submenu inline
+    const liCrafting = document.createElement("li");
+    liCrafting.id = "menu-crafting";
+    liCrafting.classList.add("menu-item-with-submenu");  // Nova classe para estilização
+    const craftingToggle = document.createElement("span");
+    craftingToggle.innerHTML = "Crafting ▼";  // Setinha inicial (fechado)
+    liCrafting.appendChild(craftingToggle);
+    liCrafting.addEventListener("click", toggleCraftingSubmenu);  // Toggle ao clicar
+
+    menu.appendChild(liCrafting);
+
+    // Adicionar o submenu inline (inicialmente escondido)
+    const submenuUl = document.createElement("ul");
+    submenuUl.id = "submenu-crafting-inline";
+    submenuUl.className = "submenu-crafting-inline";
+    submenuUl.style.display = "none";  // Inicialmente fechado
+    const craftingSections = [
         { section: "categorias", text: "Categorias" },
         // { section: "componentes", text: "Componentes" },
         { section: "estoque", text: "Componentes e Estoque" },
         { section: "receitas", text: "Receitas" },
         { section: "farmar", text: "Farmar Receitas Favoritas" },
         { section: "roadmap", text: "Roadmap" },
-        { section: "arquivados", text: "Arquivados" },
-        { section: "time", text: "Time" },
+        { section: "arquivados", text: "Arquivados" }
     ];
-    sections.forEach(sec => {
-        const li = document.createElement("li");
-        li.dataset.section = sec.section;
-        li.textContent = sec.text;
-        li.addEventListener("click", () => carregarSecao(sec.section));
-        menu.appendChild(li);
-    });
+    submenuUl.innerHTML = craftingSections.map(sec => `
+        <li onclick="carregarSecao('${sec.section}')">${sec.text}</li>
+    `).join("");
+
+    // Inserir submenu logo após o liCrafting
+    liCrafting.insertAdjacentElement('afterend', submenuUl);
+
+    // Checar localStorage para abrir submenu se salvo como aberto
+    if (localStorage.getItem("craftingMenuOpen") === "true") {
+        toggleCraftingSubmenu();  // Expande automaticamente
+    }
 
     // Adicionar item "Minha Conta" no final do menu
     const liMinhaConta = document.createElement("li");
@@ -629,6 +666,23 @@ function initMenu() {
     liMinhaConta.style.marginTop = "auto";
     liMinhaConta.addEventListener("click", mostrarPopupMinhaConta);
     menu.appendChild(liMinhaConta);
+}
+
+// Nova função para toggle do submenu inline de Crafting
+function toggleCraftingSubmenu() {
+    const submenu = document.getElementById("submenu-crafting-inline");
+    const toggleSpan = document.querySelector("#menu-crafting span");
+    const isOpen = submenu.style.display === "block";
+
+    if (isOpen) {
+        submenu.style.display = "none";
+        toggleSpan.innerHTML = "Crafting ▼";  // Fechado
+        localStorage.setItem("craftingMenuOpen", "false");
+    } else {
+        submenu.style.display = "block";
+        toggleSpan.innerHTML = "Crafting ▲";  // Aberto
+        localStorage.setItem("craftingMenuOpen", "true");
+    }
 }
 
 const botaoDeMinimizar = document.querySelector('#botaoDeMinimizarMenu')

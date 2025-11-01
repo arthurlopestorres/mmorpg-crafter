@@ -906,17 +906,17 @@ button.btn-arquivar:hover {
 }
 
 .comp-verde {
-    color: #48bb78;
+    color: #48bb78 !important;
     font-weight: 600;
 }
 
 .comp-amarelo {
-    color: #ed8936;
+    color: #ed8936 !important;
     font-weight: 600;
 }
 
 .comp-vermelho {
-    color: #f56565;
+    color: #f56565 !important;
     font-weight: 500;
 }
 
@@ -1659,7 +1659,7 @@ body.dark-mode {
 }
 
 body.dark-mode::before {
-    background: linear-gradient(135deg, rgba(26, 32, 44, 0.95) 0%, rgba(45, 55, 72, 0.95) 100%);
+    background: linear-gradient(135deg, rgba(26, 32, 44, 0.87) 0%, rgba(45, 55, 72, 0.87) 100%);
 }
 
 body.dark-mode .item {
@@ -1829,13 +1829,32 @@ body.bright-mode .item {
     color: var(--text-primary);
 }
 
+body.bright-mode .container {
+    background: rgb(0 0 0 / 87%);
+}
+
+body.bright-mode #conteudo p,
+body.bright-mode #conteudo h3,
+body.bright-mode #conteudo li {
+    color: #fff;
+}
+
+body.bright-mode #formEstoque .tituloFormEstoque,
+body.bright-mode #conteudo .filtros-label,
+body.bright-mode #conteudo #manualConteudo p,
+body.bright-mode #conteudo #sequenceList li,
+body.bright-mode #conteudo .detalhes span,
+body.bright-mode #time-lista .time-item {
+    color: var(--text-primary);
+}
+
 body.bright-mode .modal-content {
     background: white;
     color: var(--text-primary);
 }
 
 body.bright-mode .detalhes {
-    background: linear-gradient(135deg, rgba(247, 250, 252, 0.8) 0%, rgba(237, 242, 247, 0.8) 100%);
+    background: linear-gradient(135deg, rgba(247, 250, 252, 1) 0%, rgba(237, 242, 247, 1) 100%);
 }
 
 body.bright-mode .estoque-item-container {
@@ -2291,3 +2310,87 @@ body.bright-mode #popupMinhaConta button#btnLogout {
 #associadosContainerEstoque .associado-row {
     margin-bottom: 10px;
 }
+
+/* Estilos para submenu Crafting
+.submenu-crafting {
+    background: var(--background-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.submenu-crafting li {
+    transition: background-color var(--transition-fast);
+}
+
+.submenu-crafting li:hover {
+    background-color: var(--hover-color);
+}
+
+.submenu-crafting li:last-child {
+    border-bottom: none;
+} */
+
+/* Ajustes para modo escuro */
+/* .dark-mode .submenu-crafting li {
+    color: #2d3748;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.dark-mode .submenu-crafting li:first-of-type {
+    border-top: 1px solid #e2e8f0;
+}
+
+.submenu-crafting li:hover {
+    background: #edf2f7;
+} */
+
+/* Seu CSS existente aqui... */
+
+.menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.menu li {
+    padding: 10px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.menu-item-with-submenu {
+    display: flex;
+    align-items: center;
+}
+
+.menu-item-with-submenu span {
+    display: flex;
+    align-items: center;
+}
+
+.submenu-crafting-inline {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: none;
+    /* Inicialmente escondido */
+    transition: max-height 0.3s ease-in-out;
+}
+
+.submenu-crafting-inline li {
+    padding: 8px 16px;
+    cursor: pointer;
+    border-top: 1px solid #e2e8f0;
+}
+
+.menu li:hover,
+.submenu-crafting-inline li:hover {
+    background: #333;
+}
+
+/* Seu restante do CSS aqui... */
