@@ -1155,7 +1155,6 @@ form select:focus {
 #listaEstoque {
     max-height: 600px;
     overflow-y: auto;
-    padding-right: 12px;
 }
 
 .estoque--log-de-movimentacoes {
@@ -1189,7 +1188,6 @@ form select:focus {
 
 #btnZerarEstoque {
     width: 100%;
-    margin-bottom: 24px;
 }
 
 /* ========================================================================
@@ -2243,10 +2241,51 @@ body.bright-mode #popupMinhaConta button#btnLogout {
     color: #2d3748;
 }
 
-#btnExportEstoque.primary {
-    text-align: left;
+#btnExportEstoque,
+#btnImportEstoque {
+    display: flex;
+    width: 100%;
+    padding: 12px 24px;
+    text-align: center;
+    align-items: center;
+    cursor: pointer;
+    border-radius: var(--border-radius-sm);
+    background: var(--primary-gradient);
+    color: white;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+    line-height: 20px;
 }
 
 #lista-categorias .acoes {
     margin-top: 8px;
+}
+
+#btnNovoComponenteEstoque {
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+.estoque--acoes {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+#formComponenteEstoque {
+    min-width: 580px;
+}
+
+#formComponenteEstoque label,
+#formComponenteEstoque h3 {
+    color: #2d3748;
+}
+
+#formComponenteEstoque h3 {
+    margin: 0px;
+}
+
+#associadosContainerEstoque .associado-row {
+    margin-bottom: 10px;
 }

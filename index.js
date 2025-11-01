@@ -580,8 +580,8 @@ function initMenu() {
     const sections = [
         { section: "home", text: "Bem vindo!" },
         { section: "categorias", text: "Categorias" },
-        { section: "componentes", text: "Componentes" },
-        { section: "estoque", text: "Estoque de componentes" },
+        // { section: "componentes", text: "Componentes" },
+        { section: "estoque", text: "Componentes e Estoque" },
         { section: "receitas", text: "Receitas" },
         { section: "farmar", text: "Farmar Receitas Favoritas" },
         { section: "roadmap", text: "Roadmap" },
@@ -2691,7 +2691,7 @@ async function adicionarAssociadoRow(nome = "", quantidade = "") {
 async function montarEstoque() {
     const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
-    <h2>Estoque</h2>
+    <h2>Componentes e Estoque</h2>
     <div class="filtros">
         <h3 class="filtros-label">Filtros:</h3>
         <input type="text" id="buscaEstoque" placeholder="Buscar por nome...">
@@ -2714,13 +2714,15 @@ async function montarEstoque() {
           <button class="primary" type="submit">Confirmar</button>
         </form>
         ${isAdmin ? `
-        <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+        <div class="estoque--acoes">
           <button id="btnExportEstoque" class="primary">Exportar Estoque (XLS)</button>
-          <label id="btnImportEstoque" for="fileImportEstoque" class="primary" style="cursor: pointer; padding: 12px 24px; border-radius: var(--border-radius-sm); background: var(--primary-gradient); color: white; text-decoration: none; font-weight: 500; transition: all var(--transition-fast);">Importar Estoque (XLS)</label>
+          <label id="btnImportEstoque" for="fileImportEstoque" class="primary">Importar Estoque (XLS)</label>
           <input type="file" id="fileImportEstoque" accept=".xls,.xlsx" style="display: none;">
+        ${isAdmin ? '<button id="btnZerarEstoque" class="warn">Zerar todo o estoque</button>' : ''}
         </div>
         ` : ''}
-        ${isAdmin ? '<button id="btnZerarEstoque" class="warn">Zerar todo o estoque</button>' : ''}
+        
+        ${isAdmin ? '<button id="btnNovoComponenteEstoque" class="primary">+ Novo Componente</button>' : ''}
         <div id="listaEstoque" class="lista"></div>
       </div>
       <div style="flex:1">
@@ -2969,8 +2971,292 @@ async function montarEstoque() {
         });
     }
 
+    // Novo: Botão para novo componente na aba de estoque
+    if (isAdmin) {
+        const btnNovoCompEst = document.getElementById("btnNovoComponenteEstoque");
+        btnNovoCompEst.addEventListener("click", () => abrirPopupComponenteEstoque(true)); // true para novo
+    }
+
     await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
     await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
+}
+
+// Nova função para abrir popup de componente no contexto de estoque (novo ou editar)
+function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual = 0) {
+    if (!isUserAdmin()) {
+        alert('Apenas fundadores ou co-fundadores podem editar componentes.');
+        return;
+    }
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupComponenteEstoque";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.style.maxHeight = "80vh";
+    popup.style.overflowY = "auto";
+    const titulo = isNew ? "Novo Componente" : `Editar Componente: ${nome}`;
+    popup.innerHTML = `
+        <h2>${titulo}</h2>
+        <form id="formComponenteEstoque">
+            <label>Nome do Componente:</label>
+            <input type="text" id="inputNomeEstoque" value="${nome || ''}" required>
+            <label>Categoria:</label>
+            <input type="text" id="inputCategoriaEstoque" list="categoriasDatalistEstoque" placeholder="Categoria (opcional)">
+            <datalist id="categoriasDatalistEstoque"></datalist>
+            <label>Quantidade Produzida:</label>
+            <input type="number" id="inputQuantidadeProduzidaEstoque" min="0.001" step="any" value="${formatQuantity(0.001)}" required>
+            <label>Atualizar quantidade no estoque:</label>
+            <input type="number" id="inputQuantidadeEstoqueInicial" min="0" step="any" value="${formatQuantity(quantidadeAtual)}" required>
+            <input type="hidden" id="currentQuantidadeEstoque" value="${quantidadeAtual}">
+            <h3>Materiais Associados:</h3>
+            <button type="button" id="btnAddAssociadoEstoque" class="primary">+ Adicionar Material</button>
+            <div id="associadosContainerEstoque"></div>
+            <button type="submit">Salvar</button>
+            <button type="button" id="btnCancelarComponenteEstoque">Cancelar</button>
+            <p id="erroComponenteEstoque" style="color: red; display: none;"></p>
+            <input type="hidden" id="inputNomeOriginalEstoque" value="${nome || ''}">
+        </form>
+    `;
+    document.body.appendChild(popup);
+
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+
+    // Carregar categorias para datalist
+    carregarCategoriasDatalistEstoque();
+
+    // Se editando, carregar dados existentes
+    if (!isNew) {
+        safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`).then(list => {
+            const comp = list.find(c => c.nome === nome);
+            if (comp) {
+                document.getElementById("inputQuantidadeProduzidaEstoque").value = formatQuantity(comp.quantidadeProduzida || 0.001);
+                document.getElementById("inputCategoriaEstoque").value = comp.categoria || "";
+                (comp.associados || []).forEach(a => adicionarAssociadoRowEstoque(a.nome, a.quantidade));
+            }
+        }).catch(error => {
+            console.error('[POPUP COMPONENTE ESTOQUE] Erro ao carregar componente:', error);
+            mostrarErroEstoque("Erro ao carregar componente.");
+        });
+    }
+
+    // Event listener para adicionar row de associado
+    document.getElementById("btnAddAssociadoEstoque").addEventListener("click", () => adicionarAssociadoRowEstoque());
+
+    // Submit form
+    document.getElementById("formComponenteEstoque").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const nomeVal = document.getElementById("inputNomeEstoque").value.trim();
+        const categoriaVal = document.getElementById("inputCategoriaEstoque").value.trim();
+        const qtdProd = Math.max(Number(document.getElementById("inputQuantidadeProduzidaEstoque").value) || 0.001, 0.001);
+        const targetQtd = Number(document.getElementById("inputQuantidadeEstoqueInicial").value) || 0;
+        const currentQtd = Number(document.getElementById("currentQuantidadeEstoque").value) || 0;
+        const associados = Array.from(document.getElementById("associadosContainerEstoque").querySelectorAll(".associado-row")).map(row => ({
+            nome: row.querySelector(".assoc-nome").value,
+            quantidade: Math.max(Number(row.querySelector(".assoc-qtd").value) || 0.001, 0.001)
+        })).filter(it => it.nome && it.quantidade > 0);
+        const nomeOriginal = document.getElementById("inputNomeOriginalEstoque").value;
+
+        const erroEl = document.getElementById("erroComponenteEstoque");
+        if (!nomeVal) {
+            erroEl.textContent = "Nome do componente é obrigatório";
+            erroEl.style.display = "block";
+            return;
+        }
+
+        const payloadComp = {
+            nome: nomeVal,
+            categoria: categoriaVal,
+            associados,
+            quantidadeProduzida: qtdProd
+        };
+        if (nomeOriginal) payloadComp.nomeOriginal = nomeOriginal;
+
+        const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
+        const userEmail = sessionStorage.getItem('userEmail');
+        let logEntries = [];
+
+        try {
+            // Salvar/atualizar componente
+            let endpointComp = `/componentes?game=${encodeURIComponent(currentGame)}`;
+            if (nomeOriginal) endpointComp = `/componentes/editar?game=${encodeURIComponent(currentGame)}`;
+            const dataComp = await safeApi(endpointComp, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payloadComp)
+            });
+            if (!dataComp.sucesso) {
+                erroEl.textContent = dataComp.erro || "Erro ao salvar componente";
+                erroEl.style.display = "block";
+                return;
+            }
+
+            // Log para criação/edição de componente
+            logEntries.push({
+                dataHora,
+                componente: nomeVal,
+                quantidade: 0,
+                operacao: isNew ? "criar" : "editar",
+                origem: isNew ? "Criação de novo componente" : `Edição de componente (nome: ${nomeOriginal} -> ${nomeVal}${categoriaVal !== (document.getElementById("inputCategoriaEstoque").dataset.original || '') ? `, categoria: ${document.getElementById("inputCategoriaEstoque").dataset.original || '—'} -> ${categoriaVal || '—'}` : ''})`,
+                user: userEmail
+            });
+
+            // Atualizar estoque para a quantidade desejada
+            if (targetQtd !== currentQtd) {
+                let operacaoEstoque, absQtdEstoque;
+                if (targetQtd > currentQtd) {
+                    operacaoEstoque = "adicionar";
+                    absQtdEstoque = targetQtd - currentQtd;
+                } else if (targetQtd < currentQtd) {
+                    operacaoEstoque = "debitar";
+                    absQtdEstoque = currentQtd - targetQtd;
+                } else if (targetQtd === 0 && currentQtd > 0) {
+                    operacaoEstoque = "debitar";
+                    absQtdEstoque = currentQtd;
+                } else {
+                    absQtdEstoque = 0; // No change
+                }
+                if (absQtdEstoque > 0) {
+                    const dataEstoque = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ componente: nomeVal, quantidade: absQtdEstoque, operacao: operacaoEstoque })
+                    });
+                    if (!dataEstoque.sucesso) {
+                        erroEl.textContent = dataEstoque.erro || "Erro ao atualizar estoque";
+                        erroEl.style.display = "block";
+                        return;
+                    }
+
+                    // Log para movimentação de estoque
+                    logEntries.push({
+                        dataHora,
+                        componente: nomeVal,
+                        quantidade: absQtdEstoque,
+                        operacao: operacaoEstoque,
+                        origem: isNew ? "Estoque inicial para novo componente" : "Atualização de quantidade de estoque",
+                        user: userEmail
+                    });
+                }
+            }
+
+            // Registrar logs
+            if (logEntries.length > 0) {
+                const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(logEntries)
+                });
+                if (!logData.sucesso) {
+                    console.error("Erro ao registrar log:", logData.erro);
+                }
+            }
+
+            popup.remove();
+            overlay.remove();
+            // Atualizar listas
+            await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
+            await carregarLog(document.getElementById("buscaLogComponente")?.value || "", document.getElementById("filtroLogUser")?.value || "", document.getElementById("filtroLogData")?.value || "");
+            if (document.getElementById("lista-componentes")) {
+                await carregarComponentesLista(
+                    document.getElementById("buscaComponentes")?.value || "",
+                    document.getElementById("ordemComponentes")?.value || "az",
+                    document.getElementById("filtroCategoriaComponentes")?.value || ""
+                );
+            }
+            if (document.getElementById("listaReceitas")) {
+                await carregarListaReceitas();
+            }
+            if (document.getElementById("listaFarmar")) {
+                await carregarListaFarmar();
+            }
+        } catch (error) {
+            erroEl.textContent = "Erro ao salvar: " + error.message;
+            erroEl.style.display = "block";
+        }
+    });
+
+    document.getElementById("btnCancelarComponenteEstoque").addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+    });
+
+    // Função auxiliar para carregar categorias no datalist do estoque
+    async function carregarCategoriasDatalistEstoque() {
+        try {
+            const categorias = await safeApi(`/categorias?game=${encodeURIComponent(currentGame)}`);
+            const datalist = document.getElementById("categoriasDatalistEstoque");
+            datalist.innerHTML = categorias.map(cat => `<option value="${cat}">`).join("");
+        } catch (error) {
+            console.error('[CATEGORIAS DATALIST ESTOQUE] Erro:', error);
+        }
+    }
+
+    // Função auxiliar para adicionar row de associado no estoque
+    async function adicionarAssociadoRowEstoque(nome = "", quantidade = "") {
+        const container = document.getElementById("associadosContainerEstoque");
+        const row = document.createElement("div");
+        row.className = "associado-row";
+        const rowId = Math.random().toString(36).substring(7);
+        try {
+            const comps = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
+            row.innerHTML = `
+                <input type="text" class="assoc-nome" list="assoc-datalist-estoque-${rowId}" value="${nome}" placeholder="Digite para buscar...">
+                <datalist id="assoc-datalist-estoque-${rowId}">
+                    ${comps.map(c => `<option value="${c.nome}">`).join("")}
+                </datalist>
+                <input class="assoc-qtd" type="number" min="0.001" step="any" value="${formatQuantity(quantidade || 0.001)}">
+                <button type="button">❌</button>
+            `;
+        } catch (error) {
+            row.innerHTML = `
+                <input type="text" class="assoc-nome" list="assoc-datalist-estoque-${rowId}" value="${nome}" placeholder="Digite para buscar...">
+                <datalist id="assoc-datalist-estoque-${rowId}"></datalist>
+                <input class="assoc-qtd" type="number" min="0.001" step="any" value="${formatQuantity(quantidade || 0.001)}">
+                <button type="button">❌</button>
+            `;
+        }
+        row.querySelector("button").addEventListener("click", () => row.remove());
+        container.appendChild(row);
+    }
+
+    // Função auxiliar para mostrar erro no popup de estoque
+    function mostrarErroEstoque(msg) {
+        const erroEl = document.getElementById("erroComponenteEstoque");
+        if (erroEl) {
+            erroEl.textContent = msg;
+            erroEl.style.display = "block";
+        }
+    }
+}
+
+// Modificação da função editarEstoqueItem para incluir edição completa de componente
+async function editarEstoqueItem(componente, quantidadeAtual) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    let categoriaAtual = ''; // Definir fora do try para evitar ReferenceError
+    let qtdProdAtual = 0.001;
+    let associadosAtuais = [];
+
+    try {
+        const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
+        const comp = componentes.find(c => c.nome === componente);
+        if (comp) {
+            categoriaAtual = comp.categoria || '';
+            qtdProdAtual = comp.quantidadeProduzida || 0.001;
+            associadosAtuais = comp.associados || [];
+        }
+    } catch (error) {
+        console.error('[EDITAR ESTOQUE] Erro ao carregar componente:', error);
+        mostrarErro("Erro ao carregar dados do componente.");
+        return;
+    }
+
+    // Chamar a nova função para abrir popup completo
+    abrirPopupComponenteEstoque(false, componente, quantidadeAtual);
 }
 
 async function carregarEstoque(termoBusca = "", ordem = "az") {
@@ -2996,90 +3282,6 @@ async function carregarEstoque(termoBusca = "", ordem = "az") {
         const listaEstoque = document.getElementById("listaEstoque");
         if (listaEstoque) listaEstoque.innerHTML = '<p>Erro ao carregar estoque.</p>';
     }
-}
-
-async function editarEstoqueItem(componente, quantidadeAtual) {
-    const overlay = criarOverlay();
-    const popup = document.createElement("div");
-    popup.id = "popupEditarEstoque";
-    popup.style.position = "fixed";
-    popup.style.top = "50%";
-    popup.style.left = "50%";
-    popup.style.transform = "translate(-50%, -50%)";
-    popup.style.backgroundColor = "white";
-    popup.style.padding = "20px";
-    popup.style.zIndex = "1000";
-    popup.innerHTML = `
-        <h2>Editar Estoque: ${componente}</h2>
-        <form id="formEditarEstoque">
-            <input type="number" id="novaQuantidade" min="0" step="any" value="${formatQuantity(quantidadeAtual)}" required>
-            <button type="submit">Salvar</button>
-            <button type="button" id="btnCancelarEditar">Cancelar</button>
-        </form>
-    `;
-    document.body.appendChild(popup);
-
-    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-
-    document.getElementById("formEditarEstoque").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const novaQtd = Number(document.getElementById("novaQuantidade").value);
-        if (isNaN(novaQtd) || novaQtd < 0) {
-            mostrarErro("Quantidade inválida");
-            return;
-        }
-        const diff = novaQtd - quantidadeAtual;
-        if (diff === 0) {
-            popup.remove();
-            overlay.remove();
-            return;
-        }
-        const operacao = diff > 0 ? "adicionar" : "debitar";
-        const qtd = Math.abs(diff);
-        const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
-        const userEmail = sessionStorage.getItem('userEmail');
-        try {
-            const data = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ componente, quantidade: qtd, operacao })
-            });
-            if (!data.sucesso) {
-                mostrarErro(data.erro || "Erro ao atualizar estoque");
-                return;
-            }
-            // Registrar no log
-            const logEntry = {
-                dataHora,
-                componente,
-                quantidade: qtd,
-                operacao,
-                origem: "Edição manual",
-                user: userEmail  // Novo: Adicionar usuário
-            };
-            const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify([logEntry])
-            });
-            if (!logData.sucesso) {
-                mostrarErro("Erro ao registrar log.");
-                return;
-            }
-            popup.remove();
-            overlay.remove();
-            // Atualizar listas
-            await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
-            await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
-        } catch (error) {
-            mostrarErro("Erro ao atualizar estoque: " + error.message);
-        }
-    });
-
-    document.getElementById("btnCancelarEditar").addEventListener("click", () => {
-        popup.remove();
-        overlay.remove();
-    });
 }
 
 async function excluirEstoqueItem(nome) {
@@ -4128,7 +4330,7 @@ async function carregarCategoriasLista(termoBusca = "", ordem = "az") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
         const catRes = await safeApi(`/categorias?game=${encodeURIComponent(currentGame)}`);
-        const categorias = Array.isArray(catRes) ? catRes : [];
+        let categorias = Array.isArray(catRes) ? catRes : [];
         const compRes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
         const comps = Array.isArray(compRes) ? compRes : [];
 
@@ -4269,6 +4471,9 @@ async function excluirCategoria(nome) {
 
 /* ------------------ UTIL ------------------ */
 function formatQuantity(quantity) {
+    if (quantity == null) return '0';
+    quantity = Number(quantity);
+    if (isNaN(quantity)) return '0';
     return Number.isInteger(quantity) ? quantity : quantity.toFixed(3).replace(/\.?0+$/, '');
 }
 
