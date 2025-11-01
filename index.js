@@ -989,7 +989,7 @@ function montarManual() {
             titulo: "Introdução à Ferramenta",
             itens: [
                 "Esta ferramenta é um gerenciador completo para jogos MMORPG com foco em crafting e coleta de itens. Ela permite criar receitas, gerenciar componentes, rastrear estoque, planejar farms e mais.",
-                "Todas as ações são salvas por jogo (você pode alternar entre jogos no menu superior).",
+                "Todas as ações são salvas por jogo (você pode alternar entre jogos no menu em Minha Conta).",
                 "A autenticação é obrigatória para acessar as funcionalidades. Após login, você tem acesso total às ferramentas."
             ]
         },
@@ -997,7 +997,7 @@ function montarManual() {
             titulo: "Sistema de Time e Permissões",
             itens: [
                 "O sistema de time permite colaborar com outros jogadores. Há três papéis: Fundador (dono do time), Co-fundador (pode editar tudo como o fundador) e Membro (pode visualizar e usar, mas não editar).",
-                "Para adicionar alguém ao time: Vá na aba 'Time', na seção 'Convidar Novo Membro', digite o email e clique 'Convidar'. O convidado recebe uma pendência e pode aceitar/recusar.",
+                "Para adicionar alguém ao time: Vá na aba 'Time', na seção 'Convidar Novo Membro', digite o email e clique 'Convidar'. O convidado recebe uma pendência e pode aceitar/recusar. O convite chega na aba 'Time' do convidado.",
                 "Aceitar convite: Na aba 'Time', na seção 'Pendências de Convite', clique 'Aceitar' para entrar no time do fundador.",
                 "Promover a co-fundador: Na aba 'Time', na lista de associados, clique 'Promover a Co-Fundador' (apenas fundadores podem fazer isso).",
                 "Desvincular/Banir: Na aba 'Time', use os botões 'Desvincular' ou 'Banir' para remover alguém. Banidos não podem se juntar novamente sem desbanimento.",
@@ -1007,38 +1007,38 @@ function montarManual() {
         {
             titulo: "Gerenciando Jogos",
             itens: [
-                "Para criar um novo jogo: Clique em 'Novo Jogo' no menu superior, digite o nome e confirme. Um novo conjunto de arquivos (receitas, estoque etc.) é criado.",
-                "Alternar jogo: Use o seletor de jogos no menu superior para mudar entre jogos salvos. As configurações (filtros, quantidades) são salvas por jogo."
+                "Para criar um novo jogo: Clique em 'Novo Jogo' (fica em 'Minha Conta'), digite o nome e confirme. Um novo conjunto de arquivos (receitas, estoque etc.) é criado.",
+                "Alternar jogo: Use o seletor de jogos no menu em 'Minha Conta' para mudar entre jogos salvos. As configurações (filtros, quantidades) são salvas por jogo.", "Jogos não são compartilhados automaticamente com os membros do time. Após a criação de um jogo, caso queira liberar sua visualização para o time, acesse a aba 'Time' e marque a opção de compartilhar no jogo desejado. (somente fundadores podem fazer isso)."
+            ]
+        },
+        {
+            titulo: "Gerenciando Componentes",
+            itens: [
+                "Para criar um novo componente: Na aba 'Componentes e Estoque', clique '+ Novo Componente'. Defina nome, categoria, quantidade produzida e materiais associados (outros Componentes cadastrados que façam parte do fluxo de crafting; apenas fundadores/co-fundadores).",
+                "Editar: Clique 'Editar' para alterar (propaga mudanças para receitas, categoria e roadmap automaticamente; apenas fundadores/co-fundadores).",
+                "Excluir: Clique 'Excluir' (remove referências em receitas/arquivados; apenas fundadores/co-fundadores).",
+                "Categorias: Na aba 'Categorias', crie ou exclua categorias para organizar componentes."
             ]
         },
         {
             titulo: "Gerenciando Receitas",
             itens: [
-                "Para criar uma nova receita: Na aba 'Receitas', clique '+ Nova Receita'. Digite o nome e adicione componentes com quantidades.",
-                "Editar/Duplicar: Clique 'Editar' para modificar ou 'Duplicar' para criar uma cópia (útil para variações).",
-                "Favoritar: Clique 'Favoritar' para marcar como favorita (aparece em 'Favoritos').",
+                "Para criar uma nova receita: Na aba 'Receitas', clique '+ Nova Receita'. Digite o nome e adicione componentes com quantidades. (apenas fundadores/co-fundadores).",
+                "Editar/Duplicar: Clique 'Editar' para modificar ou 'Duplicar' para criar uma cópia (útil para variações; apenas fundadores/co-fundadores).",
+                "Favoritar: Clique 'Favoritar' para marcar como favorita (aparece em 'Farmar Receitas Favoritas').",
                 "Concluir: Insira a quantidade desejada e clique 'Concluir' (debitará do estoque automaticamente; apenas fundadores/co-fundadores).",
                 "Arquivar: Clique 'Arquivar' para mover para 'Arquivados' (remove de receitas ativas; apenas fundadores/co-fundadores).",
                 "Visualizar detalhes: Clique na seta ▼ ao lado da receita para ver requisitos de componentes e subcomponentes."
             ]
         },
         {
-            titulo: "Gerenciando Componentes",
-            itens: [
-                "Para criar um novo componente: Na aba 'Componentes', clique '+ Novo Componente'. Defina nome, categoria, quantidade produzida e materiais associados.",
-                "Editar: Clique 'Editar' para alterar (propaga mudanças para receitas e estoque automaticamente).",
-                "Excluir: Clique 'Excluir' (remove referências em receitas/arquivados; apenas fundadores/co-fundadores).",
-                "Categorias: Na aba 'Categorias', crie ou exclua categorias para organizar componentes."
-            ]
-        },
-        {
             titulo: "Gerenciando Estoque e Log",
             itens: [
-                "Adicionar/Debitar: Na aba 'Estoque', use o formulário para adicionar ou debitar itens manualmente. O log registra todas as movimentações.",
-                "Editar item: Clique 'Editar' em um item do estoque para ajustar a quantidade.",
-                "Excluir item: Clique 'Excluir' (remove do estoque e componente; afeta receitas).",
+                "Adicionar/Debitar: Na aba 'Estoque', use o formulário para adicionar ou debitar itens manualmente. O log registra todas as movimentações. (membros somente podem adicionar itens em estoque, mas não debitar).",
+                "Editar item: Clique 'Editar' em um item do estoque para ajustar a quantidade. (somente fundadores/co-fundadores).",
+                "Excluir item: Clique 'Excluir' (remove do estoque e componente; afeta receitas; somente fundadores/co-fundadores).",
                 "Zerar estoque: Clique 'Zerar todo o estoque' (apenas fundadores/co-fundadores).",
-                "Filtrar log: Na seção 'Log de Movimentações', busque por componente ou data."
+                "Filtrar log: Na seção 'Log de Movimentações', busque por componente, data ou usuário que fez a alteração."
             ]
         },
         {
@@ -1053,17 +1053,18 @@ function montarManual() {
         {
             titulo: "Roadmap",
             itens: [
-                "Adicionar: Clique 'Inserir nova receita' e selecione uma receita para adicionar ao plano.",
-                "Reordenar: Use ↑/↓ para mover itens no roadmap.",
-                "Marcar como pronto: Marque o checkbox 'Pronto' para indicar conclusão (filtro para ver só prontas).",
-                "Excluir: Clique 'Excluir' (apenas fundadores/co-fundadores)."
+                "Adicionar: Clique 'Inserir nova receita' e selecione uma receita para adicionar ao plano. (somente fundadores/co-fundadores).",
+                "Reordenar: Use ↑/↓ para mover itens no roadmap. (somente fundadores/co-fundadores).",
+                "Marcar como pronto: Marque o checkbox 'Pronto' para indicar conclusão (filtro para ver só prontas). (somente fundadores/co-fundadores).",
+                "Excluir: Clique 'Excluir'. (somente fundadores/co-fundadores)."
             ]
         },
         {
             titulo: "Minha Conta",
             itens: [
-                "Clique no botão 'Minha Conta' (canto superior direito) para ver seus dados, mudar senha ou fazer logout.",
-                "Mudar senha: Digite a atual e a nova (confirmação obrigatória)."
+                "Clique em 'Minha Conta' no menu lateral para abrir um dropdown com suas informações pessoais.",
+                "No dropdown, você pode: ver seus dados (ID, nome, email), selecionar o jogo atual, criar novo jogo, mudar senha, alternar entre modo claro/escuro, e fazer logout.",
+                "Mudar senha: Digite a senha atual e a nova (confirmação obrigatória)."
             ]
         }
     ];

@@ -663,6 +663,7 @@ button.btn-arquivar:hover {
     padding: 8px 12px;
     border-radius: var(--border-radius-sm);
     font-size: 1rem;
+    margin: 0px 5px 0px 5px;
 }
 
 .btn-move-up:hover,
