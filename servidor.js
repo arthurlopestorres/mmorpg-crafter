@@ -286,7 +286,7 @@ async function sendOTP(email, otp, type) {
     }
 }
 
-// Endpoint: Login - Etapa 1: Enviar OTP
+// Endpoint: Login - Etapa 1: Enviar OTP se necessário
 app.post('/login', async (req, res) => {
     const { email, senha, recaptchaToken } = req.body;
     try {
@@ -305,6 +305,15 @@ app.post('/login', async (req, res) => {
         // Verificar senha
         if (!await bcrypt.compare(senha, usuario.senhaHash)) {
             return res.status(401).json({ sucesso: false, erro: 'Senha incorreta' });
+        }
+
+        // Verificar se doisFatores está ativado
+        const doisFatores = usuario.doisFatores !== false; // Default true se não existir
+
+        if (!doisFatores) {
+            // Login direto sem OTP
+            req.session.user = email;
+            return res.json({ sucesso: true });
         }
 
         // Gerar OTP e enviar
@@ -409,7 +418,7 @@ app.post('/verify-otp-cadastro', async (req, res) => {
         const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
         let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
         const id = await generateUniqueId();
-        usuarios.push({ nome, email, senhaHash, id, aprovado: false });
+        usuarios.push({ nome, email, senhaHash, id, aprovado: false, doisFatores: true }); // Novo: doisFatores true por padrão
         await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
 
         // Enviar email para admin
@@ -441,7 +450,7 @@ app.get('/user-status', isAuthenticated, async (req, res) => {
     res.json({ isFounder, isAdmin: isAdminLocal, effectiveUser });
 });
 
-// Novo endpoint para obter dados do usuário logado efetivo (/me)
+// Novo: Endpoint para obter dados do usuário logado efetivo (/me)
 app.get('/me', isAuthenticated, async (req, res) => {
     const user = req.session.user;
     const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
@@ -465,12 +474,41 @@ app.get('/me', isAuthenticated, async (req, res) => {
             usuarios[index] = usuario;
             await saveUsuarios(usuarios);
         }
+        // Garantir doisFatores se ausente
+        if (usuario.doisFatores === undefined) {
+            usuario.doisFatores = true;
+            const index = usuarios.findIndex(u => u.email === user);
+            usuarios[index] = usuario;
+            await saveUsuarios(usuarios);
+        }
         // Não retornar senha
         const { senhaHash, ...safeUser } = usuario;
         res.json(safeUser);
     } catch (error) {
         console.error('[GET /me] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao buscar usuário' });
+    }
+});
+
+// Novo endpoint: Toggle 2FA
+app.post('/toggle-2fa', isAuthenticated, async (req, res) => {
+    const { enable } = req.body;
+    if (enable === undefined) {
+        return res.status(400).json({ sucesso: false, erro: 'Enable é obrigatório' });
+    }
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const index = usuarios.findIndex(u => u.email === req.session.user);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+        }
+        usuarios[index].doisFatores = enable;
+        await saveUsuarios(usuarios);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /toggle-2fa] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar 2FA' });
     }
 });
 
@@ -2692,7 +2730,7 @@ app.post('/admin/users', async (req, res) => {
         }
         const senhaHash = await bcrypt.hash(senha, 10);
         const id = await generateUniqueId();
-        const newUser = { nome, email, senhaHash, id, aprovado };
+        const newUser = { nome, email, senhaHash, id, aprovado, doisFatores: true }; // Novo: doisFatores true por padrão
         usuarios.push(newUser);
         await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
         res.json({ sucesso: true, user: { ...newUser, senhaHash: undefined } });

@@ -317,6 +317,10 @@ async function mostrarPopupMinhaConta() {
                 </div>
                 <button id="btnNovoJogoDropdown" style="width: 100%; margin-bottom: 12px; padding: 10px; background: var(--primary-gradient); color: white; border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-weight: 500;">Novo Jogo</button>
                 <button id="btnMudarSenha" style="width: 100%; margin-bottom: 12px; padding: 10px; background: #e2e8f0; color: #2d3748; border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-weight: 500;">Mudar Senha</button>
+                <label style="display: flex; align-items: center; margin-bottom: 12px;">
+                    <input type="checkbox" id="toggle2FA" ${usuario.doisFatores ? 'checked' : ''} style="margin-right: 8px;">
+                    Ativar Autenticação de Dois Fatores
+                </label>
             </div>
             <div style="padding: 16px 20px; border-top: 1px solid #e2e8f0;">
                 <h4 style="margin: 0 0 12px 0; font-size: 1rem;">Aparência</h4>
@@ -401,6 +405,28 @@ async function mostrarPopupMinhaConta() {
             // Fechar dropdown após mudança
             popup.remove();
             document.removeEventListener("click", fecharDropdown);
+        });
+    }
+
+    // Novo: Event listener para toggle de 2FA
+    const toggle2FA = document.getElementById("toggle2FA");
+    if (toggle2FA) {
+        toggle2FA.addEventListener("change", async () => {
+            const enable = toggle2FA.checked;
+            try {
+                const data = await safeApi('/toggle-2fa', {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enable })
+                });
+                if (!data.sucesso) {
+                    alert(data.erro || 'Erro ao atualizar 2FA');
+                    toggle2FA.checked = !enable; // Reverter checkbox se erro
+                }
+            } catch (error) {
+                alert('Erro ao atualizar 2FA: ' + error.message);
+                toggle2FA.checked = !enable; // Reverter checkbox se erro
+            }
         });
     }
 }
@@ -495,7 +521,7 @@ async function mostrarPopupMudarSenha() {
 }
 
 async function initGames() {
-    let currentGame = localStorage.getItem("currentGame");
+    let currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     if (!currentGame) {
         currentGame = "Pax Dei";
         localStorage.setItem("currentGame", currentGame);
@@ -1825,7 +1851,7 @@ async function toggleFavorita(nome, favorita) {
             body: JSON.stringify({ nome, favorita })
         });
         if (data.sucesso) {
-            await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az");
+            await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
         } else {
             mostrarErro(data.erro || "Erro ao favoritar receita");
         }
@@ -3193,7 +3219,7 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
             const datalist = document.getElementById("categoriasDatalistEstoque");
             datalist.innerHTML = categorias.map(cat => `<option value="${cat}">`).join("");
         } catch (error) {
-            console.error('[CATEGORIAS DATALIST ESTOQUE] Erro:', error);
+            console.error('[CATEGORIAS] Erro:', error);
         }
     }
 
@@ -3854,7 +3880,7 @@ function renderSequence(sequence, listaMateriasPendentes, componentes, isAdmin =
     // Adicionar event listeners para reordenação se admin
     if (true) {  // Modificado: Sempre adicionar listeners para usuários logados
         sequenceList.querySelectorAll('.btn-seq-up').forEach(btn => {
-            btn.addEventListener('click', () => handleSequenceReorder('up', btn, sequence, listaMateriasPendentes, componentes));
+            btn.addEventListener('click', () => handleSequenceReorder('up', btn, btn, sequence, listaMateriasPendentes, componentes));
         });
         sequenceList.querySelectorAll('.btn-seq-down').forEach(btn => {
             btn.addEventListener('click', () => handleSequenceReorder('down', btn, sequence, listaMateriasPendentes, componentes));
