@@ -3,6 +3,8 @@
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API = isLocal ? "http://localhost:10000" : "https://mmorpg-crafter.onrender.com";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
+// Novo: Socket.IO para atualizações em tempo real
+const socket = io.connect(isLocal ? 'http://localhost:10000' : 'https://mmorpg-crafter.onrender.com');
 // Nova função para mostrar o loading global
 function showLoading() {
     // Remover loading existente se houver
@@ -155,6 +157,43 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
         mostrarPopupLogin();
     }
+    // Novo: Socket.IO - Atualizações em tempo real
+    socket.on('connect', () => {
+        console.log('[SOCKET.IO] Conectado ao servidor');
+        const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+        socket.emit('joinGame', currentGame);
+    });
+    socket.on('update', async (data) => {
+        console.log('[SOCKET.IO] Atualização recebida:', data);
+        const currentSecao = localStorage.getItem("ultimaSecao") || "receitas";
+        // Recarregar seções afetadas
+        if (data.type === 'receitas') {
+            if (currentSecao === 'receitas') await carregarListaReceitas();
+            if (currentSecao === 'farmar') await carregarListaFarmar();
+            if (currentSecao === 'roadmap') await carregarListaRoadmap();
+            if (currentSecao === 'arquivados') await carregarArquivados();
+        } else if (data.type === 'estoque') {
+            if (currentSecao === 'estoque') await carregarEstoque();
+            if (currentSecao === 'farmar') await carregarListaFarmar();
+            if (currentSecao === 'roadmap') await carregarListaRoadmap();
+        } else if (data.type === 'componentes') {
+            if (currentSecao === 'componentes') await carregarComponentesLista();
+            if (currentSecao === 'estoque') await carregarEstoque();
+            if (currentSecao === 'farmar') await carregarListaFarmar();
+            if (currentSecao === 'roadmap') await carregarListaRoadmap();
+        } else if (data.type === 'categorias') {
+            if (currentSecao === 'categorias') await carregarCategoriasLista();
+        } else if (data.type === 'log') {
+            if (currentSecao === 'estoque') await carregarLog();
+        } else if (data.type === 'arquivados') {
+            if (currentSecao === 'arquivados') await carregarArquivados();
+        } else if (data.type === 'roadmap') {
+            if (currentSecao === 'roadmap') await carregarListaRoadmap();
+        }
+    });
+    socket.on('disconnect', () => {
+        console.log('[SOCKET.IO] Desconectado do servidor');
+    });
 });
 // Novo: Função para mostrar popup de pendências
 function mostrarPopupPendencias(pendencias) {
@@ -356,6 +395,8 @@ async function mostrarPopupMinhaConta() {
             // Atualizar seletor no dropdown
             const games = await safeApi(`/games`);
             gameSelector.innerHTML = games.map(g => `<option value="${g}" ${g === newGame ? 'selected' : ''}>${g}</option>`).join("");
+            // Novo: Atualizar room no Socket.IO
+            socket.emit('joinGame', newGame);
         });
     }
     const btnNovoJogo = document.getElementById("btnNovoJogoDropdown");
@@ -502,6 +543,8 @@ async function initGames() {
         localStorage.setItem("currentGame", currentGame);
     }
     // Não renderizar no menu mais; será renderizado no dropdown de Minha Conta
+    // Novo: Entrar na room do game atual
+    socket.emit('joinGame', currentGame);
 }
 function mostrarPopupNovoJogo() {
     const overlay = criarOverlay();
@@ -2692,7 +2735,7 @@ async function montarEstoque() {
         ${hasPermission('excluirComponente') ? '<button id="btnZerarEstoque" class="warn">Zerar todo o estoque</button>' : ''}
         </div>
         ` : ''}
-       
+      
         ${hasPermission('criarComponente') ? '<button id="btnNovoComponenteEstoque" class="primary">+ Novo Componente</button>' : ''}
         <div id="listaEstoque" class="lista"></div>
       </div>

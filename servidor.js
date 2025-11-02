@@ -1353,6 +1353,7 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
             // Atualizar toda a lista de receitas (usado no arquivamento)
             await fs.writeFile(file, JSON.stringify(novaReceita, null, 2));
             console.log('[POST /receitas] Lista de receitas atualizada');
+            io.to(game).emit('update', { type: 'receitas' });
             res.json({ sucesso: true });
             return;
         }
@@ -1369,6 +1370,7 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
         receitas.push({ ...novaReceita, favorita: false });
         await fs.writeFile(file, JSON.stringify(receitas, null, 2));
         console.log('[POST /receitas] Receita adicionada:', novaReceita.nome);
+        io.to(game).emit('update', { type: 'receitas' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /receitas] Erro:', error);
@@ -1427,6 +1429,7 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
         receitas[index] = { ...receitas[index], nome, componentes };
         await fs.writeFile(file, JSON.stringify(receitas, null, 2));
         console.log('[POST /receitas/editar] Receita editada:', nomeOriginal, '->', nome);
+        io.to(game).emit('update', { type: 'receitas' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /receitas/editar] Erro:', error);
@@ -1481,6 +1484,7 @@ app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
         receitas[index].favorita = favorita;
         await fs.writeFile(file, JSON.stringify(receitas, null, 2));
         console.log('[POST /receitas/favoritar] Favorita atualizada para receita:', nome, '->', favorita);
+        io.to(game).emit('update', { type: 'receitas' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /receitas/favoritar] Erro:', error);
@@ -1562,6 +1566,7 @@ app.post('/categorias', isAuthenticated, async (req, res) => {
         categorias.sort();
         await fs.writeFile(file, JSON.stringify(categorias, null, 2));
         console.log('[POST /categorias] Categoria adicionada:', nome);
+        io.to(game).emit('update', { type: 'categorias' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /categorias] Erro:', error);
@@ -1612,6 +1617,7 @@ app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
         categorias = categorias.filter(c => c !== nome);
         await fs.writeFile(catFile, JSON.stringify(categorias, null, 2));
         console.log('[POST /categorias/excluir] Categoria excluída:', nome);
+        io.to(game).emit('update', { type: 'categorias' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /categorias/excluir] Erro:', error);
@@ -1733,6 +1739,7 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
             await fs.writeFile(estoqueFileGame, JSON.stringify(estoque, null, 2));
             console.log('[POST /componentes] Componente adicionado ao estoque com quantidade 0:', novoComponente.nome);
         }
+        io.to(game).emit('update', { type: 'componentes' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /componentes] Erro:', error);
@@ -1856,6 +1863,7 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
                 console.log('[POST /componentes/editar] Nome atualizado nos associados de outros componentes:', nomeOriginal, '->', nome);
             }
         }
+        io.to(game).emit('update', { type: 'componentes' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /componentes/editar] Erro:', error);
@@ -1984,6 +1992,7 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
             await fs.writeFile(estoqueFileGame, JSON.stringify(estoque, null, 2));
             console.log('[POST /componentes/excluir] Componente removido do estoque:', nome);
         }
+        io.to(game).emit('update', { type: 'componentes' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /componentes/excluir] Erro:', error);
@@ -2125,6 +2134,7 @@ app.post('/estoque/import', isAuthenticated, async (req, res) => {
             await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
         }
         console.log(`[POST /estoque/import] Importado: ${updatedCount} itens atualizados`);
+        io.to(game).emit('update', { type: 'estoque' });
         res.json({ sucesso: true, updated: updatedCount });
     } catch (error) {
         console.error('[POST /estoque/import] Erro:', error);
@@ -2192,6 +2202,7 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
         }
         await fs.writeFile(file, JSON.stringify(estoque, null, 2));
         console.log('[POST /estoque] Estoque atualizado:', componente, operacao, quantidade);
+        io.to(game).emit('update', { type: 'estoque' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /estoque] Erro:', error);
@@ -2255,6 +2266,7 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
         logs.push(logEntry);
         await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
         console.log('[POST /estoque/zerar] Estoque zerado');
+        io.to(game).emit('update', { type: 'estoque' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /estoque/zerar] Erro:', error);
@@ -2309,6 +2321,7 @@ app.delete('/data', isAuthenticated, async (req, res) => {
         estoque.splice(index, 1);
         await fs.writeFile(file, JSON.stringify(estoque, null, 2));
         console.log('[DELETE /data] Componente excluído do estoque:', componente);
+        io.to(game).emit('update', { type: 'estoque' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[DELETE /data] Erro:', error);
@@ -2379,6 +2392,7 @@ app.post('/arquivados', isAuthenticated, async (req, res) => {
         const arquivados = req.body;
         await fs.writeFile(file, JSON.stringify(arquivados, null, 2));
         console.log('[POST /arquivados] Arquivados atualizados');
+        io.to(game).emit('update', { type: 'arquivados' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /arquivados] Erro:', error);
@@ -2457,6 +2471,7 @@ app.post('/log', isAuthenticated, async (req, res) => {
         logs.push(...novosLogs);
         await fs.writeFile(file, JSON.stringify(logs, null, 2));
         console.log('[POST /log] Log atualizado com', novosLogs.length, 'entradas');
+        io.to(game).emit('update', { type: 'log' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /log] Erro:', error);
@@ -2552,6 +2567,7 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
         logs.push(...newLogs);
         await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
         console.log('[POST /fabricar] Componente fabricado:', componente);
+        io.to(game).emit('update', { type: 'estoque' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /fabricar] Erro:', error);
@@ -2622,6 +2638,7 @@ app.post('/roadmap', isAuthenticated, async (req, res) => {
     try {
         const roadmap = req.body;
         await fs.writeFile(file, JSON.stringify(roadmap, null, 2));
+        io.to(game).emit('update', { type: 'roadmap' });
         res.json({ sucesso: true });
     } catch (error) {
         res.status(500).json({ sucesso: false, erro: 'Erro ao salvar roadmap' });
@@ -2846,7 +2863,7 @@ app.get('/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 // Iniciar o servidor
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`[SERVER] Servidor rodando em http://localhost:${PORT}`);
     sincronizarEstoque();
 }).on('error', (err) => {
@@ -2855,4 +2872,21 @@ app.listen(PORT, () => {
     } else {
         console.error('[SERVER] Erro ao iniciar servidor:', err);
     }
+});
+// Novo: Integração Socket.IO
+const io = require('socket.io')(server, {
+    cors: {
+        origin: '*', // Ajuste para produção
+        methods: ['GET', 'POST']
+    }
+});
+io.on('connection', (socket) => {
+    console.log('[SOCKET.IO] Cliente conectado:', socket.id);
+    socket.on('joinGame', (game) => {
+        socket.join(game);
+        console.log(`[SOCKET.IO] Cliente ${socket.id} entrou na room: ${game}`);
+    });
+    socket.on('disconnect', () => {
+        console.log('[SOCKET.IO] Cliente desconectado:', socket.id);
+    });
 });
