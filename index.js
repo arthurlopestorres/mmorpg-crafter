@@ -40,7 +40,10 @@ function hideLoading() {
 }
 // Função safeApi modificada para incluir loading
 async function safeApi(endpoint, init = {}) {
-    showLoading(); // Mostrar loading antes da requisição
+    // Mostrar loading apenas se não estiver logado (para login/cadastro)
+    if (!sessionStorage.getItem("loggedIn")) {
+        showLoading();
+    }
     try {
         if (!init.credentials) init.credentials = 'include';
         const url = `${API}${endpoint}`;
@@ -60,7 +63,10 @@ async function safeApi(endpoint, init = {}) {
         }
         return data;
     } finally {
-        hideLoading(); // Esconder loading após a requisição, independentemente do resultado
+        // Esconder loading apenas se não estiver logado
+        if (!sessionStorage.getItem("loggedIn")) {
+            hideLoading();
+        }
     }
 }
 function mostrarPopupAcessoNegado() {
@@ -168,27 +174,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         const currentSecao = localStorage.getItem("ultimaSecao") || "receitas";
         // Recarregar seções afetadas
         if (data.type === 'receitas') {
-            if (currentSecao === 'receitas') await carregarListaReceitas();
-            if (currentSecao === 'farmar') await carregarListaFarmar();
-            if (currentSecao === 'roadmap') await carregarListaRoadmap();
+            if (currentSecao === 'receitas') await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
+            if (currentSecao === 'farmar') await carregarListaFarmar(document.getElementById("buscaFarmar")?.value || "", document.getElementById("ordemFarmar")?.value || "pendente-desc", document.getElementById("filtroReceitaFarmar")?.value || "", document.getElementById("filtroCategoriaFarmar")?.value || "");
+            if (currentSecao === 'roadmap') await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
             if (currentSecao === 'arquivados') await carregarArquivados();
         } else if (data.type === 'estoque') {
-            if (currentSecao === 'estoque') await carregarEstoque();
-            if (currentSecao === 'farmar') await carregarListaFarmar();
-            if (currentSecao === 'roadmap') await carregarListaRoadmap();
+            if (currentSecao === 'estoque') await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
+            if (currentSecao === 'farmar') await carregarListaFarmar(document.getElementById("buscaFarmar")?.value || "", document.getElementById("ordemFarmar")?.value || "pendente-desc", document.getElementById("filtroReceitaFarmar")?.value || "", document.getElementById("filtroCategoriaFarmar")?.value || "");
+            if (currentSecao === 'roadmap') await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
         } else if (data.type === 'componentes') {
-            if (currentSecao === 'componentes') await carregarComponentesLista();
-            if (currentSecao === 'estoque') await carregarEstoque();
-            if (currentSecao === 'farmar') await carregarListaFarmar();
-            if (currentSecao === 'roadmap') await carregarListaRoadmap();
+            if (currentSecao === 'componentes') await carregarComponentesLista(document.getElementById("buscaComponentes")?.value || "", document.getElementById("ordemComponentes")?.value || "az", document.getElementById("filtroCategoriaComponentes")?.value || "");
+            if (currentSecao === 'estoque') await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
+            if (currentSecao === 'farmar') await carregarListaFarmar(document.getElementById("buscaFarmar")?.value || "", document.getElementById("ordemFarmar")?.value || "pendente-desc", document.getElementById("filtroReceitaFarmar")?.value || "", document.getElementById("filtroCategoriaFarmar")?.value || "");
+            if (currentSecao === 'roadmap') await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
         } else if (data.type === 'categorias') {
-            if (currentSecao === 'categorias') await carregarCategoriasLista();
+            if (currentSecao === 'categorias') await carregarCategoriasLista(document.getElementById("buscaCategorias")?.value || "", document.getElementById("ordemCategorias")?.value || "az");
         } else if (data.type === 'log') {
-            if (currentSecao === 'estoque') await carregarLog();
+            if (currentSecao === 'estoque') await carregarLog(document.getElementById("buscaLogComponente")?.value || "", document.getElementById("filtroLogUser")?.value || "", document.getElementById("filtroLogData")?.value || "");
         } else if (data.type === 'arquivados') {
             if (currentSecao === 'arquivados') await carregarArquivados();
         } else if (data.type === 'roadmap') {
-            if (currentSecao === 'roadmap') await carregarListaRoadmap();
+            if (currentSecao === 'roadmap') await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
         }
     });
     socket.on('disconnect', () => {
@@ -1938,7 +1944,6 @@ async function arquivarReceita(receitaNome) {
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     let quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
     try {
-        // Carregar receitas atuais
         const receitasAtuais = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
         console.log(`[ARQUIVAR] Receitas atuais carregadas:`, receitasAtuais);
         const receitaIndex = receitasAtuais.findIndex(r => r.nome === receitaNome);
@@ -2735,7 +2740,7 @@ async function montarEstoque() {
         ${hasPermission('excluirComponente') ? '<button id="btnZerarEstoque" class="warn">Zerar todo o estoque</button>' : ''}
         </div>
         ` : ''}
-      
+     
         ${hasPermission('criarComponente') ? '<button id="btnNovoComponenteEstoque" class="primary">+ Novo Componente</button>' : ''}
         <div id="listaEstoque" class="lista"></div>
       </div>
