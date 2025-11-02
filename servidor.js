@@ -6,6 +6,8 @@ const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const session = require('express-session');
 const axios = require('axios'); // Adicionado para verificação reCAPTCHA
+const multer = require('multer');
+const sharp = require('sharp');
 require('dotenv').config();
 const app = express();
 app.set('trust proxy', 1);
@@ -15,6 +17,7 @@ const DEFAULT_GAME = 'Pax Dei';
 // Middleware
 app.use(express.json({ limit: '100mb' }));
 app.use(express.static(__dirname)); // Servir arquivos estáticos da raiz do projeto
+app.use('/data', express.static(DATA_DIR));
 app.use(session({
     secret: 'secret-key-mmo-crafter', // Mude para um secret seguro
     resave: false,
@@ -27,6 +30,25 @@ const transporter = nodemailer.createTransport({
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
+    }
+});
+// Configuração do Multer
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, path.join(DATA_DIR, req.session.user.replace(/[^a-zA-Z0-9@._-]/g, ''))); // Diretório do usuário
+    },
+    filename: (req, file, cb) => {
+        cb(null, 'profile.jpg'); // Sempre sobrescreve com profile.jpg
+    }
+});
+const upload = multer({
+    storage,
+    limits: { fileSize: 50 * 1024 }, // 50KB max (já comprimido no cliente)
+    fileFilter: (req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+            return cb(new Error('Apenas imagens são permitidas'));
+        }
+        cb(null, true);
     }
 });
 // Novo: Map para armazenar OTPs temporários (email => {code, expire, type, tempData})
@@ -153,6 +175,7 @@ async function generateUniqueId() {
 // Função para salvar usuários (auxiliar para updates)
 async function saveUsuarios(usuarios) {
     const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    usuarios = usuarios.map(u => ({ ...u, fotoPath: u.fotoPath || '' }));
     await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
 }
 // Criar diretório de dados e arquivos JSON iniciais, se não existirem
@@ -440,6 +463,9 @@ app.post('/set-permissoes', isAuthenticated, async (req, res) => {
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
         console.log(`[SET-PERMISSOES] Permissões atualizadas para ${secondary} por ${user}`);
         res.json({ sucesso: true });
+        // Emissão de teamUpdate
+        const effectiveUserEmit = await getEffectiveUser(user);
+        await emitTeamUpdateToEffective(effectiveUserEmit, DEFAULT_GAME);
     } catch (error) {
         console.error('[SET-PERMISSOES] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar permissões' });
@@ -476,6 +502,13 @@ app.get('/me', isAuthenticated, async (req, res) => {
             usuarios[index] = usuario;
             await saveUsuarios(usuarios);
         }
+        // Garantir fotoPath se ausente
+        if (!usuario.fotoPath) {
+            usuario.fotoPath = '';
+            const index = usuarios.findIndex(u => u.email === user);
+            usuarios[index] = usuario;
+            await saveUsuarios(usuarios);
+        }
         // Não retornar senha
         const { senhaHash, ...safeUser } = usuario;
         res.json(safeUser);
@@ -484,7 +517,7 @@ app.get('/me', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao buscar usuário' });
     }
 });
-// Novo: Endpoint para toggle 2FA
+// Endpoint para toggle 2FA
 app.post('/toggle-2fa', isAuthenticated, async (req, res) => {
     const { enable } = req.body;
     if (enable === undefined) {
@@ -503,6 +536,92 @@ app.post('/toggle-2fa', isAuthenticated, async (req, res) => {
     } catch (error) {
         console.error('[POST /toggle-2fa] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar 2FA' });
+    }
+});
+// Upload de fotos
+// Novo: Endpoint para upload de foto de perfil
+app.post('/upload-foto', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const safeUser = sessionUser.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const userDir = path.join(DATA_DIR, safeUser);
+
+    try {
+        // Criar diretório se não existir (corrige erro para novos perfis)
+        await fs.mkdir(userDir, { recursive: true });
+        console.log(`[UPLOAD-FOTO] Diretório criado/verificado: ${userDir}`);
+
+        // Wrapper para tornar upload async
+        await new Promise((resolve, reject) => {
+            upload.single('foto')(req, res, (err) => {
+                if (err instanceof multer.MulterError) {
+                    console.error('[UPLOAD-FOTO] MulterError:', err);
+                    reject(err);
+                } else if (err) {
+                    console.error('[UPLOAD-FOTO] Erro geral:', err);
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+
+        // Processar com sharp, usando arquivo temporário para evitar erro de input/output igual
+        const inputPath = path.join(userDir, 'profile.jpg');
+        const tempOutputPath = path.join(userDir, 'profile-temp.jpg'); // Arquivo temporário
+        try {
+            await sharp(inputPath)
+                .resize(100, 100, { fit: 'cover' })
+                .jpeg({ quality: 80 })
+                .toFile(tempOutputPath);
+            // Substituir o original pelo processado
+            await fs.unlink(inputPath); // Deletar o original
+            await fs.rename(tempOutputPath, inputPath); // Renomear temp para original
+            console.log('[UPLOAD-FOTO] Imagem processada com sucesso');
+        } catch (sharpErr) {
+            console.error('[UPLOAD-FOTO] Erro no processamento:', sharpErr);
+            // Limpar temp se existir
+            try { await fs.unlink(tempOutputPath); } catch { }
+            return res.status(500).json({ sucesso: false, erro: 'Erro ao processar imagem' });
+        }
+
+        // Atualizar usuarios.json com fotoPath
+        const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const index = usuarios.findIndex(u => u.email === sessionUser);
+        if (index !== -1) {
+            usuarios[index].fotoPath = `/data/${safeUser}/profile.jpg`;
+            await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
+        }
+
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[UPLOAD-FOTO] Erro:', error);
+        // Limpar temp se existir em caso de erro geral
+        const tempOutputPath = path.join(userDir, 'profile-temp.jpg');
+        try { await fs.unlink(tempOutputPath); } catch { }
+        res.status(500).json({ sucesso: false, erro: 'Erro ao processar upload' });
+    }
+});
+// Endpoint para atualizar o nome do usuário logado
+app.post('/update-name', isAuthenticated, async (req, res) => {
+    const { newName } = req.body;
+    if (!newName || typeof newName !== 'string' || !/^[a-zA-Z0-9 ]+$/.test(newName) || newName.trim().length < 1 || newName.trim().length > 50) {
+        return res.status(400).json({ sucesso: false, erro: 'Nome inválido: deve conter apenas letras, números e espaços, com 1 a 50 caracteres.' });
+    }
+    const trimmedName = newName.trim();
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const index = usuarios.findIndex(u => u.email === req.session.user);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+        }
+        usuarios[index].nome = trimmedName;
+        await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /update-name] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar nome' });
     }
 });
 // Endpoint para buscar dados do usuário por email
@@ -562,6 +681,9 @@ app.post('/promote-cofounder', isAuthenticated, async (req, res) => {
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
         console.log(`[PROMOTE-COFOUNDER] ${secondary} ${promote ? 'promovido' : 'removido'} como co-founder por ${user}`);
         res.json({ sucesso: true });
+        // Emissão de teamUpdate
+        const effectiveUserEmit = await getEffectiveUser(user);
+        await emitTeamUpdateToEffective(effectiveUserEmit, DEFAULT_GAME);
     } catch (error) {
         console.error('[PROMOTE-COFOUNDER] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar co-founder' });
@@ -598,6 +720,9 @@ app.post('/enviar-convite', isAuthenticated, async (req, res) => {
         await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
         console.log(`[ENVIAR-CONVITE] Convite enviado de ${user} para ${to}`);
         res.json({ sucesso: true });
+        // Emissão de teamUpdate
+        const effectiveUserEmit = await getEffectiveUser(user);
+        await emitTeamUpdateToEffective(effectiveUserEmit, DEFAULT_GAME);
     } catch (error) {
         console.error('[ENVIAR-CONVITE] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao enviar convite' });
@@ -665,6 +790,9 @@ app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
         console.log(`[ACEITAR-CONVITE] ${user} aceitou convite de ${from}`);
         res.json({ sucesso: true });
+        // Emissão de teamUpdate
+        const effectiveUserEmit = await getEffectiveUser(user);
+        await emitTeamUpdateToEffective(effectiveUserEmit, DEFAULT_GAME);
     } catch (error) {
         console.error('[ACEITAR-CONVITE] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao aceitar convite' });
@@ -688,6 +816,9 @@ app.post('/recusar-convite', isAuthenticated, async (req, res) => {
         await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
         console.log(`[RECUSAR-CONVITE] ${user} recusou convite de ${from}`);
         res.json({ sucesso: true });
+        // Emissão de teamUpdate
+        const effectiveUserEmit = await getEffectiveUser(user);
+        await emitTeamUpdateToEffective(effectiveUserEmit, DEFAULT_GAME);
     } catch (error) {
         console.error('[RECUSAR-CONVITE] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao recusar convite' });
@@ -882,6 +1013,9 @@ app.post('/dissociate-self', isAuthenticated, async (req, res) => {
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
         console.log(`[DISSOCIATE-SELF] Desvinculado ${secondary} do primary ${user}`);
         res.json({ sucesso: true });
+        // Emissão de teamUpdate
+        const effectiveUserEmit = await getEffectiveUser(user);
+        await emitTeamUpdateToEffective(effectiveUserEmit, DEFAULT_GAME);
     } catch (error) {
         console.error('[DISSOCIATE-SELF] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao desvincular usuário' });
@@ -913,6 +1047,9 @@ app.post('/dissociate-as-secondary', isAuthenticated, async (req, res) => {
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
         console.log(`[DISSOCIATE-AS-SECONDARY] Desvinculado ${secondary} do primary ${primary}`);
         res.json({ sucesso: true });
+        // Emissão de teamUpdate
+        const effectiveUserEmit = await getEffectiveUser(secondary);
+        await emitTeamUpdateToEffective(effectiveUserEmit, DEFAULT_GAME);
     } catch (error) {
         console.error('[DISSOCIATE-AS-SECONDARY] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao desvincular usuário' });
@@ -955,6 +1092,9 @@ app.post('/ban-user', isAuthenticated, async (req, res) => {
         await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
         console.log(`[BAN-USER] ${secondary} banido por ${user}`);
         res.json({ sucesso: true });
+        // Emissão de teamUpdate
+        const effectiveUserEmit = await getEffectiveUser(user);
+        await emitTeamUpdateToEffective(effectiveUserEmit, DEFAULT_GAME);
     } catch (error) {
         console.error('[BAN-USER] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao banir usuário' });
@@ -997,6 +1137,9 @@ app.post('/ban-as-secondary', isAuthenticated, async (req, res) => {
         await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
         console.log(`[BAN-AS-SECONDARY] ${banned} banido por ${secondary}`);
         res.json({ sucesso: true });
+        // Emissão de teamUpdate
+        const effectiveUserEmit = await getEffectiveUser(secondary);
+        await emitTeamUpdateToEffective(effectiveUserEmit, DEFAULT_GAME);
     } catch (error) {
         console.error('[BAN-AS-SECONDARY] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao banir usuário' });
@@ -1044,6 +1187,9 @@ app.post('/unban-user', isAuthenticated, async (req, res) => {
         await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
         console.log(`[UNBAN-USER] ${bannedEmail} desbanido por ${user}`);
         res.json({ sucesso: true });
+        // Emissão de teamUpdate
+        const effectiveUserEmit = await getEffectiveUser(user);
+        await emitTeamUpdateToEffective(effectiveUserEmit, DEFAULT_GAME);
     } catch (error) {
         console.error('[UNBAN-USER] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao desbanir usuário' });
@@ -1270,6 +1416,8 @@ app.post('/shared', isAuthenticated, async (req, res) => {
     }
     await fs.writeFile(sharedPath, JSON.stringify(shared, null, 2));
     res.json({ sucesso: true });
+    // Emissão de teamUpdate
+    await emitTeamUpdateToEffective(effectiveUser, game);
 });
 // Endpoints protegidos com suporte a user e game
 app.get('/receitas', isAuthenticated, async (req, res) => {
@@ -2862,6 +3010,10 @@ app.get('/health', (req, res) => {
     console.log('[GET /health] Verificação de status do servidor');
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
+// Função para emitir teamUpdate para effectiveUser
+async function emitTeamUpdateToEffective(effectiveUser, game = DEFAULT_GAME) {
+    io.to(effectiveUser).emit('teamUpdate', { game });
+}
 // Iniciar o servidor
 const server = app.listen(PORT, () => {
     console.log(`[SERVER] Servidor rodando em http://localhost:${PORT}`);
@@ -2880,13 +3032,24 @@ const io = require('socket.io')(server, {
         methods: ['GET', 'POST']
     }
 });
+// Novo: Map para armazenar effectiveUser por socket
+const socketToUser = new Map(); // socket.id → { email, effectiveUser, game }
 io.on('connection', (socket) => {
     console.log('[SOCKET.IO] Cliente conectado:', socket.id);
     socket.on('joinGame', (game) => {
+        socket.leaveAll();
         socket.join(game);
         console.log(`[SOCKET.IO] Cliente ${socket.id} entrou na room: ${game}`);
     });
+    // Novo: Registrar usuário efetivo ao conectar
+    socket.on('registerUser', async ({ email, game }) => {
+        const effectiveUser = await getEffectiveUser(email);
+        socketToUser.set(socket.id, { email, effectiveUser, game });
+        socket.join(effectiveUser); // Entrar na sala do effectiveUser
+        console.log(`[SOCKET.IO] Usuário ${email} (effective: ${effectiveUser}) registrado no socket ${socket.id}`);
+    });
     socket.on('disconnect', () => {
+        socketToUser.delete(socket.id);
         console.log('[SOCKET.IO] Cliente desconectado:', socket.id);
     });
 });

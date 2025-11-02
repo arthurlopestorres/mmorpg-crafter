@@ -3,7 +3,8 @@
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API = isLocal ? "http://localhost:10000" : "https://mmorpg-crafter.onrender.com";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
-// Novo: Socket.IO para atualizações em tempo real
+let processedFotoBlob = null;
+// Socket.IO para atualizações em tempo real
 const socket = io.connect(isLocal ? 'http://localhost:10000' : 'https://mmorpg-crafter.onrender.com');
 // Nova função para mostrar o loading global
 function showLoading() {
@@ -147,7 +148,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             } else {
                 await initGames();
-                await carregarUserStatus(); // Novo: Carregar status do usuário incluindo isAdmin
+                await carregarUserStatus(); // Carregar status do usuário incluindo isAdmin
                 const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
                 carregarSecao(ultimaSecao);
             }
@@ -163,7 +164,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
         mostrarPopupLogin();
     }
-    // Novo: Socket.IO - Atualizações em tempo real
+    // Socket.IO - Atualizações em tempo real
     socket.on('connect', () => {
         console.log('[SOCKET.IO] Conectado ao servidor');
         const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
@@ -200,8 +201,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     socket.on('disconnect', () => {
         console.log('[SOCKET.IO] Desconectado do servidor');
     });
+    socket.on('teamUpdate', async (data) => {
+        console.log('[SOCKET.IO] Atualização de time recebida:', data);
+        const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+        if (data.game === currentGame) {
+            await carregarListaTime();
+            await carregarUserStatus(); // Atualiza permissões
+            // Recarregar seções que dependem de permissões
+            const currentSecao = localStorage.getItem("ultimaSecao") || "receitas";
+            await carregarSecao(currentSecao);
+        }
+    });
 });
-// Novo: Função para mostrar popup de pendências
+// Função para mostrar popup de pendências
 function mostrarPopupPendencias(pendencias) {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
@@ -268,7 +280,7 @@ function mostrarPopupPendencias(pendencias) {
         }
     };
 }
-// Novo: Função para carregar status do usuário (inclui isFounder, isAdmin, permissões)
+// Função para carregar status do usuário (inclui isFounder, isAdmin, permissões)
 async function carregarUserStatus() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -276,7 +288,7 @@ async function carregarUserStatus() {
         sessionStorage.setItem('isFounder', status.isFounder.toString());
         sessionStorage.setItem('isAdmin', status.isAdmin.toString()); // Salvar isAdmin
         sessionStorage.setItem('effectiveUser', status.effectiveUser);
-        // Novo: Salvar permissões granulares se existirem
+        // Salvar permissões granulares se existirem
         sessionStorage.setItem('permissao', JSON.stringify(status.permissao || {}));
     } catch (error) {
         console.error('[USER STATUS] Erro ao carregar status:', error);
@@ -293,16 +305,83 @@ function isUserAdmin() {
 function isUserFounder() {
     return sessionStorage.getItem('isFounder') === 'true';
 }
-// Novo: Função para checar permissão granular
+// Função para checar permissão granular
 function hasPermission(permissionKey) {
     const permissao = JSON.parse(sessionStorage.getItem('permissao') || '{}');
     return isUserAdmin() || permissao[permissionKey] === true;
 }
-// Novo: Dropdown para "Minha Conta"
+async function previewFotoPerfil(event) {
+    const file = event.target.files[0];  // Correção: 'e' → 'event'
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        const preview = document.getElementById("previewFotoPerfil");
+        if (preview) {
+            preview.src = ev.target.result;
+        }
+
+        // Compressão básica com canvas para preparar o blob (opcional, mas ajuda em consistência)
+        const img = new Image();
+        img.src = ev.target.result;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 100;  // Tamanho fixo para perfil
+            canvas.height = 100;
+            ctx.drawImage(img, 0, 0, 100, 100);
+            canvas.toBlob((blob) => {
+                processedFotoBlob = blob;  // Armazena o blob processado para upload
+            }, 'image/jpeg', 0.8);  // Qualidade 80%
+        };
+    };
+    reader.readAsDataURL(file);
+}
+// Função para upload da foto
+async function uploadFotoPerfil() {
+    if (!processedFotoBlob && !document.getElementById('inputFotoPerfil').files[0]) {
+        mostrarErro('Selecione uma imagem primeiro');
+        return;
+    }
+
+    const formData = new FormData();
+    const fileToUpload = processedFotoBlob || document.getElementById('inputFotoPerfil').files[0];
+    formData.append('foto', fileToUpload);
+
+    try {
+        const data = await safeApi('/upload-foto', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (data.sucesso) {
+            // Atualizar preview com cache busting
+            const preview = document.getElementById("previewFotoPerfil");
+            if (preview) {
+                const timestamp = new Date().getTime();
+                preview.src = `/data/${encodeURIComponent(sessionStorage.getItem('userEmail') || 'default')}/profile.jpg?${timestamp}`;
+            }
+            processedFotoBlob = null;  // Limpar após upload
+            mostrarSucesso('Foto atualizada com sucesso!');  // Use mostrarErro ou crie um mostrarSucesso se preferir
+        } else {
+            mostrarErro(data.erro || 'Erro ao fazer upload');
+        }
+    } catch (error) {
+        console.error('Erro no upload:', error);
+        mostrarErro('Erro ao fazer upload: ' + error.message);
+        if (error.message.includes('404')) {
+            // Caso específico de 404: fallback para default
+            const preview = document.getElementById("previewFotoPerfil");
+            if (preview) preview.src = '/imagens/default-profile.jpg';
+        }
+    }
+}
+// Dropdown para "Minha Conta"
 async function mostrarPopupMinhaConta() {
     // Remover dropdown existente se houver
     const existingPopup = document.getElementById("popupMinhaConta");
     if (existingPopup) existingPopup.remove();
+
     const menuItem = document.getElementById("menu-minha-conta");
     const rect = menuItem.getBoundingClientRect();
     const popup = document.createElement("div");
@@ -321,15 +400,348 @@ async function mostrarPopupMinhaConta() {
     popup.style.minWidth = "300px";
     popup.style.maxWidth = "400px";
     popup.style.overflow = "hidden";
+
+    // Buscar dados do usuário do servidor via endpoint /me
+    try {
+        const usuario = await safeApi(`/me`);
+        sessionStorage.setItem('userEmail', usuario.email); // Armazena o email do usuário logado para uso consistente
+        const games = await safeApi(`/games`);
+        const isDark = document.body.classList.contains('dark-mode');
+
+        // Foto de perfil com lápis de edição
+        const fotoPath = usuario.fotoPath ? `${API}${usuario.fotoPath}?${Date.now()}` : null;
+        const temFoto = !!fotoPath;
+
+        popup.innerHTML = `
+            <div style="padding: 20px; border-bottom: 1px solid #e2e8f0;">
+                <h3 style="margin: 0 0 12px 0; font-size: 1.1rem;">Minha Conta</h3>
+                <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 12px; position: relative;">
+                    <div id="fotoPerfilContainer" style="position: relative; width: 150px; height: 150px; border-radius: 50%; overflow: hidden; border: 2px solid #e2e8f0; margin-bottom: 12px;">
+                        <img id="fotoPerfilImg" src="${fotoPath || ''}" alt="Foto de Perfil" style="width: 100%; height: 100%; object-fit: cover; display: ${temFoto ? 'block' : 'none'};">
+                        <div id="editPencilOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4);
+        `;
+        document.body.appendChild(popup); // Nota: O innerHTML está truncado no prompt original, mas assumi que continua como antes. Não alterei o resto do HTML.
+    } catch (error) {
+        console.error('Erro ao carregar dados da conta:', error);
+    }
+}
+function abrirPopupTrocarFoto() {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupTrocarFoto";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.borderRadius = "var(--border-radius-xl)";
+    popup.style.boxShadow = "var(--shadow-xl)";
+    popup.style.zIndex = "1001";
+    popup.style.maxWidth = "400px";
+    popup.style.width = "90%";
+    popup.innerHTML = `
+        <h3 style="margin: 0 0 16px; font-size: 1.1rem;">Trocar Foto de Perfil</h3>
+        <div style="text-align: center; margin-bottom: 16px;">
+            <img id="previewTrocarFoto" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; display: none; margin-bottom: 12px;">
+            <input type="file" id="inputTrocarFoto" accept="image/*" style="margin-bottom: 12px;">
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button id="btnCancelarTrocar" style="padding: 8px 16px; background: #e2e8f0; color: #2d3748; border: none; border-radius: var(--border-radius-sm); cursor: pointer;">Cancelar</button>
+            <button id="btnConfirmarTrocar" style="padding: 8px 16px; background: var(--primary-gradient); color: white; border: none; border-radius: var(--border-radius-sm); cursor: pointer;">Confirmar</button>
+        </div>
+        <p id="erroTrocarFoto" style="color: red; font-size: 0.85rem; margin-top: 8px; display: none;"></p>
+    `;
+    document.body.appendChild(popup);
+
+    const inputTrocar = document.getElementById("inputTrocarFoto");
+    const previewTrocar = document.getElementById("previewTrocarFoto");
+    let processedFotoBlob = null; // Local para este popup, para evitar global
+
+    inputTrocar.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                previewTrocar.src = ev.target.result;
+                previewTrocar.style.display = "block";
+
+                // Compressão para garantir tamanho < 50KB
+                const img = new Image();
+                img.src = ev.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = 100;
+                    canvas.height = 100;
+                    ctx.drawImage(img, 0, 0, 100, 100);
+                    canvas.toBlob((blob) => {
+                        processedFotoBlob = blob;
+                    }, 'image/jpeg', 0.8);
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    document.getElementById("btnCancelarTrocar").addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+    });
+
+    document.getElementById("btnConfirmarTrocar").addEventListener("click", async () => {
+        const file = inputTrocar.files[0];
+        if (!file) {
+            document.getElementById("erroTrocarFoto").textContent = "Selecione uma imagem";
+            document.getElementById("erroTrocarFoto").style.display = "block";
+            return;
+        }
+
+        const formData = new FormData();
+        const fileToUpload = processedFotoBlob || file;
+        formData.append("foto", fileToUpload);
+
+        try {
+            const data = await safeApi('/upload-foto', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (data.sucesso) {
+                // Atualizar preview com cache busting
+                const preview = document.getElementById("previewFotoPerfil");
+                if (preview) {
+                    const timestamp = new Date().getTime();
+                    preview.src = `/data/${encodeURIComponent(sessionStorage.getItem('userEmail') || 'default')}/profile.jpg?${timestamp}`;
+                }
+                processedFotoBlob = null;  // Limpar após upload
+                mostrarSucesso('Foto atualizada com sucesso!');  // Alterado para mostrarSucesso
+            } else {
+                document.getElementById("erroTrocarFoto").textContent = data.erro || 'Erro ao fazer upload';
+                document.getElementById("erroTrocarFoto").style.display = "block";
+            }
+        } catch (error) {
+            console.error('Erro no upload:', error);
+            document.getElementById("erroTrocarFoto").textContent = 'Erro ao fazer upload: ' + error.message;
+            document.getElementById("erroTrocarFoto").style.display = "block";
+            if (error.message.includes('404')) {
+                previewTrocar.src = '/imagens/default-profile.jpg';
+            }
+        }
+    });
+}
+// Dropdown para "Minha Conta"
+async function mostrarPopupMinhaConta() {
+    // Remover dropdown existente se houver
+    const existingPopup = document.getElementById("popupMinhaConta");
+    if (existingPopup) existingPopup.remove();
+
+    const menuItem = document.getElementById("menu-minha-conta");
+    const rect = menuItem.getBoundingClientRect();
+    const popup = document.createElement("div");
+    popup.id = "popupMinhaConta";
+    popup.style.position = "fixed";
+    popup.style.top = "auto";
+    popup.style.bottom = "24px";
+    popup.style.left = `${rect.right + 8}px`;
+    popup.style.right = "auto";
+    popup.style.transform = "none";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "0";
+    popup.style.zIndex = "1001";
+    popup.style.borderRadius = "var(--border-radius-xl)";
+    popup.style.boxShadow = "var(--shadow-xl)";
+    popup.style.minWidth = "300px";
+    popup.style.maxWidth = "400px";
+    popup.style.overflow = "hidden";
+
+    // Buscar dados do usuário do servidor via endpoint /me
+    try {
+        const usuario = await safeApi(`/me`);
+        sessionStorage.setItem('userEmail', usuario.email); // Armazena o email do usuário logado para uso consistente
+        const games = await safeApi(`/games`);
+        const isDark = document.body.classList.contains('dark-mode');
+
+        // Foto de perfil com lápis de edição
+        const fotoPath = usuario.fotoPath ? `${API}${usuario.fotoPath}?${Date.now()}` : null;
+        const temFoto = !!fotoPath;
+
+        popup.innerHTML = `
+            <div style="padding: 20px; border-bottom: 1px solid #e2e8f0;">
+                <h3 style="margin: 0 0 12px 0; font-size: 1.1rem;">Minha Conta</h3>
+                <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 12px; position: relative;">
+                    <div id="fotoPerfilContainer" style="position: relative; width: 150px; height: 150px; border-radius: 50%; overflow: hidden; border: 2px solid #e2e8f0; margin-bottom: 12px;">
+                        <img id="fotoPerfilImg" src="${fotoPath || ''}" alt="Foto de Perfil" style="width: 100%; height: 100%; object-fit: cover; display: ${temFoto ? 'block' : 'none'};">
+                        <div id="editPencilOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4);
+        `;
+        document.body.appendChild(popup); // Nota: O innerHTML está truncado no prompt original, mas assumi que continua como antes. Não alterei o resto do HTML.
+    } catch (error) {
+        console.error('Erro ao carregar dados da conta:', error);
+    }
+}
+function abrirPopupTrocarFoto() {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupTrocarFoto";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.borderRadius = "var(--border-radius-xl)";
+    popup.style.boxShadow = "var(--shadow-xl)";
+    popup.style.zIndex = "1001";
+    popup.style.maxWidth = "400px";
+    popup.style.width = "90%";
+    popup.innerHTML = `
+        <h3 style="margin: 0 0 16px; font-size: 1.1rem;">Trocar Foto de Perfil</h3>
+        <div style="text-align: center; margin-bottom: 16px;">
+            <img id="previewTrocarFoto" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; display: none; margin-bottom: 12px;">
+            <input type="file" id="inputTrocarFoto" accept="image/*" style="margin-bottom: 12px;">
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button id="btnCancelarTrocar" style="padding: 8px 16px; background: #e2e8f0; color: #2d3748; border: none; border-radius: var(--border-radius-sm); cursor: pointer;">Cancelar</button>
+            <button id="btnConfirmarTrocar" style="padding: 8px 16px; background: var(--primary-gradient); color: white; border: none; border-radius: var(--border-radius-sm); cursor: pointer;">Confirmar</button>
+        </div>
+        <p id="erroTrocarFoto" style="color: red; font-size: 0.85rem; margin-top: 8px; display: none;"></p>
+    `;
+    document.body.appendChild(popup);
+
+    const inputTrocar = document.getElementById("inputTrocarFoto");
+    const previewTrocar = document.getElementById("previewTrocarFoto");
+    let processedFotoBlob = null; // Local para este popup, para evitar global
+
+    inputTrocar.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                previewTrocar.src = ev.target.result;
+                previewTrocar.style.display = "block";
+
+                // Compressão para garantir tamanho < 50KB
+                const img = new Image();
+                img.src = ev.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = 100;
+                    canvas.height = 100;
+                    ctx.drawImage(img, 0, 0, 100, 100);
+                    canvas.toBlob((blob) => {
+                        processedFotoBlob = blob;
+                    }, 'image/jpeg', 0.8);
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    document.getElementById("btnCancelarTrocar").addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+    });
+
+    document.getElementById("btnConfirmarTrocar").addEventListener("click", async () => {
+        const file = inputTrocar.files[0];
+        if (!file) {
+            document.getElementById("erroTrocarFoto").textContent = "Selecione uma imagem";
+            document.getElementById("erroTrocarFoto").style.display = "block";
+            return;
+        }
+
+        const formData = new FormData();
+        const fileToUpload = processedFotoBlob || file;
+        formData.append("foto", fileToUpload, 'profile.jpg'); // Adiciona filename para blobs
+
+        try {
+            const response = await fetch(`${API}/upload-foto`, {
+                method: "POST",
+                body: formData,
+                credentials: "include"
+            });
+            const data = await response.json();
+
+            if (data.sucesso) {
+                // Atualizar foto no popup principal
+                const imgPerfil = document.querySelector("#fotoPerfilImg");
+                if (imgPerfil) {
+                    imgPerfil.src = `${API}/data/${encodeURIComponent(sessionStorage.getItem('userEmail'))}/profile.jpg?${Date.now()}`;
+                }
+                popup.remove();
+                overlay.remove();
+            } else {
+                document.getElementById("erroTrocarFoto").textContent = data.erro || 'Erro ao fazer upload';
+                document.getElementById("erroTrocarFoto").style.display = "block";
+            }
+        } catch (error) {
+            document.getElementById("erroTrocarFoto").textContent = 'Erro ao fazer upload: ' + error.message;
+            document.getElementById("erroTrocarFoto").style.display = "block";
+        }
+    });
+}
+
+// Dropdown para "Minha Conta"
+async function mostrarPopupMinhaConta() {
+    // Remover dropdown existente se houver
+    const existingPopup = document.getElementById("popupMinhaConta");
+    if (existingPopup) existingPopup.remove();
+
+    const menuItem = document.getElementById("menu-minha-conta");
+    const rect = menuItem.getBoundingClientRect();
+    const popup = document.createElement("div");
+    popup.id = "popupMinhaConta";
+    popup.style.position = "fixed";
+    popup.style.top = "auto";
+    popup.style.bottom = "24px";
+    popup.style.left = `${rect.right + 8}px`;
+    popup.style.right = "auto";
+    popup.style.transform = "none";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "0";
+    popup.style.zIndex = "1001";
+    popup.style.borderRadius = "var(--border-radius-xl)";
+    popup.style.boxShadow = "var(--shadow-xl)";
+    popup.style.minWidth = "300px";
+    popup.style.maxWidth = "400px";
+    popup.style.overflow = "hidden";
+
     // Buscar dados do usuário do servidor via endpoint /me
     try {
         const usuario = await safeApi(`/me`);
         const games = await safeApi(`/games`);
         const isDark = document.body.classList.contains('dark-mode');
+
+        // Foto de perfil com lápis de edição
+        const fotoPath = usuario.fotoPath ? `${API}${usuario.fotoPath}?${Date.now()}` : null;
+        const temFoto = !!fotoPath;
+
         popup.innerHTML = `
-            <div style="padding: 20px; border-bottom: 1px solid #e2e8f0;">
-                <h3 style="margin: 0 0 12px 0; font-size: 1.1rem;">Minha Conta</h3>
-                <p style="margin: 0 0 8px 0; font-size: 0.9rem;"><strong>Nome:</strong> #${usuario.id}${usuario.nome}</p>
+            <div class="minhaContaResumo"style="padding: 20px; border-bottom: 1px solid #e2e8f0;">
+                <div class="minhaContaResumo-tituloEimg">
+                    <h3 style="margin: 0 0 12px 0; font-size: 1.1rem;">Minha Conta</h3>
+                    <div style="width: 50px; display: flex; flex-direction: column; align-items: center; margin-bottom: 12px; position: relative;">
+                        <div id="fotoPerfilContainer" style="position: relative; width: 150px; height: 150px; border-radius: 50%; overflow: hidden; border: 2px solid #e2e8f0; margin-bottom: 12px;">
+                            <img id="fotoPerfilImg" src="${fotoPath || ''}" alt="Foto de Perfil" style="width: 100%; height: 100%; object-fit: cover; display: ${temFoto ? 'block' : 'none'};">
+                            <div id="editPencilOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: ${temFoto ? 'none' : 'none'}; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s; cursor: pointer; border-radius: 50%;">
+                                <span style="color: white; font-size: 10px;">Edit</span>
+                            </div>
+                        </div>
+                        <div id="uploadFotoContainer" style="width: 100%; text-align: center; display: ${temFoto ? 'none' : 'block'};">
+                            <input type="file" id="inputFotoPerfil" accept="image/*" style="margin-bottom: 8px;">
+                            <img id="previewFotoPerfil" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; display: none; margin: 8px 0;">
+                            <button id="btnUploadFoto" style="padding: 4px 8px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Salvar Foto</button>
+                            <p style="display: none; font-size: 0.8rem; color: #666; margin-top: 4px;">Máx 150x150px, 50KB</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="minhaConta-nomeWrapper" style="margin: 0 0 8px 0; font-size: 0.9rem;">
+                    <strong>Nome:</strong> 
+                    <input type="text" id="editNome" value="#${usuario.id}${usuario.nome}">
+                    <span class="lapisEditarNome"></span>
+                    <button id="btnSalvarNome" style="margin-left: 8px; padding: 4px 8px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Salvar</button>
+                </div>
                 <p style="margin: 0 0 16px 0; font-size: 0.9rem;"><strong>Email:</strong> ${usuario.email}</p>
             </div>
             <div style="padding: 16px 20px;">
@@ -364,7 +776,34 @@ async function mostrarPopupMinhaConta() {
             </div>
         `;
     }
+
     document.body.appendChild(popup);
+
+    // === Eventos de Foto ===
+    const inputFoto = document.getElementById("inputFotoPerfil");
+    const btnUploadFoto = document.getElementById("btnUploadFoto");
+    if (inputFoto && btnUploadFoto) {
+        inputFoto.addEventListener("change", previewFotoPerfil);
+        btnUploadFoto.addEventListener("click", uploadFotoPerfil);
+    }
+
+    // Hover no lápis
+    const container = document.getElementById("fotoPerfilContainer");
+    const pencil = document.getElementById("editPencilOverlay");
+    if (container && pencil) {
+        container.addEventListener("mouseenter", () => {
+            pencil.style.opacity = "1";
+            pencil.style.display = "flex";
+        });
+        container.addEventListener("mouseleave", () => {
+            pencil.style.opacity = "0";
+        });
+        pencil.addEventListener("click", (e) => {
+            e.stopPropagation();
+            abrirPopupTrocarFoto();
+        });
+    }
+
     // Fechar dropdown ao clicar fora
     const fecharDropdown = (e) => {
         if (!popup.contains(e.target) && e.target.id !== 'menu-minha-conta') {
@@ -373,7 +812,8 @@ async function mostrarPopupMinhaConta() {
         }
     };
     document.addEventListener('click', fecharDropdown);
-    // Event listeners
+
+    // === Eventos existentes (mantidos 100%) ===
     const btnMudarSenha = document.getElementById("btnMudarSenha");
     if (btnMudarSenha) {
         btnMudarSenha.addEventListener("click", () => {
@@ -381,15 +821,17 @@ async function mostrarPopupMinhaConta() {
             mostrarPopupMudarSenha();
         });
     }
+
     const btnLogout = document.getElementById("btnLogout");
     if (btnLogout) {
         btnLogout.addEventListener("click", () => {
             sessionStorage.removeItem("loggedIn");
             sessionStorage.removeItem("userEmail");
             popup.remove();
-            window.location.reload(); // Recarrega para mostrar popup login
+            window.location.reload();
         });
     }
+
     const gameSelector = document.getElementById("gameSelectorDropdown");
     if (gameSelector) {
         gameSelector.addEventListener("change", async (e) => {
@@ -398,13 +840,12 @@ async function mostrarPopupMinhaConta() {
             await carregarUserStatus();
             const currentSecao = localStorage.getItem("ultimaSecao") || "receitas";
             await carregarSecao(currentSecao);
-            // Atualizar seletor no dropdown
             const games = await safeApi(`/games`);
             gameSelector.innerHTML = games.map(g => `<option value="${g}" ${g === newGame ? 'selected' : ''}>${g}</option>`).join("");
-            // Novo: Atualizar room no Socket.IO
             socket.emit('joinGame', newGame);
         });
     }
+
     const btnNovoJogo = document.getElementById("btnNovoJogoDropdown");
     if (btnNovoJogo) {
         btnNovoJogo.addEventListener("click", () => {
@@ -412,7 +853,7 @@ async function mostrarPopupMinhaConta() {
             mostrarPopupNovoJogo();
         });
     }
-    // Event listener para toggle de tema no dropdown
+
     const themeToggle = document.getElementById("themeToggleDropdown");
     if (themeToggle) {
         themeToggle.addEventListener("click", (e) => {
@@ -421,12 +862,11 @@ async function mostrarPopupMinhaConta() {
             document.body.classList.remove("bright-mode", "dark-mode");
             document.body.classList.add(newMode + "-mode");
             localStorage.setItem("themeMode", newMode);
-            // Fechar dropdown após mudança
             popup.remove();
             document.removeEventListener("click", fecharDropdown);
         });
     }
-    // Novo: Event listener para toggle de 2FA
+
     const toggle2FA = document.getElementById("toggle2FA");
     if (toggle2FA) {
         toggle2FA.addEventListener("change", async () => {
@@ -439,16 +879,195 @@ async function mostrarPopupMinhaConta() {
                 });
                 if (!data.sucesso) {
                     alert(data.erro || 'Erro ao atualizar 2FA');
-                    toggle2FA.checked = !enable; // Reverter checkbox se erro
+                    toggle2FA.checked = !enable;
                 }
             } catch (error) {
                 alert('Erro ao atualizar 2FA: ' + error.message);
-                toggle2FA.checked = !enable; // Reverter checkbox se erro
+                toggle2FA.checked = !enable;
+            }
+        });
+    }
+
+    const btnSalvarNome = document.getElementById("btnSalvarNome");
+    if (btnSalvarNome) {
+        btnSalvarNome.addEventListener("click", async () => {
+            const editNomeInput = document.getElementById("editNome");
+            const newName = editNomeInput.value.trim().replace(/^#\d+/, '');
+            if (!newName || !/^[a-zA-Z0-9 ]+$/.test(newName) || newName.length > 50) {
+                mostrarErro('Nome inválido: deve conter apenas letras, números e espaços, com até 50 caracteres.');
+                return;
+            }
+            try {
+                const data = await safeApi('/update-name', {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ newName })
+                });
+                if (data.sucesso) {
+                    const updatedUser = await safeApi(`/me`);
+                    editNomeInput.value = `#${updatedUser.id}${updatedUser.nome}`;
+                    alert('Nome atualizado com sucesso!');
+                } else {
+                    mostrarErro(data.erro || 'Erro ao atualizar nome');
+                }
+            } catch (error) {
+                mostrarErro('Erro ao atualizar nome: ' + error.message);
             }
         });
     }
 }
-// Novo: Popup para Mudar Senha
+function loadProfilePhotoWithFallback() {
+    const preview = document.getElementById("previewFotoPerfil");
+    if (!preview) return;
+
+    const userEmail = sessionStorage.getItem('userEmail') || 'default';  // Ajuste se o email estiver em outro lugar
+    const timestamp = new Date().getTime();
+    const imgUrl = `/data/${encodeURIComponent(userEmail)}/profile.jpg?${timestamp}`;
+
+    preview.src = imgUrl;
+    preview.onerror = () => {
+        preview.src = '/imagens/default-profile.jpg';  // Fallback se 404
+    };
+}
+// Função para pré-visualizar a imagem selecionada
+function previewImage(event, previewElementId) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const preview = document.getElementById(previewElementId);
+            if (preview) {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+}
+function abrirPopupEditarFoto() {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupEditarFoto";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.innerHTML = `
+        <h2>Editar Foto de Perfil</h2>
+        <form id="formEditarFoto">
+            <input type="file" id="inputFotoEditar" accept="image/*" style="margin-bottom: 10px;">
+            <img id="previewFotoEditar" style="max-width: 100px; max-height: 100px; border-radius: 50%; display: none; margin-bottom: 10px;">
+            <button type="submit" id="btnUploadFotoEditar">Salvar Foto</button>
+            <button type="button" id="btnCancelarEditarFoto">Cancelar</button>
+            <p id="erroEditarFoto" style="color: red; display: none;"></p>
+        </form>
+    `;
+    document.body.appendChild(popup);
+    loadProfilePhotoWithFallback();
+    // Evento para pré-visualização no popup de edição
+    document.getElementById("inputFotoEditar").addEventListener("change", (e) => previewImage(e, "previewFotoEditar"));
+
+    // Evento de submit para upload (reutiliza a lógica de handleUploadFoto, mas atualiza o popup principal após sucesso)
+    document.getElementById("formEditarFoto").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const fileInput = document.getElementById("inputFotoEditar");
+        if (!fileInput.files[0]) {
+            const erroEl = document.getElementById("erroEditarFoto");
+            if (erroEl) {
+                erroEl.textContent = "Selecione uma imagem";
+                erroEl.style.display = "block";
+            }
+            return;
+        }
+        const formData = new FormData();
+        formData.append('foto', fileInput.files[0]);
+        try {
+            const response = await fetch(`${API}/upload-foto`, {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            });
+            const data = await response.json();
+            if (data.sucesso) {
+                // Fechar popup de edição
+                popup.remove();
+                overlay.remove();
+                // Atualizar a foto no popup principal "Minha Conta" (se aberto)
+                const profilePic = document.getElementById("profilePic");
+                if (profilePic) {
+                    profilePic.src = `${API}/data/${encodeURIComponent(sessionStorage.getItem('effectiveUser') || sessionStorage.getItem('user'))}/profile.jpg?${new Date().getTime()}`;
+                    profilePic.style.display = 'block';
+                }
+                // Atualizar visibilidade no popup principal
+                const uploadContainer = document.getElementById("uploadFotoContainer");
+                if (uploadContainer) uploadContainer.style.display = 'none';
+                const editPencil = document.getElementById("editPencil");
+                if (editPencil) editPencil.style.display = 'block';
+            } else {
+                const erroEl = document.getElementById("erroEditarFoto");
+                if (erroEl) {
+                    erroEl.textContent = data.erro || "Erro ao fazer upload";
+                    erroEl.style.display = "block";
+                }
+            }
+        } catch (error) {
+            const erroEl = document.getElementById("erroEditarFoto");
+            if (erroEl) {
+                erroEl.textContent = "Erro ao fazer upload";
+                erroEl.style.display = "block";
+            }
+        }
+    });
+
+    document.getElementById("btnCancelarEditarFoto").addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+    });
+}
+// Função para comprimir e redimensionar imagem (cliente-side)
+async function compressAndResizeImage(file) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const maxSize = 150;
+            if (width > height) {
+                if (width > maxSize) {
+                    height *= maxSize / width;
+                    width = maxSize;
+                }
+            } else {
+                if (height > maxSize) {
+                    width *= maxSize / height;
+                    height = maxSize;
+                }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            // Comprimir para JPEG com qualidade inicial 0.7, ajustando se necessário para <50KB
+            canvas.toBlob((blob) => {
+                if (blob.size > 50 * 1024) {
+                    // Se maior que 50KB, reduzir qualidade
+                    canvas.toBlob((reducedBlob) => {
+                        resolve(reducedBlob);
+                    }, 'image/jpeg', 0.5); // Qualidade reduzida
+                } else {
+                    resolve(blob);
+                }
+            }, 'image/jpeg', 0.7); // Qualidade inicial
+        };
+        img.onerror = reject;
+        img.src = URL.createObjectURL(file);
+    });
+}
+// Popup para Mudar Senha
 async function mostrarPopupMudarSenha() {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
@@ -549,7 +1168,7 @@ async function initGames() {
         localStorage.setItem("currentGame", currentGame);
     }
     // Não renderizar no menu mais; será renderizado no dropdown de Minha Conta
-    // Novo: Entrar na room do game atual
+    // Entrar na room do game atual
     socket.emit('joinGame', currentGame);
 }
 function mostrarPopupNovoJogo() {
@@ -799,7 +1418,7 @@ function mostrarPopupLogin() {
                 overlay.remove();
                 initMenu();
                 await initGames();
-                await carregarUserStatus(); // Novo: Carregar status após login
+                await carregarUserStatus(); // Carregar status após login
                 const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
                 carregarSecao(ultimaSecao);
             } else {
@@ -839,7 +1458,7 @@ function mostrarPopupLogin() {
                 overlay.remove();
                 initMenu();
                 await initGames();
-                await carregarUserStatus(); // Novo: Carregar status após login
+                await carregarUserStatus(); // Carregar status após login
                 const ultimaSecao = localStorage.getItem("ultimaSecao") || "receitas";
                 carregarSecao(ultimaSecao);
             } else {
@@ -1023,7 +1642,7 @@ async function carregarSecao(secao) {
     if (secao === "roadmap") return montarRoadmap();
     if (secao === "categorias") return montarCategorias();
     if (secao === "time") return montarTime();
-    if (secao === "home") return montarManual(); // Novo: Manual de uso
+    if (secao === "home") return montarManual(); // Manual de uso
     conteudo.innerHTML = `<h1 class="home--titulo-principal">Bem-vindo!</h1>
 <p>Essa aplicação tem como finalidade servir como calculadora e gestão de estoque para qualquer jogo de RPG (aqueles que envolvem craft e coleta de itens)!</p>
 <p>No momento, estamos jogando somente o jogo Pax Dei, por isso, seguem alguns links úteis para o jogo:</p>
@@ -1034,7 +1653,7 @@ async function carregarSecao(secao) {
 <iframe id="mapaIframe" src="https://paxdei.th.gl/" title="Pax Dei Interactive Map" loading="lazy"></iframe>
 <iframe id="paxDeiIframe" src="https://paxdei.gaming.tools/" title="Pax Dei DataBase" loading="lazy"></iframe>`;
 }
-// Novo: Função para montar o manual de uso
+// Função para montar o manual de uso
 function montarManual() {
     conteudo.innerHTML = `
         <h2>Bem-vindo! Manual de Uso da Ferramenta</h2>
@@ -1264,7 +1883,7 @@ async function carregarListaTime() {
                     `).join("") || '<li>Nenhum banido</li>'}</ul>
                 </div>
             `;
-            // Novo: Seção para compartilhar jogos (somente para founder)
+            // Seção para compartilhar jogos (somente para founder)
             html += await getSharedGamesSection();
         } catch (error) {
             console.error('[TIME] Erro ao carregar lista:', error);
@@ -1273,7 +1892,7 @@ async function carregarListaTime() {
     }
     div.innerHTML = html;
     await carregarPendencias();
-    // Novo: Event listener para toggle co-founder (apenas se founder)
+    // Event listener para toggle co-founder (apenas se founder)
     if (isFounder) {
         const btnConvidar = document.getElementById("btnConvidar");
         const inputEmail = document.getElementById("inputEmailConvidar");
@@ -1287,7 +1906,7 @@ async function carregarListaTime() {
             await enviarConvidar(email, btnConvidar, feedbackDiv, inputEmail);
         });
     }
-    // Novo: Adicionar event listeners para toggles de compartilhamento de jogos
+    // Adicionar event listeners para toggles de compartilhamento de jogos
     if (isFounder) {
         document.querySelectorAll('.toggle-share').forEach(toggle => {
             toggle.addEventListener('change', async (e) => {
@@ -1369,6 +1988,7 @@ async function mostrarPopupPermissoes(secondary) {
                 popup.remove();
                 overlay.remove();
                 await carregarListaTime();
+                emitTeamUpdate(); // <--- EMITIR ATUALIZAÇÃO
             } else {
                 alert(data.erro || 'Erro ao salvar permissões');
             }
@@ -1417,7 +2037,9 @@ async function toggleShareGame(game, share) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ game, share })
         });
-        if (!data.sucesso) {
+        if (data.sucesso) {
+            emitTeamUpdate(); // <--- EMITIR ATUALIZAÇÃO
+        } else {
             alert(data.erro || 'Erro ao atualizar compartilhamento');
         }
     } catch (error) {
@@ -1435,8 +2057,9 @@ async function toggleCoFounder(secondary, isCoFounder) {
             body: JSON.stringify({ secondary, promote: !isCoFounder })
         });
         if (data.sucesso) {
-            await carregarUserStatus(); // Recarregar status para atualizar isAdmin global
-            await carregarListaTime(); // Recarregar lista
+            await carregarUserStatus();
+            await carregarListaTime();
+            emitTeamUpdate(); // <--- EMITIR ATUALIZAÇÃO
         } else {
             alert(data.erro || 'Erro ao atualizar co-founder');
         }
@@ -1465,6 +2088,10 @@ async function carregarPendencias() {
         document.getElementById("pendencias-lista").innerHTML = '<li>Erro ao carregar pendências.</li>';
     }
 }
+function emitTeamUpdate() {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    socket.emit('teamUpdate', { game: currentGame });
+}
 async function enviarConvidar(email, btn = null, feedbackDiv = null, input = null) {
     if (!confirm(`Enviar convite para ${email}?`)) return;
     if (btn) btn.disabled = true;
@@ -1480,6 +2107,7 @@ async function enviarConvidar(email, btn = null, feedbackDiv = null, input = nul
             mostrarSucesso("Convite enviado ✅");
             if (input) input.value = "";
             await carregarListaTime();
+            emitTeamUpdate(); // <--- EMITIR ATUALIZAÇÃO
         } else {
             showFeedback(feedbackDiv, data.erro || 'Erro ao enviar convite', "error", btn);
         }
@@ -1519,7 +2147,14 @@ function showFeedback(feedbackDiv, message, type, btn = null) {
 }
 // Nova função para mostrar popup de sucesso temporário
 function mostrarSucesso(msg) {
+
+    // Remover overlay e modal existentes para evitar conflitos
+    const existingOverlay = document.getElementById("overlaySucesso");
+    if (existingOverlay) existingOverlay.remove();
+    const existingModal = document.getElementById("modalSucesso");
+    if (existingModal) existingModal.remove();
     const overlay = criarOverlay();
+    overlay.id = "overlaySucesso";
     const modalSucesso = document.createElement("div");
     modalSucesso.id = "modalSucesso";
     modalSucesso.style.position = "fixed";
@@ -1531,26 +2166,42 @@ function mostrarSucesso(msg) {
     modalSucesso.style.zIndex = "1000";
     modalSucesso.style.borderRadius = "5px";
     modalSucesso.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.1)";
+    // Criar o botão de fechar antes de append para garantir o listener
+    const buttonClose = document.createElement("button");
+    buttonClose.id = "fecharModalSucesso";
+    buttonClose.style.background = "none";
+    buttonClose.style.border = "none";
+    buttonClose.style.fontSize = "16px";
+    buttonClose.style.cursor = "pointer";
+    buttonClose.innerHTML = "❌";
     modalSucesso.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="color: #48bb78; margin: 0;">Sucesso</h3>
-            <button id="fecharModalSucesso" style="background: none; border: none; font-size: 16px; cursor: pointer;">❌</button>
+            <h3>Sucesso</h3>
+            ${buttonClose.outerHTML}
         </div>
-        <p id="mensagemSucesso" style="color: #48bb78; margin: 0;">${msg}</p>
+        <p id="mensagemSucesso" style="color: green;">${msg}</p>
     `;
-    document.body.appendChild(modalSucesso);
-    const fecharModalSucesso = document.getElementById("fecharModalSucesso");
-    fecharModalSucesso.addEventListener("click", () => {
+    // Adicionar listener imediatamente após criar o botão
+    buttonClose.addEventListener("click", () => {
         modalSucesso.remove();
-        const overlay = document.getElementById("overlay");
-        if (overlay) overlay.remove();
+        const currentOverlay = document.getElementById("overlaySucesso");
+        if (currentOverlay) currentOverlay.remove();
     });
-    // Auto-remove após 1 segundo
-    setTimeout(() => {
+    document.body.appendChild(modalSucesso);
+    // Re-adicionar listener para segurança (caso haja manipulação DOM)
+    const fecharModal = document.getElementById("fecharModalSucesso");
+    if (fecharModal) {
+        fecharModal.addEventListener("click", () => {
+            modalSucesso.remove();
+            const currentOverlay = document.getElementById("overlaySucesso");
+            if (currentOverlay) currentOverlay.remove();
+        });
+    }
+    // Fechar ao clicar no overlay
+    overlay.addEventListener("click", () => {
         modalSucesso.remove();
-        const overlay = document.getElementById("overlay");
-        if (overlay) overlay.remove();
-    }, 1000);
+        overlay.remove();
+    });
 }
 async function aceitarConvidar(from) {
     if (!confirm(`Aceitar convite de ${from}?`)) return;
@@ -1562,7 +2213,8 @@ async function aceitarConvidar(from) {
         });
         if (data.sucesso) {
             await carregarListaTime();
-            window.location.reload(); // Refresh automático para atualizar games e estado
+            window.location.reload();
+            emitTeamUpdate(); // <--- EMITIR ATUALIZAÇÃO
         } else {
             alert(data.erro || 'Erro ao aceitar convite');
         }
@@ -1581,6 +2233,7 @@ async function recusarConvidar(from) {
         });
         if (data.sucesso) {
             window.location.reload();
+            emitTeamUpdate(); // <--- EMITIR ATUALIZAÇÃO
         } else {
             alert(data.erro || 'Erro ao recusar convite');
         }
@@ -1600,7 +2253,8 @@ async function sairDoTime(primary) {
         if (data.sucesso) {
             localStorage.removeItem("currentGame");
             await carregarListaTime();
-            window.location.reload(); // Refresh automático para atualizar games e estado
+            window.location.reload();
+            emitTeamUpdate(); // <--- EMITIR ATUALIZAÇÃO
         } else {
             alert(data.erro || 'Erro ao sair do time');
         }
@@ -1643,6 +2297,7 @@ async function desvincularUsuario(email, role) {
         });
         if (data.sucesso) {
             await carregarListaTime();
+            emitTeamUpdate(); // <--- EMITIR ATUALIZAÇÃO
         } else {
             alert(data.erro || 'Erro ao desvincular usuário');
         }
@@ -1667,6 +2322,7 @@ async function banirUsuario(email, role) {
         });
         if (data.sucesso) {
             await carregarListaTime();
+            emitTeamUpdate(); // <--- EMITIR ATUALIZAÇÃO
         } else {
             alert(data.erro || 'Erro ao banir usuário');
         }
@@ -1691,6 +2347,7 @@ async function desbanirUsuario(email, role) {
         });
         if (data.sucesso) {
             await carregarListaTime();
+            emitTeamUpdate(); // <--- EMITIR ATUALIZAÇÃO
         } else {
             alert(data.erro || 'Erro ao desbanir usuário');
         }
@@ -2221,7 +2878,7 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             quantidade,
             operacao: "debitar",
             origem: `Conclusão de ${receitaNome}`,
-            user: userEmail // Novo: Adicionar usuário
+            user: userEmail // Adicionar usuário
         }));
         console.log("[CONCLUIR] Registrando no log:", logEntries);
         const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
@@ -2866,7 +3523,7 @@ async function montarEstoque() {
                 quantidade,
                 operacao,
                 origem: "Movimentação manual",
-                user: userEmail // Novo: Adicionar usuário
+                user: userEmail // Adicionar usuário
             };
             const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
@@ -2880,7 +3537,7 @@ async function montarEstoque() {
             mostrarErro("Erro ao movimentar estoque: " + error.message);
         }
     };
-    // Novo: Exportar Estoque
+    // Exportar Estoque
     if (hasPermission('exportarEstoque')) {
         const btnExportEstoque = document.getElementById("btnExportEstoque");
         btnExportEstoque.addEventListener("click", async () => {
@@ -2896,7 +3553,7 @@ async function montarEstoque() {
             }
         });
     }
-    // Novo: Importar Estoque
+    // Importar Estoque
     if (hasPermission('importarEstoque')) {
         const fileInput = document.getElementById("fileImportEstoque");
         fileInput.addEventListener("change", async (e) => {
@@ -2970,7 +3627,7 @@ async function montarEstoque() {
             }
         });
     }
-    // Novo: Botão para novo componente na aba de estoque
+    // Botão para novo componente na aba de estoque
     if (hasPermission('criarComponente')) {
         const btnNovoCompEst = document.getElementById("btnNovoComponenteEstoque");
         btnNovoCompEst.addEventListener("click", () => abrirPopupComponenteEstoque(true)); // true para novo
@@ -3307,7 +3964,7 @@ async function carregarLog(componenteFiltro = "", userFiltro = "", dataFiltro = 
         // Filtro por data (convertendo dataFiltro de YYYY-MM-DD para DD/MM/YYYY para matching com dataHora)
         if (dataFiltro) {
             const [ano, mes, dia] = dataFiltro.split('-');
-            const dataFormatada = `${dia}/${mes}/${ano}`; // Novo: Converter para formato DD/MM/YYYY
+            const dataFormatada = `${dia}/${mes}/${ano}`; // Converter para formato DD/MM/YYYY
             logsFiltrados = logsFiltrados.filter(l => l.dataHora && l.dataHora.startsWith(dataFormatada));
         }
         const div = document.getElementById("logMovimentacoes");
@@ -3317,7 +3974,7 @@ async function carregarLog(componenteFiltro = "", userFiltro = "", dataFiltro = 
                 const qtd = l.quantidade ?? 0;
                 const nome = l.componente ?? "(Sem nome)";
                 const hora = l.dataHora ?? "(Sem data)";
-                const user = l.user ? ` por ${l.user}` : ''; // Novo: Exibir usuário
+                const user = l.user ? ` por ${l.user}` : ''; // Exibir usuário
                 const origem = l.origem ? ` (Origem: ${l.origem})` : "";
                 return `<div class="item"><span>[${hora}]</span> ${simb}${formatQuantity(qtd)} x ${nome}${user}${origem}</div>`;
             }).join("");

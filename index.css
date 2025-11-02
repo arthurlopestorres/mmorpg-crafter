@@ -2211,6 +2211,7 @@ body.bright-mode .manual-dropdown-content p.manual-item {
 }
 
 #popupMinhaConta h3 {
+    width: 250px;
     color: #2d3748;
 }
 
@@ -2351,4 +2352,44 @@ body.bright-mode #popupMinhaConta button#btnLogout {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+#editNome {
+    margin-left: 8px;
+    padding: 4px;
+    border: 1px solid lightgray;
+}
+
+.minhaConta-nomeWrapper {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.lapisEditarNome {
+    display: block;
+    width: 20px;
+}
+
+.lapisEditarNome::before {
+    display: block;
+    width: 20px;
+    content: "\270F";
+    font-size: 14px;
+    transform: rotate(135deg);
+}
+
+#fotoPerfilContainer {
+    width: 50px !important;
+    height: 50px !important;
+}
+
+.minhaContaResumo-tituloEimg {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+#btnUploadFoto {
+    width: 115px !important;
 }
