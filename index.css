@@ -685,31 +685,49 @@ button.btn-arquivar:hover {
     transition: all var(--transition-fast);
 }
 
-.btn-vincular {
-    background: var(--success-gradient);
-    color: white;
-}
-
-.btn-vincular:hover {
-    background: linear-gradient(135deg, #38ef7d 0%, #11998e 100%);
-}
-
-.btn-desvincular {
-    background: var(--warning-gradient);
-    color: #2d3748;
-}
-
-.btn-desvincular:hover {
-    background: linear-gradient(135deg, #fdcb6e 0%, #ffeaa7 100%);
-}
-
-.btn-banir {
+.time-item .btn-promote-cofounder {
     background: var(--danger-gradient);
     color: white;
 }
 
-.btn-banir:hover {
+.time-item .btn-promote-cofounder:hover {
     background: linear-gradient(135deg, #fee140 0%, #fa709a 100%);
+}
+
+.time-item .btn-permissoes {
+    background: var(--warning-gradient);
+    color: #2d3748;
+}
+
+.time-item .btn-permissoes:hover {
+    background: linear-gradient(135deg, #fdcb6e 0%, #ffeaa7 100%);
+}
+
+.btn-vincular {
+    background: var(--warning-gradient);
+    color: #2d3748;
+}
+
+.btn-vincular:hover {
+    background: linear-gradient(135deg, #fdcb6e 0%, #ffeaa7 100%);
+}
+
+.btn-desvincular {
+    background: #b9b9b9;
+    color: darkred;
+}
+
+.btn-desvincular:hover {
+    background: #818181;
+}
+
+.btn-banir {
+    background: #b9b9b9;
+    color: darkred;
+}
+
+.btn-banir:hover {
+    background: #818181;
 }
 
 .btn-desbanir {
@@ -950,18 +968,25 @@ button.btn-arquivar:hover {
 
 .time-item {
     display: flex;
-    align-items: center;
-    gap: 12px;
     padding: 12px;
     background: rgba(255, 255, 255, 0.95);
     border-radius: var(--border-radius-md);
     margin-bottom: 8px;
     box-shadow: var(--shadow-sm);
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
 }
 
 .time-item strong {
     flex: 1;
     color: var(--text-primary);
+}
+
+.time-item button {
+    width: 100px;
+    height: 50px;
+    border-radius: 7px;
 }
 
 /* Novos estilos para input e feedback de convidar */
@@ -1905,7 +1930,7 @@ body.bright-mode .filtros select {
 }
 
 body.bright-mode .comps-lista {
-    color: var(--text-secondary);
+    color: var(--text-primary);
 }
 
 body.bright-mode .categoria {
@@ -1976,12 +2001,6 @@ body.bright-mode #botaoDeMinimizarMenu:hover {
 
     .menu-text {
         display: none;
-    }
-
-    .time-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
     }
 }
 
@@ -2311,77 +2330,6 @@ body.bright-mode #popupMinhaConta button#btnLogout {
     margin-bottom: 10px;
 }
 
-/* Estilos para submenu Crafting
-.submenu-crafting {
-    background: var(--background-color);
-    color: var(--text-color);
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-}
-
-.submenu-crafting li {
-    transition: background-color var(--transition-fast);
-}
-
-.submenu-crafting li:hover {
-    background-color: var(--hover-color);
-}
-
-.submenu-crafting li:last-child {
-    border-bottom: none;
-} */
-
-/* Ajustes para modo escuro */
-/* .dark-mode .submenu-crafting li {
-    color: #2d3748;
-    padding: 8px 16px;
-    cursor: pointer;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.dark-mode .submenu-crafting li:first-of-type {
-    border-top: 1px solid #e2e8f0;
-}
-
-.submenu-crafting li:hover {
-    background: #edf2f7;
-} */
-
-/* Seu CSS existente aqui... */
-
-.menu {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.menu li {
-    padding: 10px;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.menu-item-with-submenu {
-    display: flex;
-    align-items: center;
-}
-
-.menu-item-with-submenu span {
-    display: flex;
-    align-items: center;
-}
-
-.submenu-crafting-inline {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: none;
-    /* Inicialmente escondido */
-    transition: max-height 0.3s ease-in-out;
-}
-
 .submenu-crafting-inline li {
     padding: 8px 16px;
     cursor: pointer;
@@ -2393,4 +2341,14 @@ body.bright-mode #popupMinhaConta button#btnLogout {
     background: #333;
 }
 
-/* Seu restante do CSS aqui... */
+#popupPermissoes h2,
+#popupPermissoes h3,
+#popupPermissoes label {
+    color: #2d3748;
+}
+
+#menu-crafting {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}

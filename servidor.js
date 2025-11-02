@@ -1,5 +1,4 @@
 // servidor.js
-
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
@@ -9,13 +8,10 @@ const session = require('express-session');
 const axios = require('axios'); // Adicionado para verificação reCAPTCHA
 require('dotenv').config();
 const app = express();
-
 app.set('trust proxy', 1);
-
 const PORT = process.env.PORT || 10000;
 const DATA_DIR = '/data';
 const DEFAULT_GAME = 'Pax Dei';
-
 // Middleware
 app.use(express.json({ limit: '100mb' }));
 app.use(express.static(__dirname)); // Servir arquivos estáticos da raiz do projeto
@@ -25,7 +21,6 @@ app.use(session({
     saveUninitialized: false,
     cookie: { secure: process.env.NODE_ENV === 'production' }
 }));
-
 // Configuração do Nodemailer
 const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -34,25 +29,13 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS
     }
 });
-
 // Novo: Map para armazenar OTPs temporários (email => {code, expire, type, tempData})
 const otps = new Map();
 const OTP_EXPIRE_MINUTES = 10;
-
 // Função placeholder para sincronizarEstoque (substitua pelo código original)
 async function sincronizarEstoque() {
     console.log('[sincronizarEstoque] Função placeholder executada. Substitua pelo código original.');
-    // Exemplo de implementação (remova ou substitua pelo seu código):
-    /*
-    try {
-        const estoque = await fs.readFile(estoqueFile, 'utf8').then(JSON.parse).catch(() => []);
-        console.log('[sincronizarEstoque] Estoque sincronizado:', estoque);
-    } catch (error) {
-        console.error('[sincronizarEstoque] Erro:', error);
-    }
-    */
 }
-
 // Função para obter usuário efetivo baseado em associações
 async function getEffectiveUser(user) {
     const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
@@ -76,13 +59,11 @@ async function getEffectiveUser(user) {
         return user;
     }
 }
-
 // Função para checar se é admin (founder ou co-founder)
 async function isUserAdmin(userEmail) {
     if (!userEmail) return false;
     const effectiveUser = await getEffectiveUser(userEmail);
     if (effectiveUser === userEmail) return true; // Founder
-
     const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
     try {
         const associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
@@ -93,7 +74,19 @@ async function isUserAdmin(userEmail) {
         return false;
     }
 }
-
+// Novo: Função para checar permissão granular para member
+async function hasPermission(userEmail, permissionKey) {
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    try {
+        const associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        const assoc = associations.find(a => a.secondary === userEmail);
+        if (!assoc || assoc.role !== 'member') return false;
+        return assoc.permissao && assoc.permissao[permissionKey] === true; // CORRIGIDO: era 'permissoes' → agora 'permissao'
+    } catch (error) {
+        console.error('[hasPermission] Erro:', error);
+        return false;
+    }
+}
 // Função para verificar se o jogo é próprio do session user
 async function isOwnGame(sessionUser, game) {
     const safeUser = sessionUser.replace(/[^a-zA-Z0-9@._-]/g, '');
@@ -106,7 +99,6 @@ async function isOwnGame(sessionUser, game) {
         return false;
     }
 }
-
 // Função para obter o gameDir correto
 async function getGameDir(sessionUser, effectiveUser, game) {
     const safeOwn = sessionUser.replace(/[^a-zA-Z0-9@._-]/g, '');
@@ -120,7 +112,6 @@ async function getGameDir(sessionUser, effectiveUser, game) {
         return path.join(DATA_DIR, safeEff, safeGame);
     }
 }
-
 // Nova função para obter a lista de jogos acessíveis ao usuário
 async function getUserGames(sessionUser) {
     const effectiveUser = await getEffectiveUser(sessionUser);
@@ -148,7 +139,6 @@ async function getUserGames(sessionUser) {
     games = [...new Set(games)].sort();
     return games;
 }
-
 // Função para gerar ID único de 4-6 dígitos
 async function generateUniqueId() {
     const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
@@ -160,19 +150,16 @@ async function generateUniqueId() {
     } while (usuarios.some(u => u.id === id));
     return id;
 }
-
 // Função para salvar usuários (auxiliar para updates)
 async function saveUsuarios(usuarios) {
     const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
     await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
 }
-
 // Criar diretório de dados e arquivos JSON iniciais, se não existirem
 async function inicializarArquivos() {
     try {
         await fs.mkdir(DATA_DIR, { recursive: true });
         console.log('[INIT] Diretório de dados criado ou já existente:', DATA_DIR);
-
         // Usuarios global
         const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
         try {
@@ -181,7 +168,6 @@ async function inicializarArquivos() {
             await fs.writeFile(usuariosPath, JSON.stringify([]));
             console.log('[INIT] Criado usuarios.json na raiz');
         }
-
         // Associações de usuários
         const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
         try {
@@ -190,7 +176,6 @@ async function inicializarArquivos() {
             await fs.writeFile(associationsPath, JSON.stringify([]));
             console.log('[INIT] Criado usuarios-associacoes.json na raiz');
         }
-
         // Banidos de usuários
         const banidosPath = path.join(DATA_DIR, 'usuarios-banidos.json');
         try {
@@ -199,7 +184,6 @@ async function inicializarArquivos() {
             await fs.writeFile(banidosPath, JSON.stringify([]));
             console.log('[INIT] Criado usuarios-banidos.json na raiz');
         }
-
         // Pendências de convites
         const pendenciasPath = path.join(DATA_DIR, 'usuarios-pendencias.json');
         try {
@@ -208,19 +192,16 @@ async function inicializarArquivos() {
             await fs.writeFile(pendenciasPath, JSON.stringify([]));
             console.log('[INIT] Criado usuarios-pendencias.json na raiz');
         }
-
     } catch (error) {
         console.error('[INIT] Erro ao inicializar arquivos:', error);
     }
 }
-
 // Inicializar arquivos antes de iniciar o servidor
 inicializarArquivos().then(() => {
     console.log('[INIT] Arquivos de dados inicializados com sucesso');
 }).catch(error => {
     console.error('[INIT] Falha ao inicializar arquivos:', error);
 });
-
 // Middleware de autenticação
 const isAuthenticated = (req, res, next) => {
     if (req.session.user) {
@@ -229,7 +210,6 @@ const isAuthenticated = (req, res, next) => {
         res.status(401).json({ sucesso: false, erro: 'Não autorizado' });
     }
 };
-
 // Middleware para admin (headers)
 const isAdmin = (req, res, next) => {
     const key = req.headers['atboficial-mmo-crafter'];
@@ -239,7 +219,6 @@ const isAdmin = (req, res, next) => {
     }
     next();
 };
-
 // Função para verificar reCAPTCHA (usada em login e cadastro)
 async function verificarRecaptcha(token) {
     if (!process.env.RECAPTCHA_SECRET) {
@@ -259,17 +238,14 @@ async function verificarRecaptcha(token) {
         return false;
     }
 }
-
 // Função auxiliar para obter caminho do arquivo baseado no user e game
 function getFilePath(gameDir, filename) {
     return path.join(gameDir, filename);
 }
-
 // Novo: Função para gerar OTP de 6 dígitos
 function generateOTP() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
-
 // Novo: Função para enviar OTP por email
 async function sendOTP(email, otp, type) {
     try {
@@ -285,7 +261,6 @@ async function sendOTP(email, otp, type) {
         return false;
     }
 }
-
 // Endpoint: Login - Etapa 1: Enviar OTP se necessário
 app.post('/login', async (req, res) => {
     const { email, senha, recaptchaToken } = req.body;
@@ -294,45 +269,37 @@ app.post('/login', async (req, res) => {
         if (!await verificarRecaptcha(recaptchaToken)) {
             return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
         }
-
         const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
         let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
         const usuario = usuarios.find(u => u.email === email);
         if (!usuario || !usuario.aprovado) {
             return res.status(401).json({ sucesso: false, erro: 'Usuário ou senha não encontrados' });
         }
-
         // Verificar senha
         if (!await bcrypt.compare(senha, usuario.senhaHash)) {
             return res.status(401).json({ sucesso: false, erro: 'Senha incorreta' });
         }
-
         // Verificar se doisFatores está ativado
         const doisFatores = usuario.doisFatores !== false; // Default true se não existir
-
         if (!doisFatores) {
             // Login direto sem OTP
             req.session.user = email;
             return res.json({ sucesso: true });
         }
-
         // Gerar OTP e enviar
         const otp = generateOTP();
         if (!await sendOTP(email, otp, 'login')) {
             return res.status(500).json({ sucesso: false, erro: 'Erro ao enviar código de verificação' });
         }
-
         // Armazenar OTP (sem tempData, pois senha já foi validada)
         const expire = Date.now() + OTP_EXPIRE_MINUTES * 60 * 1000;
         otps.set(email, { code: otp, expire, type: 'login' });
-
         res.json({ sucesso: 'otp_sent' });
     } catch (error) {
         console.error('[POST /login] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao processar login' });
     }
 });
-
 // Novo: Endpoint para verificar OTP no login
 app.post('/verify-otp-login', async (req, res) => {
     const { email, code } = req.body;
@@ -341,13 +308,10 @@ app.post('/verify-otp-login', async (req, res) => {
         if (!otpData || otpData.type !== 'login' || Date.now() > otpData.expire || otpData.code !== code.trim()) {
             return res.status(400).json({ sucesso: false, erro: 'Código inválido ou expirado' });
         }
-
         // Como a senha já foi validada na etapa anterior, prosseguir com o login
         req.session.user = email;
-
         // Limpar OTP
         otps.delete(email);
-
         // Proceder com ações pós-login, se necessário
         let usuarios = await fs.readFile(path.join(DATA_DIR, 'usuarios.json'), 'utf8').then(JSON.parse).catch(() => []);
         const usuario = usuarios.find(u => u.email === email);
@@ -363,14 +327,12 @@ app.post('/verify-otp-login', async (req, res) => {
             usuarios[index] = usuario;
             await saveUsuarios(usuarios);
         }
-
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /verify-otp-login] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao verificar código' });
     }
 });
-
 // Endpoint: Cadastro - Etapa 1: Enviar OTP
 app.post('/cadastro', async (req, res) => {
     const { nome, email, senha, recaptchaToken } = req.body;
@@ -379,31 +341,26 @@ app.post('/cadastro', async (req, res) => {
         if (!await verificarRecaptcha(recaptchaToken)) {
             return res.status(400).json({ sucesso: false, erro: 'reCAPTCHA inválido' });
         }
-
         const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
         let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
         if (usuarios.some(u => u.email === email)) {
             return res.status(400).json({ sucesso: false, erro: 'Email já cadastrado' });
         }
-
         // Gerar OTP e enviar
         const otp = generateOTP();
         if (!await sendOTP(email, otp, 'cadastro')) {
             return res.status(500).json({ sucesso: false, erro: 'Erro ao enviar código de verificação' });
         }
-
         // Armazenar OTP e dados temporários
         const expire = Date.now() + OTP_EXPIRE_MINUTES * 60 * 1000;
         const senhaHash = await bcrypt.hash(senha, 10);
         otps.set(email, { code: otp, expire, type: 'cadastro', tempData: { nome, senhaHash } });
-
         res.json({ sucesso: 'otp_sent' });
     } catch (error) {
         console.error('[POST /cadastro] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao processar cadastro' });
     }
 });
-
 // Novo: Endpoint para verificar OTP no cadastro
 app.post('/verify-otp-cadastro', async (req, res) => {
     const { email, code } = req.body;
@@ -412,7 +369,6 @@ app.post('/verify-otp-cadastro', async (req, res) => {
         if (!otpData || otpData.type !== 'cadastro' || Date.now() > otpData.expire || otpData.code !== code.trim()) {
             return res.status(400).json({ sucesso: false, erro: 'Código inválido ou expirado' });
         }
-
         // Salvar usuário
         const { nome, senhaHash } = otpData.tempData;
         const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
@@ -420,7 +376,6 @@ app.post('/verify-otp-cadastro', async (req, res) => {
         const id = await generateUniqueId();
         usuarios.push({ nome, email, senhaHash, id, aprovado: false, doisFatores: true }); // Novo: doisFatores true por padrão
         await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
-
         // Enviar email para admin
         await transporter.sendMail({
             from: process.env.EMAIL_USER,
@@ -428,17 +383,14 @@ app.post('/verify-otp-cadastro', async (req, res) => {
             subject: 'Solicitação de Acesso',
             text: `Usuário solicitou acesso:\nNome: ${nome}\nEmail: ${email}`
         });
-
         // Limpar OTP
         otps.delete(email);
-
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /verify-otp-cadastro] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao verificar código' });
     }
 });
-
 // Endpoint para status do usuário (agora inclui isAdmin per game)
 app.get('/user-status', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -447,9 +399,52 @@ app.get('/user-status', isAuthenticated, async (req, res) => {
     const isFounder = effectiveUser === user;
     const isOwn = await isOwnGame(user, game);
     let isAdminLocal = isOwn ? true : await isUserAdmin(user);
-    res.json({ isFounder, isAdmin: isAdminLocal, effectiveUser });
+    // Novo: Incluir permissões granulares se member
+    let permissao = {};
+    if (!isFounder && !isAdminLocal) {
+        permissao = await getMemberPermissoes(user);
+    }
+    res.json({ isFounder, isAdmin: isAdminLocal, effectiveUser, permissao });
 });
-
+// Novo: Função auxiliar para obter permissões de member
+async function getMemberPermissoes(userEmail) {
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    try {
+        const associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        const assoc = associations.find(a => a.secondary === userEmail);
+        return assoc ? assoc.permissao || {} : {}; // CORRIGIDO: era 'permissoes' → agora 'permissao'
+    } catch (error) {
+        console.error('[getMemberPermissoes] Erro:', error);
+        return {};
+    }
+}
+// Novo: Endpoint para definir permissões granulares (só founder)
+app.post('/set-permissoes', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const effectiveUser = await getEffectiveUser(user);
+    if (effectiveUser !== user) {
+        return res.status(403).json({ sucesso: false, erro: 'Apenas o fundador pode definir permissões' });
+    }
+    const { secondary, permissao } = req.body;
+    if (!secondary || typeof permissao !== 'object') {
+        return res.status(400).json({ sucesso: false, erro: 'Secondary e permissões são obrigatórios' });
+    }
+    const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
+    try {
+        let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
+        const assocIndex = associations.findIndex(a => a.primary === user && a.secondary === secondary && a.role === 'member');
+        if (assocIndex === -1) {
+            return res.status(400).json({ sucesso: false, erro: 'Associação de member não encontrada' });
+        }
+        associations[assocIndex].permissao = permissao; // CORRIGIDO: permissao
+        await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
+        console.log(`[SET-PERMISSOES] Permissões atualizadas para ${secondary} por ${user}`);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[SET-PERMISSOES] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar permissões' });
+    }
+});
 // Novo: Endpoint para obter dados do usuário logado efetivo (/me)
 app.get('/me', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -489,8 +484,7 @@ app.get('/me', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao buscar usuário' });
     }
 });
-
-// Novo endpoint: Toggle 2FA
+// Novo: Endpoint para toggle 2FA
 app.post('/toggle-2fa', isAuthenticated, async (req, res) => {
     const { enable } = req.body;
     if (enable === undefined) {
@@ -511,7 +505,6 @@ app.post('/toggle-2fa', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar 2FA' });
     }
 });
-
 // Endpoint para buscar dados do usuário por email
 app.get('/usuarios', isAuthenticated, async (req, res) => {
     const { email } = req.query;
@@ -547,7 +540,6 @@ app.get('/usuarios', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao buscar usuário' });
     }
 });
-
 // Novo: Endpoint para promover/demover co-founder (só founder)
 app.post('/promote-cofounder', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -575,7 +567,6 @@ app.post('/promote-cofounder', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar co-founder' });
     }
 });
-
 // Endpoint para enviar convite
 app.post('/enviar-convite', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -612,7 +603,6 @@ app.post('/enviar-convite', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao enviar convite' });
     }
 });
-
 // Endpoint para listar pendências do usuário
 app.get('/pendencias', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -626,7 +616,6 @@ app.get('/pendencias', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao listar pendências' });
     }
 });
-
 // Endpoint para aceitar convite
 app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -641,23 +630,39 @@ app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
         let pendencias = await fs.readFile(pendenciasPath, 'utf8').then(JSON.parse).catch(() => []);
         let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
         let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
-
         // Remover pendência
         const pendIndex = pendencias.findIndex(p => p.from === from && p.to === user);
         if (pendIndex === -1) {
             return res.status(400).json({ sucesso: false, erro: 'Convite não encontrado' });
         }
         pendencias.splice(pendIndex, 1);
-
-        // Adicionar associação
+        // Adicionar associação com permissões padrão false
         if (associations.some(a => a.secondary === user)) {
             return res.status(400).json({ sucesso: false, erro: 'Você já está em um time' });
         }
-        associations.push({ primary: from, secondary: user, role: 'member' }); // Novo: Role padrão 'member'
-
+        associations.push({
+            primary: from, secondary: user, role: 'member', permissao: {
+                criarCategorias: false,
+                excluirCategorias: false,
+                criarComponente: false,
+                editarComponente: false,
+                excluirComponente: false,
+                exportarEstoque: false,
+                importarEstoque: false,
+                criarReceitas: false,
+                favoritarReceitas: false,
+                concluirReceitas: false,
+                duplicarReceitas: false,
+                editarReceitas: false,
+                fabricarComponentes: false,
+                criarRoadmap: false,
+                excluirRoadmap: false,
+                reordenarRoadmap: false,
+                marcarProntoRoadmap: false
+            }
+        });
         await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
-
         console.log(`[ACEITAR-CONVITE] ${user} aceitou convite de ${from}`);
         res.json({ sucesso: true });
     } catch (error) {
@@ -665,7 +670,6 @@ app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao aceitar convite' });
     }
 });
-
 // Endpoint para recusar convite
 app.post('/recusar-convite', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -689,7 +693,6 @@ app.post('/recusar-convite', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao recusar convite' });
     }
 });
-
 // Endpoint para associar usuários (protegido por headers)
 app.post('/associate-users', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
@@ -715,7 +718,27 @@ app.post('/associate-users', async (req, res) => {
         if (!usuarios.some(u => u.email === secondary)) {
             return res.status(400).json({ sucesso: false, erro: 'Secondary não encontrado nos usuários' });
         }
-        associations.push({ primary, secondary, role: 'member' }); // Novo: Role padrão 'member'
+        associations.push({
+            primary, secondary, role: 'member', permissao: {
+                criarCategorias: false,
+                excluirCategorias: false,
+                criarComponente: false,
+                editarComponente: false,
+                excluirComponente: false,
+                exportarEstoque: false,
+                importarEstoque: false,
+                criarReceitas: false,
+                favoritarReceitas: false,
+                concluirReceitas: false,
+                duplicarReceitas: false,
+                editarReceitas: false,
+                fabricarComponentes: false,
+                criarRoadmap: false,
+                excluirRoadmap: false,
+                reordenarRoadmap: false,
+                marcarProntoRoadmap: false
+            }
+        }); // Novo: Role padrão 'member' com permissões padrão false
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
         console.log(`[ASSOCIATE-USERS] Associado ${secondary} ao primary ${primary}`);
         res.json({ sucesso: true });
@@ -724,7 +747,6 @@ app.post('/associate-users', async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao associar usuários' });
     }
 });
-
 // Endpoint para desvincular usuários (protegido por headers)
 app.post('/dissociate-users', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
@@ -760,16 +782,15 @@ app.post('/dissociate-users', async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao desvincular usuários' });
     }
 });
-
 // Endpoint para listar associações do usuário logado
 app.get('/associacoes', isAuthenticated, async (req, res) => {
     const user = req.session.user;
     const associationsPath = path.join(DATA_DIR, 'usuarios-associacoes.json');
     try {
         const associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
-        const asPrimary = associations.filter(a => a.primary === user).map(a => ({ secondary: a.secondary, role: a.role || 'member' })); // Novo: Incluir role
+        const asPrimary = associations.filter(a => a.primary === user).map(a => ({ secondary: a.secondary, role: a.role || 'member', permissao: a.permissao || {} })); // Novo: Incluir permissões
         const asSecondaryAssoc = associations.find(a => a.secondary === user);
-        const asSecondary = asSecondaryAssoc ? [{ secondary: asSecondaryAssoc.primary, role: asSecondaryAssoc.role || 'member' }] : []; // Novo: Incluir role
+        const asSecondary = asSecondaryAssoc ? [{ secondary: asSecondaryAssoc.primary, role: asSecondaryAssoc.role || 'member', permissao: asSecondaryAssoc.permissao || {} }] : []; // Novo: Incluir permissões
         const allAssociados = [...asPrimary, ...asSecondary];
         res.json(allAssociados);
     } catch (error) {
@@ -777,7 +798,6 @@ app.get('/associacoes', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao listar associações' });
     }
 });
-
 // Endpoint para associar usuário (self)
 app.post('/associate-self', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -803,7 +823,27 @@ app.post('/associate-self', isAuthenticated, async (req, res) => {
         if (!usuarios.some(u => u.email === secondary && u.aprovado)) {
             return res.status(400).json({ sucesso: false, erro: 'Secondary não aprovado' });
         }
-        associations.push({ primary: user, secondary, role: 'member' }); // Novo: Role 'member'
+        associations.push({
+            primary: user, secondary, role: 'member', permissao: {
+                criarCategorias: false,
+                excluirCategorias: false,
+                criarComponente: false,
+                editarComponente: false,
+                excluirComponente: false,
+                exportarEstoque: false,
+                importarEstoque: false,
+                criarReceitas: false,
+                favoritarReceitas: false,
+                concluirReceitas: false,
+                duplicarReceitas: false,
+                editarReceitas: false,
+                fabricarComponentes: false,
+                criarRoadmap: false,
+                excluirRoadmap: false,
+                reordenarRoadmap: false,
+                marcarProntoRoadmap: false
+            }
+        }); // Novo: Role 'member' com permissões padrão false
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
         console.log(`[ASSOCIATE-SELF] Associado ${secondary} ao primary ${user}`);
         res.json({ sucesso: true });
@@ -812,7 +852,6 @@ app.post('/associate-self', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao associar usuário' });
     }
 });
-
 // Endpoint para desvincular usuário (self)
 app.post('/dissociate-self', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -841,7 +880,6 @@ app.post('/dissociate-self', isAuthenticated, async (req, res) => {
         }
         associations.splice(index, 1);
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
-
         console.log(`[DISSOCIATE-SELF] Desvinculado ${secondary} do primary ${user}`);
         res.json({ sucesso: true });
     } catch (error) {
@@ -849,7 +887,6 @@ app.post('/dissociate-self', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao desvincular usuário' });
     }
 });
-
 // Novo endpoint para desvincular como secondary
 app.post('/dissociate-as-secondary', isAuthenticated, async (req, res) => {
     const secondary = req.session.user;
@@ -881,7 +918,6 @@ app.post('/dissociate-as-secondary', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao desvincular usuário' });
     }
 });
-
 // Endpoint para banir usuário
 app.post('/ban-user', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -900,14 +936,12 @@ app.post('/ban-user', isAuthenticated, async (req, res) => {
         let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
         let banidos = await fs.readFile(banidosPath, 'utf8').then(JSON.parse).catch(() => []);
         let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
-
         // Primeiro, desvincular se associado
         const assocIndex = associations.findIndex(a => a.primary === user && a.secondary === secondary);
         if (assocIndex !== -1) {
             associations.splice(assocIndex, 1);
             await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
         }
-
         if (!usuarios.some(u => u.email === user && u.aprovado)) {
             return res.status(400).json({ sucesso: false, erro: 'Primary não autorizado' });
         }
@@ -917,7 +951,6 @@ app.post('/ban-user', isAuthenticated, async (req, res) => {
         if (banidos.some(b => b.primary === user && b.banned === secondary)) {
             return res.status(400).json({ sucesso: false, erro: 'Secondary já banido' });
         }
-
         banidos.push({ primary: user, banned: secondary, date: new Date().toISOString() });
         await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
         console.log(`[BAN-USER] ${secondary} banido por ${user}`);
@@ -927,7 +960,6 @@ app.post('/ban-user', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao banir usuário' });
     }
 });
-
 // Novo endpoint para banir como secondary (banir o primary)
 app.post('/ban-as-secondary', isAuthenticated, async (req, res) => {
     const secondary = req.session.user;
@@ -946,14 +978,12 @@ app.post('/ban-as-secondary', isAuthenticated, async (req, res) => {
         let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
         let banidos = await fs.readFile(banidosPath, 'utf8').then(JSON.parse).catch(() => []);
         let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
-
         // Primeiro, desvincular se associado
         const assocIndex = associations.findIndex(a => a.primary === banned && a.secondary === secondary);
         if (assocIndex !== -1) {
             associations.splice(assocIndex, 1);
             await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
         }
-
         if (!usuarios.some(u => u.email === secondary && u.aprovado)) {
             return res.status(400).json({ sucesso: false, erro: 'Secondary não autorizado' });
         }
@@ -963,7 +993,6 @@ app.post('/ban-as-secondary', isAuthenticated, async (req, res) => {
         if (banidos.some(b => b.primary === secondary && b.banned === banned)) {
             return res.status(400).json({ sucesso: false, erro: 'Primary já banido' });
         }
-
         banidos.push({ primary: secondary, banned, date: new Date().toISOString() });
         await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
         console.log(`[BAN-AS-SECONDARY] ${banned} banido por ${secondary}`);
@@ -973,7 +1002,6 @@ app.post('/ban-as-secondary', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao banir usuário' });
     }
 });
-
 // Endpoint para listar banidos do usuário logado
 app.get('/banidos', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -989,7 +1017,6 @@ app.get('/banidos', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao listar banidos' });
     }
 });
-
 // Endpoint para desbanir usuário
 app.post('/unban-user', isAuthenticated, async (req, res) => {
     const user = req.session.user;
@@ -1006,11 +1033,9 @@ app.post('/unban-user', isAuthenticated, async (req, res) => {
     try {
         let banidos = await fs.readFile(banidosPath, 'utf8').then(JSON.parse).catch(() => []);
         let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
-
         if (!usuarios.some(u => u.email === user && u.aprovado)) {
             return res.status(400).json({ sucesso: false, erro: 'Primary não autorizado' });
         }
-
         const index = banidos.findIndex(b => b.primary === user && b.banned === bannedEmail);
         if (index === -1) {
             return res.status(400).json({ sucesso: false, erro: 'Banimento não encontrado' });
@@ -1024,12 +1049,10 @@ app.post('/unban-user', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao desbanir usuário' });
     }
 });
-
 // Novo endpoint para desbanir como banned (desbanir o baneador) - BLOQUEADO: Apenas o baneador pode desbanir
 app.post('/unban-as-banned', isAuthenticated, async (req, res) => {
     return res.status(403).json({ sucesso: false, erro: 'Não autorizado a desbanir. Contate o fundador do time.' });
 });
-
 // Endpoint para listar usuários aprovados (exceto self)
 app.get('/usuarios-aprovados', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(req.session.user);
@@ -1043,7 +1066,6 @@ app.get('/usuarios-aprovados', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao listar usuários aprovados' });
     }
 });
-
 // Endpoint para listar usuários disponíveis para convite (não em nenhum time)
 app.get('/usuarios-disponiveis', isAuthenticated, async (req, res) => {
     const userEmail = req.session.user;
@@ -1067,13 +1089,11 @@ app.get('/usuarios-disponiveis', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao listar usuários disponíveis' });
     }
 });
-
 // Endpoint: Servir index.html (não protegido)
 app.get('/', (req, res) => {
     console.log('[GET /] Servindo index.html');
     res.sendFile(path.join(__dirname, 'index.html'));
 });
-
 // Endpoint: Aprovação manual (não protegido, pois manual via Postman)
 app.put('/usuarios', async (req, res) => {
     const { email, aprovadoParaAcesso } = req.body;
@@ -1091,7 +1111,6 @@ app.put('/usuarios', async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao aprovar' });
     }
 });
-
 // Endpoint: Troca de senha (protegido por headers)
 app.put('/usuarios', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
@@ -1115,7 +1134,6 @@ app.put('/usuarios', async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao trocar senha' });
     }
 });
-
 // Novo endpoint para mudar senha (autenticado)
 app.post('/change-password', isAuthenticated, async (req, res) => {
     const { oldPassword, newPassword } = req.body;
@@ -1141,7 +1159,6 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao mudar senha' });
     }
 });
-
 // Endpoint para listar jogos
 app.get('/games', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
@@ -1170,7 +1187,6 @@ app.get('/games', isAuthenticated, async (req, res) => {
     games = [...new Set(games)].sort();
     res.json(games);
 });
-
 // Endpoint para criar novo jogo (sempre no own dir)
 app.post('/games', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
@@ -1194,7 +1210,6 @@ app.post('/games', isAuthenticated, async (req, res) => {
         res.json({ sucesso: true });
     }
 });
-
 // Endpoint para deletar jogo (protegido por headers)
 app.delete('/games/:game', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
@@ -1219,7 +1234,6 @@ app.delete('/games/:game', async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao deletar jogo' });
     }
 });
-
 // Novo: Endpoint para jogos compartilhados (somente founder)
 app.get('/shared', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
@@ -1236,7 +1250,6 @@ app.get('/shared', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao ler shared' });
     }
 });
-
 app.post('/shared', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const effectiveUser = await getEffectiveUser(sessionUser);
@@ -1258,7 +1271,6 @@ app.post('/shared', isAuthenticated, async (req, res) => {
     await fs.writeFile(sharedPath, JSON.stringify(shared, null, 2));
     res.json({ sucesso: true });
 });
-
 // Endpoints protegidos com suporte a user e game
 app.get('/receitas', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
@@ -1287,32 +1299,26 @@ app.get('/receitas', isAuthenticated, async (req, res) => {
     try {
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit, favoritas } = req.query;
-
         if (favoritas === 'true') {
             data = data.filter(r => r.favorita === true);
         }
-
         if (search) {
             data = data.filter(r => r.nome.toLowerCase().includes(search.toLowerCase()));
         }
-
         if (order === 'az') {
             data.sort((a, b) => a.nome.localeCompare(b.nome));
         } else if (order === 'za') {
             data.sort((a, b) => b.nome.localeCompare(a.nome));
         }
-
         if (limit) {
             data = data.slice(0, parseInt(limit));
         }
-
         res.json(data);
     } catch (err) {
         console.error('[GET /receitas] Erro:', err);
         res.status(500).json({ sucesso: false, erro: 'Erro ao ler receitas' });
     }
 });
-
 app.post('/receitas', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -1323,7 +1329,8 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasCreatePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'criarReceitas');
+    if (!hasCreatePermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -1349,19 +1356,16 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
             res.json({ sucesso: true });
             return;
         }
-
         if (!novaReceita.nome || !novaReceita.componentes) {
             console.log('[POST /receitas] Erro: Nome ou componentes ausentes');
             return res.status(400).json({ sucesso: false, erro: 'Nome e componentes são obrigatórios' });
         }
-
         let receitas = [];
         try {
             receitas = JSON.parse(await fs.readFile(file, 'utf8'));
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
-
         receitas.push({ ...novaReceita, favorita: false });
         await fs.writeFile(file, JSON.stringify(receitas, null, 2));
         console.log('[POST /receitas] Receita adicionada:', novaReceita.nome);
@@ -1371,7 +1375,6 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao salvar receita' });
     }
 });
-
 app.post('/receitas/editar', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -1382,7 +1385,8 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasEditPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'editarReceitas');
+    if (!hasEditPermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -1405,25 +1409,21 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
             console.log('[POST /receitas/editar] Erro: Nome original, nome ou componentes ausentes');
             return res.status(400).json({ sucesso: false, erro: 'Nome original, nome e componentes são obrigatórios' });
         }
-
         let receitas = [];
         try {
             receitas = JSON.parse(await fs.readFile(file, 'utf8'));
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
-
         const index = receitas.findIndex(r => r.nome === nomeOriginal);
         if (index === -1) {
             console.log('[POST /receitas/editar] Erro: Receita original não encontrada:', nomeOriginal);
             return res.status(404).json({ sucesso: false, erro: 'Receita original não encontrada' });
         }
-
         if (nome !== nomeOriginal && receitas.some(r => r.nome === nome)) {
             console.log('[POST /receitas/editar] Erro: Novo nome já existe:', nome);
             return res.status(400).json({ sucesso: false, erro: 'Novo nome de receita já existe' });
         }
-
         receitas[index] = { ...receitas[index], nome, componentes };
         await fs.writeFile(file, JSON.stringify(receitas, null, 2));
         console.log('[POST /receitas/editar] Receita editada:', nomeOriginal, '->', nome);
@@ -1433,7 +1433,6 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao editar receita' });
     }
 });
-
 app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -1442,8 +1441,13 @@ app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
         return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
     }
     const effectiveUser = await getEffectiveUser(sessionUser);
-    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
+    const hasFavoritarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'favoritarReceitas');
+    if (!hasFavoritarPermission) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
         const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
         const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
@@ -1463,20 +1467,17 @@ app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
             console.log('[POST /receitas/favoritar] Erro: Nome ou favorita ausentes');
             return res.status(400).json({ sucesso: false, erro: 'Nome e favorita são obrigatórios' });
         }
-
         let receitas = [];
         try {
             receitas = JSON.parse(await fs.readFile(file, 'utf8'));
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
-
         const index = receitas.findIndex(r => r.nome === nome);
         if (index === -1) {
             console.log('[POST /receitas/favoritar] Erro: Receita não encontrada:', nome);
             return res.status(404).json({ sucesso: false, erro: 'Receita não encontrada' });
         }
-
         receitas[index].favorita = favorita;
         await fs.writeFile(file, JSON.stringify(receitas, null, 2));
         console.log('[POST /receitas/favoritar] Favorita atualizada para receita:', nome, '->', favorita);
@@ -1486,7 +1487,6 @@ app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar favorita' });
     }
 });
-
 app.get('/categorias', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -1519,7 +1519,6 @@ app.get('/categorias', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao ler categorias' });
     }
 });
-
 app.post('/categorias', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -1530,7 +1529,8 @@ app.post('/categorias', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasCreatePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'criarCategorias');
+    if (!hasCreatePermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -1553,13 +1553,11 @@ app.post('/categorias', isAuthenticated, async (req, res) => {
             console.log('[POST /categorias] Erro: Nome ausente');
             return res.status(400).json({ sucesso: false, erro: 'Nome é obrigatório' });
         }
-
         let categorias = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         if (categorias.includes(nome)) {
             console.log('[POST /categorias] Erro: Categoria já existe:', nome);
             return res.status(400).json({ sucesso: false, erro: 'Categoria já existe' });
         }
-
         categorias.push(nome);
         categorias.sort();
         await fs.writeFile(file, JSON.stringify(categorias, null, 2));
@@ -1570,7 +1568,6 @@ app.post('/categorias', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao salvar categoria' });
     }
 });
-
 app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -1581,7 +1578,8 @@ app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirCategorias');
+    if (!hasDeletePermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -1605,13 +1603,11 @@ app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
             console.log('[POST /categorias/excluir] Erro: Nome ausente');
             return res.status(400).json({ sucesso: false, erro: 'Nome é obrigatório' });
         }
-
         let comps = await fs.readFile(compFile, 'utf8').then(JSON.parse).catch(() => []);
         if (comps.some(c => c.categoria === nome)) {
             console.log('[POST /categorias/excluir] Erro: Categoria em uso:', nome);
             return res.status(400).json({ sucesso: false, erro: 'Categoria em uso' });
         }
-
         let categorias = await fs.readFile(catFile, 'utf8').then(JSON.parse).catch(() => []);
         categorias = categorias.filter(c => c !== nome);
         await fs.writeFile(catFile, JSON.stringify(categorias, null, 2));
@@ -1622,7 +1618,6 @@ app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao excluir categoria' });
     }
 });
-
 app.get('/componentes', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -1650,28 +1645,23 @@ app.get('/componentes', isAuthenticated, async (req, res) => {
     try {
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit } = req.query;
-
         if (search) {
             data = data.filter(c => c.nome.toLowerCase().includes(search.toLowerCase()));
         }
-
         if (order === 'az') {
             data.sort((a, b) => a.nome.localeCompare(b.nome));
         } else if (order === 'za') {
             data.sort((a, b) => b.nome.localeCompare(a.nome));
         }
-
         if (limit) {
             data = data.slice(0, parseInt(limit));
         }
-
         res.json(data);
     } catch (err) {
         console.error('[GET /componentes] Erro:', err);
         res.status(500).json({ sucesso: false, erro: 'Erro ao ler componentes' });
     }
 });
-
 app.post('/componentes', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -1682,7 +1672,8 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasCreatePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'criarComponente');
+    if (!hasCreatePermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -1707,23 +1698,19 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
             console.log('[POST /componentes] Erro: Nome ausente');
             return res.status(400).json({ sucesso: false, erro: 'Nome é obrigatório' });
         }
-
         let componentes = [];
         try {
             componentes = JSON.parse(await fs.readFile(file, 'utf8'));
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
-
         if (componentes.some(c => c.nome === novoComponente.nome)) {
             console.log('[POST /componentes] Erro: Componente já existe:', novoComponente.nome);
             return res.status(400).json({ sucesso: false, erro: 'Componente já existe' });
         }
-
         componentes.push(novoComponente);
         await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes] Componente adicionado:', novoComponente.nome);
-
         // Adicionar categoria se nova
         const categoria = novoComponente.categoria;
         let cats = await fs.readFile(catFile, 'utf8').then(JSON.parse).catch(() => []);
@@ -1733,7 +1720,6 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
             await fs.writeFile(catFile, JSON.stringify(cats, null, 2));
             console.log('[POST /componentes] Categoria adicionada:', categoria);
         }
-
         // Adicionar automaticamente ao estoque com quantidade 0 se não existir
         let estoque = [];
         try {
@@ -1741,21 +1727,18 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
-
         const index = estoque.findIndex(e => e.componente === novoComponente.nome);
         if (index === -1) {
             estoque.push({ componente: novoComponente.nome, quantidade: 0 });
             await fs.writeFile(estoqueFileGame, JSON.stringify(estoque, null, 2));
             console.log('[POST /componentes] Componente adicionado ao estoque com quantidade 0:', novoComponente.nome);
         }
-
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /componentes] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao salvar componente' });
     }
 });
-
 app.post('/componentes/editar', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -1766,7 +1749,8 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasEditPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'editarComponente');
+    if (!hasEditPermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -1792,29 +1776,24 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
             console.log('[POST /componentes/editar] Erro: Nome original ou nome ausente');
             return res.status(400).json({ sucesso: false, erro: 'Nome original e nome são obrigatórios' });
         }
-
         let componentes = [];
         try {
             componentes = JSON.parse(await fs.readFile(file, 'utf8'));
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
-
         const index = componentes.findIndex(c => c.nome === nomeOriginal);
         if (index === -1) {
             console.log('[POST /componentes/editar] Erro: Componente original não encontrado:', nomeOriginal);
             return res.status(404).json({ sucesso: false, erro: 'Componente original não encontrado' });
         }
-
         if (nome !== nomeOriginal && componentes.some(c => c.nome === nome)) {
             console.log('[POST /componentes/editar] Erro: Novo nome já existe:', nome);
             return res.status(400).json({ sucesso: false, erro: 'Novo nome de componente já existe' });
         }
-
         componentes[index] = { nome, categoria, associados, quantidadeProduzida };
         await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes/editar] Componente editado:', nomeOriginal, '->', nome);
-
         // Adicionar categoria se nova
         let cats = await fs.readFile(catFile, 'utf8').then(JSON.parse).catch(() => []);
         if (categoria && !cats.includes(categoria)) {
@@ -1823,7 +1802,6 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
             await fs.writeFile(catFile, JSON.stringify(cats, null, 2));
             console.log('[POST /componentes/editar] Categoria adicionada:', categoria);
         }
-
         // Se o nome mudou, propagar a mudança para estoque, receitas e outros componentes
         if (nome !== nomeOriginal) {
             // Atualizar estoque
@@ -1839,7 +1817,6 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
                 await fs.writeFile(estoqueFileGame, JSON.stringify(estoque, null, 2));
                 console.log('[POST /componentes/editar] Nome atualizado no estoque:', nomeOriginal, '->', nome);
             }
-
             // Atualizar receitas
             let receitas = [];
             try {
@@ -1862,7 +1839,6 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
                 await fs.writeFile(receitasFileGame, JSON.stringify(receitas, null, 2));
                 console.log('[POST /componentes/editar] Nome atualizado nas receitas:', nomeOriginal, '->', nome);
             }
-
             // Atualizar associados em outros componentes
             let componentesAtualizados = false;
             componentes.forEach(comp => {
@@ -1880,14 +1856,12 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
                 console.log('[POST /componentes/editar] Nome atualizado nos associados de outros componentes:', nomeOriginal, '->', nome);
             }
         }
-
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /componentes/editar] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao editar componente' });
     }
 });
-
 app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -1898,7 +1872,8 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirComponente');
+    if (!hasDeletePermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -1924,20 +1899,17 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
             console.log('[POST /componentes/excluir] Erro: Nome ausente');
             return res.status(400).json({ sucesso: false, erro: 'Nome é obrigatório' });
         }
-
         let componentes = [];
         try {
             componentes = JSON.parse(await fs.readFile(file, 'utf8'));
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
-
         const index = componentes.findIndex(c => c.nome === nome);
         if (index === -1) {
             console.log('[POST /componentes/excluir] Erro: Componente não encontrado:', nome);
             return res.status(404).json({ sucesso: false, erro: 'Componente não encontrado' });
         }
-
         // Remover referências em receitas
         let receitas = [];
         try {
@@ -1959,7 +1931,6 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
             await fs.writeFile(receitasFileGame, JSON.stringify(receitas, null, 2));
             console.log('[POST /componentes/excluir] Referências removidas nas receitas para:', nome);
         }
-
         // Remover referências em arquivados
         let arquivados = [];
         try {
@@ -1981,7 +1952,6 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
             await fs.writeFile(arquivadosFileGame, JSON.stringify(arquivados, null, 2));
             console.log('[POST /componentes/excluir] Referências removidas nos arquivados para:', nome);
         }
-
         // Remover referências em associados de outros componentes
         let componentesAtualizados = false;
         componentes.forEach(comp => {
@@ -1997,12 +1967,10 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
             await fs.writeFile(file, JSON.stringify(componentes, null, 2));
             console.log('[POST /componentes/excluir] Referências removidas nos associados de outros componentes para:', nome);
         }
-
         // Remover o componente
         componentes.splice(index, 1);
         await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes/excluir] Componente excluído:', nome);
-
         // Remover do estoque
         let estoque = [];
         try {
@@ -2016,14 +1984,12 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
             await fs.writeFile(estoqueFileGame, JSON.stringify(estoque, null, 2));
             console.log('[POST /componentes/excluir] Componente removido do estoque:', nome);
         }
-
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /componentes/excluir] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao excluir componente' });
     }
 });
-
 app.get('/estoque', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -2051,28 +2017,23 @@ app.get('/estoque', isAuthenticated, async (req, res) => {
     try {
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const { search, order, limit } = req.query;
-
         if (search) {
             data = data.filter(e => e.componente.toLowerCase().includes(search.toLowerCase()));
         }
-
         if (order === 'az') {
             data.sort((a, b) => a.componente.localeCompare(b.componente));
         } else if (order === 'za') {
             data.sort((a, b) => b.componente.localeCompare(a.componente));
         }
-
         if (limit) {
             data = data.slice(0, parseInt(limit));
         }
-
         res.json(data);
     } catch (err) {
         console.error('[GET /estoque] Erro:', err);
         res.status(500).json({ sucesso: false, erro: 'Erro ao ler estoque' });
     }
 });
-
 // Novo: Endpoint para importação em massa de estoque
 app.post('/estoque/import', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
@@ -2084,6 +2045,10 @@ app.post('/estoque/import', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
+    const hasImportPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'importarEstoque');
+    if (!hasImportPermission) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
         const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
@@ -2166,7 +2131,6 @@ app.post('/estoque/import', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao importar estoque' });
     }
 });
-
 app.post('/estoque', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -2197,18 +2161,17 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
             console.log('[POST /estoque] Erro: Componente, quantidade ou operação ausentes');
             return res.status(400).json({ sucesso: false, erro: 'Componente, quantidade e operação são obrigatórios' });
         }
-        // Correção: Permitir debitar em jogos próprios (isOwn), mesmo para não-admins; em compartilhados, só admins
-        if (operacao === 'debitar' && !isAdminUser && !isOwn) {
+        // Correção: Permitir debitar em jogos próprios (isOwn), mesmo para não-admins; em compartilhados, só admins ou com permissão
+        const hasDebitPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'debitarEstoque'); // Assumindo 'debitarEstoque' como chave, ajuste se necessário
+        if (operacao === 'debitar' && !hasDebitPermission) {
             return res.status(403).json({ sucesso: false, erro: 'Não autorizado a debitar estoque' });
         }
-
         let estoque = [];
         try {
             estoque = JSON.parse(await fs.readFile(file, 'utf8'));
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
-
         const index = estoque.findIndex(e => e.componente === componente);
         if (operacao === 'adicionar') {
             if (index === -1) {
@@ -2227,7 +2190,6 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
             console.log('[POST /estoque] Erro: Operação inválida:', operacao);
             return res.status(400).json({ sucesso: false, erro: 'Operação inválida' });
         }
-
         await fs.writeFile(file, JSON.stringify(estoque, null, 2));
         console.log('[POST /estoque] Estoque atualizado:', componente, operacao, quantidade);
         res.json({ sucesso: true });
@@ -2236,7 +2198,6 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar estoque' });
     }
 });
-
 app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -2247,7 +2208,8 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasZerarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirComponente'); // Usando excluirComponente como proxy
+    if (!hasZerarPermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -2272,15 +2234,12 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
-
         // Zerar todas as quantidades
         const originalQuantities = estoque.map(e => ({ componente: e.componente, quantidade: e.quantidade || 0 }));
         estoque.forEach(e => {
             e.quantidade = 0;
         });
-
         await fs.writeFile(file, JSON.stringify(estoque, null, 2));
-
         // Registrar no log como uma única entrada
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
         const userEmail = req.session.user;
@@ -2295,7 +2254,6 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
         let logs = await fs.readFile(logFile, 'utf8').then(JSON.parse).catch(() => []);
         logs.push(logEntry);
         await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
-
         console.log('[POST /estoque/zerar] Estoque zerado');
         res.json({ sucesso: true });
     } catch (error) {
@@ -2303,7 +2261,6 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao zerar estoque' });
     }
 });
-
 app.delete('/data', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -2314,7 +2271,8 @@ app.delete('/data', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirComponente');
+    if (!hasDeletePermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -2337,20 +2295,17 @@ app.delete('/data', isAuthenticated, async (req, res) => {
             console.log('[DELETE /data] Erro: Nome do componente ausente');
             return res.status(400).json({ sucesso: false, erro: 'Nome do componente é obrigatório' });
         }
-
         let estoque = [];
         try {
             estoque = JSON.parse(await fs.readFile(file, 'utf8'));
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
-
         const index = estoque.findIndex(e => e.componente === componente);
         if (index === -1) {
             console.log('[DELETE /data] Erro: Componente não encontrado no estoque:', componente);
             return res.status(404).json({ sucesso: false, erro: 'Componente não encontrado no estoque' });
         }
-
         estoque.splice(index, 1);
         await fs.writeFile(file, JSON.stringify(estoque, null, 2));
         console.log('[DELETE /data] Componente excluído do estoque:', componente);
@@ -2360,7 +2315,6 @@ app.delete('/data', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao excluir componente do estoque' });
     }
 });
-
 app.get('/arquivados', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -2393,7 +2347,6 @@ app.get('/arquivados', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao ler arquivados' });
     }
 });
-
 app.post('/arquivados', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -2404,7 +2357,8 @@ app.post('/arquivados', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasConcluirPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'concluirReceitas');
+    if (!hasConcluirPermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -2431,7 +2385,6 @@ app.post('/arquivados', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao salvar arquivados' });
     }
 });
-
 app.get('/log', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -2464,7 +2417,6 @@ app.get('/log', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao ler log' });
     }
 });
-
 app.post('/log', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -2494,7 +2446,7 @@ app.post('/log', isAuthenticated, async (req, res) => {
         const userEmail = req.session.user;
         novosLogs = novosLogs.map(entry => ({
             ...entry,
-            user: entry.user || userEmail  // Adicionar user se ausente
+            user: entry.user || userEmail // Adicionar user se ausente
         }));
         let logs = [];
         try {
@@ -2502,7 +2454,6 @@ app.post('/log', isAuthenticated, async (req, res) => {
         } catch (err) {
             if (err.code !== 'ENOENT') throw err;
         }
-
         logs.push(...novosLogs);
         await fs.writeFile(file, JSON.stringify(logs, null, 2));
         console.log('[POST /log] Log atualizado com', novosLogs.length, 'entradas');
@@ -2512,7 +2463,6 @@ app.post('/log', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao salvar log' });
     }
 });
-
 app.post('/fabricar', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -2523,7 +2473,8 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasFabricarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'fabricarComponentes');
+    if (!hasFabricarPermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -2554,9 +2505,7 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
             console.log('[POST /fabricar] Erro: Componente sem associados');
             return res.status(400).json({ sucesso: false, erro: 'Componente sem associados' });
         }
-
         let estoque = await fs.readFile(estoqueFile, 'utf8').then(JSON.parse).catch(() => []);
-
         // Verificar estoque dos subcomponentes diretos
         for (const assoc of comp.associados) {
             const eIndex = estoque.findIndex(e => e.componente === assoc.nome);
@@ -2565,7 +2514,6 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
                 return res.status(400).json({ sucesso: false, erro: `Estoque insuficiente para ${assoc.nome}` });
             }
         }
-
         // Debitar subcomponentes
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
         const userEmail = req.session.user;
@@ -2579,10 +2527,9 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
                 quantidade: assoc.quantidade * numCrafts,
                 operacao: "debitar",
                 origem: `Fabricação de ${componente}`,
-                user: userEmail  // Novo: Adicionar usuário
+                user: userEmail // Novo: Adicionar usuário
             });
         }
-
         // Adicionar o componente produzido
         const qtdProd = comp.quantidadeProduzida || 1;
         const cIndex = estoque.findIndex(e => e.componente === componente);
@@ -2597,16 +2544,13 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
             quantidade: qtdProd * numCrafts,
             operacao: "adicionar",
             origem: `Fabricação de ${componente}`,
-            user: userEmail  // Novo: Adicionar usuário
+            user: userEmail // Novo: Adicionar usuário
         });
-
         await fs.writeFile(estoqueFile, JSON.stringify(estoque, null, 2));
-
         // Registrar no log
         let logs = await fs.readFile(logFile, 'utf8').then(JSON.parse).catch(() => []);
         logs.push(...newLogs);
         await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
-
         console.log('[POST /fabricar] Componente fabricado:', componente);
         res.json({ sucesso: true });
     } catch (error) {
@@ -2614,7 +2558,6 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao fabricar componente' });
     }
 });
-
 // Endpoint para roadmap
 app.get('/roadmap', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
@@ -2648,7 +2591,6 @@ app.get('/roadmap', isAuthenticated, async (req, res) => {
         else res.status(500).json({ sucesso: false, erro: 'Erro ao ler roadmap' });
     }
 });
-
 app.post('/roadmap', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
@@ -2659,7 +2601,8 @@ app.post('/roadmap', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    if (!isOwn && !isAdminUser) {
+    const hasCreatePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'criarRoadmap');
+    if (!hasCreatePermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
@@ -2684,7 +2627,6 @@ app.post('/roadmap', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao salvar roadmap' });
     }
 });
-
 // Novo: Endpoint admin para listar todos os usuários e associações (protegido por headers)
 app.get('/admin/users', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
@@ -2700,8 +2642,8 @@ app.get('/admin/users', async (req, res) => {
         // Para cada usuário, encontrar associações
         const usersWithAssocs = usuarios.map(u => {
             const { senhaHash, ...safeU } = u;
-            const primaries = associations.filter(a => a.primary === u.email).map(a => ({ secondary: a.secondary, role: a.role || 'member' }));
-            const secondaries = associations.filter(a => a.secondary === u.email).map(a => ({ primary: a.primary, role: a.role || 'member' }));
+            const primaries = associations.filter(a => a.primary === u.email).map(a => ({ secondary: a.secondary, role: a.role || 'member', permissao: a.permissao || {} })); // Incluir permissões
+            const secondaries = associations.filter(a => a.secondary === u.email).map(a => ({ primary: a.primary, role: a.role || 'member', permissao: a.permissao || {} })); // Incluir permissões
             return { ...safeU, associations: { primaries, secondaries } };
         });
         res.json(usersWithAssocs);
@@ -2710,7 +2652,6 @@ app.get('/admin/users', async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao listar usuários' });
     }
 });
-
 // Novo: Endpoint admin para adicionar usuário (protegido por headers)
 app.post('/admin/users', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
@@ -2739,7 +2680,6 @@ app.post('/admin/users', async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao adicionar usuário' });
     }
 });
-
 // Novo: Endpoint admin para excluir usuário e dados (protegido por headers)
 app.delete('/admin/users/:email', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
@@ -2761,22 +2701,18 @@ app.delete('/admin/users/:email', async (req, res) => {
         }
         usuarios.splice(userIndex, 1);
         await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
-
         // Remover associações onde primary ou secondary é email
         let associations = await fs.readFile(associationsPath, 'utf8').then(JSON.parse).catch(() => []);
         associations = associations.filter(a => a.primary !== email && a.secondary !== email);
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
-
         // Remover pendências envolvendo email
         let pendencias = await fs.readFile(pendenciasPath, 'utf8').then(JSON.parse).catch(() => []);
         pendencias = pendencias.filter(p => p.from !== email && p.to !== email);
         await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
-
         // Remover banidos envolvendo email
         let banidos = await fs.readFile(banidosPath, 'utf8').then(JSON.parse).catch(() => []);
         banidos = banidos.filter(b => b.primary !== email && b.banned !== email);
         await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
-
         // Deletar diretório do usuário
         const safeUser = email.replace(/[^a-zA-Z0-9@._-]/g, '');
         const userDir = path.join(DATA_DIR, safeUser);
@@ -2786,14 +2722,12 @@ app.delete('/admin/users/:email', async (req, res) => {
         } catch (dirErr) {
             console.warn(`[DELETE /admin/users] Aviso: Não foi possível remover diretório ${userDir}:`, dirErr);
         }
-
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[DELETE /admin/users] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao excluir usuário' });
     }
 });
-
 // Nova rota 1: Obter todos os jogos do diretório de um usuário (admin)
 app.get('/admin/user-games', isAdmin, async (req, res) => {
     const { email } = req.query;
@@ -2812,7 +2746,6 @@ app.get('/admin/user-games', isAdmin, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao listar jogos do usuário' });
     }
 });
-
 // Nova rota 2: Criar jogo novo no diretório do usuário (admin)
 app.post('/admin/user-games', isAdmin, async (req, res) => {
     const { email, name } = req.body;
@@ -2836,7 +2769,6 @@ app.post('/admin/user-games', isAdmin, async (req, res) => {
         res.json({ sucesso: true });
     }
 });
-
 // Nova rota 3: Deletar jogo do diretório do usuário (admin)
 app.delete('/admin/user-games', isAdmin, async (req, res) => {
     const { email, game } = req.body;
@@ -2855,7 +2787,6 @@ app.delete('/admin/user-games', isAdmin, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao deletar jogo' });
     }
 });
-
 // Nova rota 4: Obter arquivos json de um jogo do usuário (admin)
 app.get('/admin/game-files', isAdmin, async (req, res) => {
     const { email, game } = req.query;
@@ -2874,7 +2805,6 @@ app.get('/admin/game-files', isAdmin, async (req, res) => {
         res.json([]);
     }
 });
-
 // Nova rota 5: Obter dados do arquivo json de um jogo do usuário (admin)
 app.get('/admin/game-file', isAdmin, async (req, res) => {
     const { email, game, file } = req.query;
@@ -2892,7 +2822,6 @@ app.get('/admin/game-file', isAdmin, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao ler arquivo' });
     }
 });
-
 // Nova rota 6: Editar arquivo json de um jogo do usuário (admin)
 app.put('/admin/game-file', isAdmin, async (req, res) => {
     const { email, game, file, content } = req.body;
@@ -2911,13 +2840,11 @@ app.put('/admin/game-file', isAdmin, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao editar arquivo' });
     }
 });
-
 // Endpoint para verificar status do servidor (não protegido)
 app.get('/health', (req, res) => {
     console.log('[GET /health] Verificação de status do servidor');
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
-
 // Iniciar o servidor
 app.listen(PORT, () => {
     console.log(`[SERVER] Servidor rodando em http://localhost:${PORT}`);

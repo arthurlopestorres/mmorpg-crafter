@@ -1,16 +1,13 @@
 // index.js
 //rodar node servidor.js (no terminal)
-
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API = isLocal ? "http://localhost:10000" : "https://mmorpg-crafter.onrender.com";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
-
 // Nova função para mostrar o loading global
 function showLoading() {
     // Remover loading existente se houver
     const existingLoading = document.getElementById("loadingOverlay");
     if (existingLoading) existingLoading.remove();
-
     const overlay = document.createElement("div");
     overlay.id = "loadingOverlay";
     overlay.style.position = "fixed";
@@ -23,7 +20,6 @@ function showLoading() {
     overlay.style.display = "flex";
     overlay.style.alignItems = "center";
     overlay.style.justifyContent = "center";
-
     const spinner = document.createElement("div");
     spinner.className = "spinner";
     spinner.style.border = "8px solid #f3f3f3";
@@ -32,17 +28,14 @@ function showLoading() {
     spinner.style.width = "60px";
     spinner.style.height = "60px";
     spinner.style.animation = "spin 1s linear infinite";
-
     overlay.appendChild(spinner);
     document.body.appendChild(overlay);
 }
-
 // Nova função para esconder o loading
 function hideLoading() {
     const loading = document.getElementById("loadingOverlay");
     if (loading) loading.remove();
 }
-
 // Função safeApi modificada para incluir loading
 async function safeApi(endpoint, init = {}) {
     showLoading(); // Mostrar loading antes da requisição
@@ -68,14 +61,12 @@ async function safeApi(endpoint, init = {}) {
         hideLoading(); // Esconder loading após a requisição, independentemente do resultado
     }
 }
-
 function mostrarPopupAcessoNegado() {
     // Remover overlay e modal existentes para evitar conflitos
     const existingOverlay = document.getElementById("overlayAcessoNegado");
     if (existingOverlay) existingOverlay.remove();
     const existingModal = document.getElementById("modalAcessoNegado");
     if (existingModal) existingModal.remove();
-
     const overlay = document.createElement("div");
     overlay.id = "overlayAcessoNegado";
     overlay.style.position = "fixed";
@@ -86,7 +77,6 @@ function mostrarPopupAcessoNegado() {
     overlay.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
     overlay.style.zIndex = "999";
     document.body.appendChild(overlay);
-
     const popup = document.createElement("div");
     popup.id = "modalAcessoNegado";
     popup.style.position = "fixed";
@@ -108,7 +98,6 @@ function mostrarPopupAcessoNegado() {
     <button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Recarregar agora</button>
   `;
     document.body.appendChild(popup);
-
     const fecharBtn = document.getElementById("fecharAcessoNegado");
     if (fecharBtn) {
         fecharBtn.addEventListener("click", () => {
@@ -116,19 +105,15 @@ function mostrarPopupAcessoNegado() {
             overlay.remove();
         });
     }
-
     overlay.addEventListener("click", () => {
         popup.remove();
         overlay.remove();
     });
-
     setTimeout(() => {
         window.location.reload();
     }, 3000);
 }
-
 const conteudo = document.getElementById("conteudo");
-
 function debounce(func, delay) {
     let timeout;
     return (...args) => {
@@ -136,13 +121,11 @@ function debounce(func, delay) {
         timeout = setTimeout(() => func(...args), delay);
     };
 }
-
 document.addEventListener("DOMContentLoaded", async () => {
     // Inicializar o modo escuro/claro baseado no localStorage
     const savedMode = localStorage.getItem("themeMode") || "bright";
     document.body.classList.remove("bright-mode", "dark-mode");
     document.body.classList.add(savedMode + "-mode");
-
     if (sessionStorage.getItem("loggedIn")) {
         initMenu();
         try {
@@ -173,7 +156,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         mostrarPopupLogin();
     }
 });
-
 // Novo: Função para mostrar popup de pendências
 function mostrarPopupPendencias(pendencias) {
     const overlay = criarOverlay();
@@ -206,13 +188,11 @@ function mostrarPopupPendencias(pendencias) {
         <button id="btnFecharPendencias" style="margin-top: 10px; padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Fechar</button>
     `;
     document.body.appendChild(popup);
-
     document.getElementById("btnFecharPendencias").addEventListener("click", () => {
         popup.remove();
         overlay.remove();
         mostrarPopupNovoJogo();
     });
-
     // Função auxiliar para refresh da lista após recusar
     window.refreshPendenciasPopup = async () => {
         try {
@@ -243,41 +223,43 @@ function mostrarPopupPendencias(pendencias) {
         }
     };
 }
-
-// Novo: Função para carregar status do usuário (inclui isAdmin)
+// Novo: Função para carregar status do usuário (inclui isFounder, isAdmin, permissões)
 async function carregarUserStatus() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
         const status = await safeApi(`/user-status?game=${encodeURIComponent(currentGame)}`);
         sessionStorage.setItem('isFounder', status.isFounder.toString());
-        sessionStorage.setItem('isAdmin', status.isAdmin.toString()); // Novo: Salvar isAdmin
+        sessionStorage.setItem('isAdmin', status.isAdmin.toString()); // Salvar isAdmin
         sessionStorage.setItem('effectiveUser', status.effectiveUser);
+        // Novo: Salvar permissões granulares se existirem
+        sessionStorage.setItem('permissao', JSON.stringify(status.permissao || {}));
     } catch (error) {
         console.error('[USER STATUS] Erro ao carregar status:', error);
         sessionStorage.setItem('isFounder', 'false');
         sessionStorage.setItem('isAdmin', 'false');
+        sessionStorage.setItem('permissao', JSON.stringify({}));
     }
 }
-
 // Função auxiliar para checar se é admin (founder ou co-founder)
 function isUserAdmin() {
     return sessionStorage.getItem('isAdmin') === 'true';
 }
-
 // Função auxiliar para checar se é founder
 function isUserFounder() {
     return sessionStorage.getItem('isFounder') === 'true';
 }
-
+// Novo: Função para checar permissão granular
+function hasPermission(permissionKey) {
+    const permissao = JSON.parse(sessionStorage.getItem('permissao') || '{}');
+    return isUserAdmin() || permissao[permissionKey] === true;
+}
 // Novo: Dropdown para "Minha Conta"
 async function mostrarPopupMinhaConta() {
     // Remover dropdown existente se houver
     const existingPopup = document.getElementById("popupMinhaConta");
     if (existingPopup) existingPopup.remove();
-
     const menuItem = document.getElementById("menu-minha-conta");
     const rect = menuItem.getBoundingClientRect();
-
     const popup = document.createElement("div");
     popup.id = "popupMinhaConta";
     popup.style.position = "fixed";
@@ -294,14 +276,11 @@ async function mostrarPopupMinhaConta() {
     popup.style.minWidth = "300px";
     popup.style.maxWidth = "400px";
     popup.style.overflow = "hidden";
-
     // Buscar dados do usuário do servidor via endpoint /me
     try {
         const usuario = await safeApi(`/me`);
         const games = await safeApi(`/games`);
-
         const isDark = document.body.classList.contains('dark-mode');
-
         popup.innerHTML = `
             <div style="padding: 20px; border-bottom: 1px solid #e2e8f0;">
                 <h3 style="margin: 0 0 12px 0; font-size: 1.1rem;">Minha Conta</h3>
@@ -340,9 +319,7 @@ async function mostrarPopupMinhaConta() {
             </div>
         `;
     }
-
     document.body.appendChild(popup);
-
     // Fechar dropdown ao clicar fora
     const fecharDropdown = (e) => {
         if (!popup.contains(e.target) && e.target.id !== 'menu-minha-conta') {
@@ -351,7 +328,6 @@ async function mostrarPopupMinhaConta() {
         }
     };
     document.addEventListener('click', fecharDropdown);
-
     // Event listeners
     const btnMudarSenha = document.getElementById("btnMudarSenha");
     if (btnMudarSenha) {
@@ -360,7 +336,6 @@ async function mostrarPopupMinhaConta() {
             mostrarPopupMudarSenha();
         });
     }
-
     const btnLogout = document.getElementById("btnLogout");
     if (btnLogout) {
         btnLogout.addEventListener("click", () => {
@@ -370,7 +345,6 @@ async function mostrarPopupMinhaConta() {
             window.location.reload(); // Recarrega para mostrar popup login
         });
     }
-
     const gameSelector = document.getElementById("gameSelectorDropdown");
     if (gameSelector) {
         gameSelector.addEventListener("change", async (e) => {
@@ -384,7 +358,6 @@ async function mostrarPopupMinhaConta() {
             gameSelector.innerHTML = games.map(g => `<option value="${g}" ${g === newGame ? 'selected' : ''}>${g}</option>`).join("");
         });
     }
-
     const btnNovoJogo = document.getElementById("btnNovoJogoDropdown");
     if (btnNovoJogo) {
         btnNovoJogo.addEventListener("click", () => {
@@ -392,7 +365,6 @@ async function mostrarPopupMinhaConta() {
             mostrarPopupNovoJogo();
         });
     }
-
     // Event listener para toggle de tema no dropdown
     const themeToggle = document.getElementById("themeToggleDropdown");
     if (themeToggle) {
@@ -407,7 +379,6 @@ async function mostrarPopupMinhaConta() {
             document.removeEventListener("click", fecharDropdown);
         });
     }
-
     // Novo: Event listener para toggle de 2FA
     const toggle2FA = document.getElementById("toggle2FA");
     if (toggle2FA) {
@@ -430,7 +401,6 @@ async function mostrarPopupMinhaConta() {
         });
     }
 }
-
 // Novo: Popup para Mudar Senha
 async function mostrarPopupMudarSenha() {
     const overlay = criarOverlay();
@@ -457,19 +427,15 @@ async function mostrarPopupMudarSenha() {
         </form>
     `;
     document.body.appendChild(popup);
-
     document.getElementById("formMudarSenha").addEventListener("submit", async (e) => {
         e.preventDefault();
         const senhaAtual = document.getElementById("senhaAtual").value;
         const novaSenha = document.getElementById("novaSenha").value;
         const confirmaNovaSenha = document.getElementById("confirmaNovaSenha").value;
-
         // Resetar erros e bordas
         document.querySelectorAll("#formMudarSenha input").forEach(input => input.style.border = "1px solid #ccc");
         document.querySelectorAll("#formMudarSenha p").forEach(p => p.style.display = "none");
-
         let hasError = false;
-
         if (!senhaAtual) {
             document.getElementById("erroSenhaAtual").textContent = "Senha atual é obrigatória";
             document.getElementById("erroSenhaAtual").style.display = "block";
@@ -489,9 +455,7 @@ async function mostrarPopupMudarSenha() {
             document.getElementById("confirmaNovaSenha").style.border = "1px solid red";
             hasError = true;
         }
-
         if (hasError) return;
-
         try {
             const data = await safeApi(`/change-password`, {
                 method: "POST",
@@ -513,13 +477,11 @@ async function mostrarPopupMudarSenha() {
             document.getElementById("senhaAtual").style.border = "1px solid red";
         }
     });
-
     document.getElementById("btnCancelarMudarSenha").addEventListener("click", () => {
         popup.remove();
         overlay.remove();
     });
 }
-
 async function initGames() {
     let currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     if (!currentGame) {
@@ -541,7 +503,6 @@ async function initGames() {
     }
     // Não renderizar no menu mais; será renderizado no dropdown de Minha Conta
 }
-
 function mostrarPopupNovoJogo() {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
@@ -563,7 +524,6 @@ function mostrarPopupNovoJogo() {
         </form>
     `;
     document.body.appendChild(popup);
-
     document.getElementById("formNovoJogo").addEventListener("submit", async (e) => {
         e.preventDefault();
         const nome = document.getElementById("nomeJogo").value.trim();
@@ -592,26 +552,21 @@ function mostrarPopupNovoJogo() {
             document.getElementById("erroNovoJogo").style.display = "block";
         }
     });
-
     document.getElementById("btnCancelarNovoJogo").addEventListener("click", () => {
         popup.remove();
         overlay.remove();
     });
 }
-
 function initMenu() {
     const menu = document.querySelector(".menu");
     if (!menu) return;
     menu.innerHTML = ''; // Limpar menu existente para reordenar
-
     // Itens principais fora do dropdown
     const mainSections = [
         { section: "home", text: "Bem vindo!" },
         { section: "time", text: "Time" }
     ];
-
     let menuItemsCount = 0
-
     mainSections.forEach(sec => {
         menuItemsCount++
         const li = document.createElement("li");
@@ -621,23 +576,24 @@ function initMenu() {
         li.addEventListener("click", () => carregarSecao(sec.section));
         menu.appendChild(li);
     });
-
     // Item "Crafting" com submenu inline
     const liCrafting = document.createElement("li");
     liCrafting.id = "menu-crafting";
-    liCrafting.classList.add("menu-item-with-submenu");  // Nova classe para estilização
+    liCrafting.classList.add("menu-item-with-submenu"); // Nova classe para estilização
     const craftingToggle = document.createElement("span");
-    craftingToggle.innerHTML = "Crafting ▼";  // Setinha inicial (fechado)
+    const craftingToggleArrow = document.createElement("span");
+    craftingToggle.innerHTML = "Crafting"; // Setinha inicial (fechado)
+    craftingToggleArrow.classList.add('menu-crafting-SpanArrow')
+    craftingToggleArrow.innerHTML = "▼"
     liCrafting.appendChild(craftingToggle);
-    liCrafting.addEventListener("click", toggleCraftingSubmenu);  // Toggle ao clicar
-
+    liCrafting.appendChild(craftingToggleArrow);
+    liCrafting.addEventListener("click", toggleCraftingSubmenu); // Toggle ao clicar
     menu.appendChild(liCrafting);
-
     // Adicionar o submenu inline (inicialmente escondido)
     const submenuUl = document.createElement("ul");
     submenuUl.id = "submenu-crafting-inline";
     submenuUl.className = "submenu-crafting-inline";
-    submenuUl.style.display = "none";  // Inicialmente fechado
+    submenuUl.style.display = "none"; // Inicialmente fechado
     const craftingSections = [
         { section: "categorias", text: "Categorias" },
         // { section: "componentes", text: "Componentes" },
@@ -650,15 +606,12 @@ function initMenu() {
     submenuUl.innerHTML = craftingSections.map(sec => `
         <li onclick="carregarSecao('${sec.section}')">${sec.text}</li>
     `).join("");
-
     // Inserir submenu logo após o liCrafting
     liCrafting.insertAdjacentElement('afterend', submenuUl);
-
     // Checar localStorage para abrir submenu se salvo como aberto
     if (localStorage.getItem("craftingMenuOpen") === "true") {
-        toggleCraftingSubmenu();  // Expande automaticamente
+        toggleCraftingSubmenu(); // Expande automaticamente
     }
-
     // Adicionar item "Minha Conta" no final do menu
     const liMinhaConta = document.createElement("li");
     liMinhaConta.id = "menu-minha-conta";
@@ -667,26 +620,25 @@ function initMenu() {
     liMinhaConta.addEventListener("click", mostrarPopupMinhaConta);
     menu.appendChild(liMinhaConta);
 }
-
 // Nova função para toggle do submenu inline de Crafting
 function toggleCraftingSubmenu() {
     const submenu = document.getElementById("submenu-crafting-inline");
     const toggleSpan = document.querySelector("#menu-crafting span");
+    const toggleSpanArrow = document.querySelector('#menu-crafting .menu-crafting-SpanArrow')
     const isOpen = submenu.style.display === "block";
-
     if (isOpen) {
         submenu.style.display = "none";
-        toggleSpan.innerHTML = "Crafting ▼";  // Fechado
+        toggleSpan.innerHTML = "Crafting"; // Fechado
+        toggleSpanArrow.innerHTML = "▼" // Fechado
         localStorage.setItem("craftingMenuOpen", "false");
     } else {
         submenu.style.display = "block";
-        toggleSpan.innerHTML = "Crafting ▲";  // Aberto
+        toggleSpan.innerHTML = "Crafting"; // Aberto
+        toggleSpanArrow.innerHTML = "▲" // Aberto
         localStorage.setItem("craftingMenuOpen", "true");
     }
 }
-
 const botaoDeMinimizar = document.querySelector('#botaoDeMinimizarMenu')
-
 function minimizarOmenu() {
     const menuLateral = document.querySelector('aside')
     const itensDoMenu = document.querySelectorAll('.menu li')
@@ -705,9 +657,7 @@ function minimizarOmenu() {
         itensDoMenu.forEach(item => item.style.removeProperty('display'))
     }
 }
-
 botaoDeMinimizar.addEventListener('click', minimizarOmenu)
-
 /* ------------------ Funções de Login e Cadastro ------------------ */
 function criarOverlay() {
     const overlay = document.createElement("div");
@@ -722,7 +672,6 @@ function criarOverlay() {
     document.body.appendChild(overlay);
     return overlay;
 }
-
 function mostrarPopupLogin() {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
@@ -752,7 +701,6 @@ function mostrarPopupLogin() {
         </div>
     `;
     document.body.appendChild(popup);
-
     // Carregar reCAPTCHA script se não carregado
     if (!window.grecaptcha) {
         const script = document.createElement('script');
@@ -761,7 +709,6 @@ function mostrarPopupLogin() {
         script.defer = true;
         document.head.appendChild(script);
     }
-
     // Renderizar reCAPTCHA explicitamente
     let recaptchaWidgetLogin;
     const renderRecaptchaLogin = () => {
@@ -774,7 +721,6 @@ function mostrarPopupLogin() {
         }
     };
     renderRecaptchaLogin();
-
     document.getElementById("formLogin").addEventListener("submit", async (e) => {
         e.preventDefault();
         const token = grecaptcha.getResponse(recaptchaWidgetLogin);
@@ -822,7 +768,6 @@ function mostrarPopupLogin() {
             grecaptcha.reset(recaptchaWidgetLogin);
         }
     });
-
     // Listener para verificar OTP
     document.getElementById("btnVerifyOtpLogin").addEventListener("click", async () => {
         const email = document.getElementById("emailLogin").value;
@@ -857,14 +802,12 @@ function mostrarPopupLogin() {
             document.getElementById("erroOtpLogin").style.display = "block";
         }
     });
-
     document.getElementById("btnCadastrar").addEventListener("click", () => {
         popup.remove();
         overlay.remove();
         mostrarPopupCadastro();
     });
 }
-
 function mostrarPopupCadastro() {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
@@ -900,7 +843,6 @@ function mostrarPopupCadastro() {
         </div>
     `;
     document.body.appendChild(popup);
-
     // Carregar reCAPTCHA script se não carregado
     if (!window.grecaptcha) {
         const script = document.createElement('script');
@@ -909,7 +851,6 @@ function mostrarPopupCadastro() {
         script.defer = true;
         document.head.appendChild(script);
     }
-
     // Renderizar reCAPTCHA explicitamente
     let recaptchaWidgetCadastro;
     const renderRecaptchaCadastro = () => {
@@ -922,7 +863,6 @@ function mostrarPopupCadastro() {
         }
     };
     renderRecaptchaCadastro();
-
     document.getElementById("formCadastro").addEventListener("submit", async (e) => {
         e.preventDefault();
         const token = grecaptcha.getResponse(recaptchaWidgetCadastro);
@@ -977,7 +917,6 @@ function mostrarPopupCadastro() {
             grecaptcha.reset(recaptchaWidgetCadastro);
         }
     });
-
     // Listener para verificar OTP
     document.getElementById("btnVerifyOtpCadastro").addEventListener("click", async () => {
         const email = document.getElementById("emailCadastro").value;
@@ -1011,14 +950,12 @@ function mostrarPopupCadastro() {
             document.getElementById("erroOtpCadastro").style.display = "block";
         }
     });
-
     document.getElementById("btnVoltarLogin").addEventListener("click", () => {
         const overlay = document.getElementById("overlay");
         if (overlay) overlay.remove();
         popup.remove();
         mostrarPopupLogin();
     });
-
     document.getElementById("btnVoltarLoginConfirmacao").addEventListener("click", () => {
         const overlay = document.getElementById("overlay");
         if (overlay) overlay.remove();
@@ -1026,7 +963,6 @@ function mostrarPopupCadastro() {
         mostrarPopupLogin();
     });
 }
-
 /* ------------------ Seções ------------------ */
 async function carregarSecao(secao) {
     localStorage.setItem("ultimaSecao", secao); // Salvar a seção atual no localStorage
@@ -1049,7 +985,6 @@ async function carregarSecao(secao) {
 <iframe id="mapaIframe" src="https://paxdei.th.gl/" title="Pax Dei Interactive Map" loading="lazy"></iframe>
 <iframe id="paxDeiIframe" src="https://paxdei.gaming.tools/" title="Pax Dei DataBase" loading="lazy"></iframe>`;
 }
-
 // Novo: Função para montar o manual de uso
 function montarManual() {
     conteudo.innerHTML = `
@@ -1062,7 +997,6 @@ function montarManual() {
             <!-- Seções serão geradas dinamicamente abaixo -->
         </div>
     `;
-
     // Gerar seções do manual
     const manualSeções = [
         {
@@ -1148,7 +1082,6 @@ function montarManual() {
             ]
         }
     ];
-
     const manualDiv = document.getElementById("manualConteudo");
     manualSeções.forEach(secao => {
         const secaoHtml = `
@@ -1161,7 +1094,6 @@ function montarManual() {
         `;
         manualDiv.innerHTML += secaoHtml;
     });
-
     // Adicionar event listeners para dropdowns
     document.querySelectorAll('.manual-dropdown-toggle').forEach(toggle => {
         toggle.addEventListener('click', (e) => {
@@ -1174,13 +1106,11 @@ function montarManual() {
             toggle.textContent = isOpen ? '▶ ' + titulo : '▼ ' + titulo;
         });
     });
-
     // Filtro de busca
     const buscaInput = document.getElementById("buscaManual");
     const debouncedFiltrarManual = debounce(filtrarManual, 300);
     buscaInput.addEventListener("input", () => debouncedFiltrarManual(buscaInput.value.toLowerCase()));
 }
-
 // Função para filtrar manual
 function filtrarManual(termo) {
     document.querySelectorAll('.manual-section').forEach(secao => {
@@ -1197,7 +1127,6 @@ function filtrarManual(termo) {
         }
     });
 }
-
 /* ------------------ MÓDULO TIME ------------------ */
 async function montarTime() {
     conteudo.innerHTML = `
@@ -1206,7 +1135,6 @@ async function montarTime() {
     `;
     await carregarListaTime();
 }
-
 async function carregarListaTime() {
     const userEmail = sessionStorage.getItem('userEmail');
     let isFounder = isUserFounder();
@@ -1216,14 +1144,12 @@ async function carregarListaTime() {
         isFounder = status.isFounder;
         effectiveUser = status.effectiveUser;
         sessionStorage.setItem('isFounder', status.isFounder.toString());
-        sessionStorage.setItem('effectiveUser', effectiveUser);
+        sessionStorage.setItem('effectiveUser', status.effectiveUser);
     } catch (error) {
         console.error('[TIME] Erro ao carregar status do usuário:', error);
     }
-
     const div = document.getElementById("time-lista");
     div.innerHTML = '';
-
     // Sempre adicionar seção de pendências
     let html = `
         <div class="secao" id="pendencias-secao">
@@ -1231,7 +1157,6 @@ async function carregarListaTime() {
             <ul id="pendencias-lista"></ul>
         </div>
     `;
-
     if (!isFounder) {
         html = `
             <div class="secao">
@@ -1241,7 +1166,6 @@ async function carregarListaTime() {
             </div>
         ` + html;
     }
-
     if (isFounder) {
         try {
             const [associados, banidosComRole, disponiveisAll] = await Promise.all([
@@ -1249,25 +1173,24 @@ async function carregarListaTime() {
                 safeApi(`/banidos`),
                 safeApi(`/usuarios-disponiveis`)
             ]);
-
             // Filtrar associados para excluir o próprio email do usuário logado
             const associadosFiltrados = associados.filter(a => a.secondary !== userEmail);
             const associadosEmails = associadosFiltrados.map(a => a.secondary);
             const banidosEmails = banidosComRole.map(b => b.banned);
-
             // Filtrar disponíveis para excluir pendências recebidas
             const disponiveis = disponiveisAll.filter(d => !d.pendingReceived);
-
             html += `
                 <div class="secao">
                     <h3>Associados</h3>
                     <ul>${associadosFiltrados.map(a => {
                 const isCoFounder = a.role === 'co-founder';
+                const permissoesHtml = !isCoFounder ? `<button class="btn-permissoes" onclick="mostrarPopupPermissoes('${a.secondary}')">Permissões</button>` : '';
                 return `
                             <li class="time-item">
                                 ${a.secondary}
                                 ${isCoFounder ? '<span style="color: green;"> (Co-Fundador)</span>' : ''}
                                 <button class="btn-promote-cofounder" onclick="toggleCoFounder('${a.secondary}', ${isCoFounder})">${isCoFounder ? 'Remover Co-Fundador' : 'Promover a Co-Fundador'}</button>
+                                ${permissoesHtml}
                                 <button class="btn-desvincular" onclick="desvincularUsuario('${a.secondary}', '${a.role}')">Desvincular</button>
                                 <button class="btn-banir" onclick="banirUsuario('${a.secondary}', '${a.role}')">Banir</button>
                             </li>
@@ -1299,16 +1222,13 @@ async function carregarListaTime() {
             html += '<p>Erro ao carregar dados do time.</p>';
         }
     }
-
     div.innerHTML = html;
     await carregarPendencias();
-
     // Novo: Event listener para toggle co-founder (apenas se founder)
     if (isFounder) {
         const btnConvidar = document.getElementById("btnConvidar");
         const inputEmail = document.getElementById("inputEmailConvidar");
         const feedbackDiv = document.getElementById("feedbackConvidar");
-
         btnConvidar.addEventListener("click", async () => {
             const email = inputEmail.value.trim();
             if (!email) {
@@ -1318,7 +1238,6 @@ async function carregarListaTime() {
             await enviarConvidar(email, btnConvidar, feedbackDiv, inputEmail);
         });
     }
-
     // Novo: Adicionar event listeners para toggles de compartilhamento de jogos
     if (isFounder) {
         document.querySelectorAll('.toggle-share').forEach(toggle => {
@@ -1330,7 +1249,89 @@ async function carregarListaTime() {
         });
     }
 }
-
+// Nova função para mostrar popup de permissões granulares
+async function mostrarPopupPermissoes(secondary) {
+    const overlay = criarOverlay();
+    const popup = document.createElement("div");
+    popup.id = "popupPermissoes";
+    popup.style.position = "fixed";
+    popup.style.top = "50%";
+    popup.style.left = "50%";
+    popup.style.transform = "translate(-50%, -50%)";
+    popup.style.backgroundColor = "white";
+    popup.style.padding = "20px";
+    popup.style.zIndex = "1000";
+    popup.style.maxHeight = "80vh";
+    popup.style.overflowY = "auto";
+    popup.innerHTML = `
+        <h2>Permissões para ${secondary}</h2>
+        <form id="formPermissoes">
+            <h3>Categorias</h3>
+            <label><input type="checkbox" class="perm-checkbox" data-key="criarCategorias"> Criar Categorias</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="excluirCategorias"> Excluir Categorias</label>
+            <h3>Componentes e Estoque</h3>
+            <label><input type="checkbox" class="perm-checkbox" data-key="criarComponente"> Criar Componente</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="editarComponente"> Editar Componente</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="excluirComponente"> Excluir Componente</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="exportarEstoque"> Exportar Estoque</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="importarEstoque"> Importar Estoque</label>
+            <h3>Receitas</h3>
+            <label><input type="checkbox" class="perm-checkbox" data-key="criarReceitas"> Criar Receitas</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="favoritarReceitas"> Favoritar Receitas</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="concluirReceitas"> Concluir Receitas</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="duplicarReceitas"> Duplicar Receitas</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="editarReceitas"> Editar Receitas</label>
+            <h3>Farmar Receitas Favoritas</h3>
+            <label><input type="checkbox" class="perm-checkbox" data-key="fabricarComponentes"> Fabricar Componentes</label>
+            <h3>Roadmap</h3>
+            <label><input type="checkbox" class="perm-checkbox" data-key="criarRoadmap"> Criar Roadmap</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="excluirRoadmap"> Excluir Roadmap</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="reordenarRoadmap"> Reordenar Roadmap</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="marcarProntoRoadmap"> Marcar Pronto Roadmap</label>
+            <button type="submit">Salvar</button>
+            <button type="button" id="btnCancelarPermissoes">Cancelar</button>
+        </form>
+    `;
+    document.body.appendChild(popup);
+    // Carregar permissões atuais
+    try {
+        const associacoes = await safeApi('/associacoes');
+        const assoc = associacoes.find(a => a.secondary === secondary);
+        const permissao = assoc.permissao || {}; // CORRIGIDO: era 'permissoes' → agora 'permissao'
+        document.querySelectorAll('.perm-checkbox').forEach(cb => {
+            cb.checked = permissao[cb.dataset.key] || false;
+        });
+    } catch (error) {
+        console.error('[PERMISSOES] Erro ao carregar permissões:', error);
+    }
+    document.getElementById("formPermissoes").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const permissao = {};
+        document.querySelectorAll('.perm-checkbox').forEach(cb => {
+            permissao[cb.dataset.key] = cb.checked;
+        });
+        try {
+            const data = await safeApi('/set-permissoes', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ secondary, permissao })
+            });
+            if (data.sucesso) {
+                popup.remove();
+                overlay.remove();
+                await carregarListaTime();
+            } else {
+                alert(data.erro || 'Erro ao salvar permissões');
+            }
+        } catch (error) {
+            alert('Erro ao salvar permissões: ' + error.message);
+        }
+    });
+    document.getElementById("btnCancelarPermissoes").addEventListener("click", () => {
+        popup.remove();
+        overlay.remove();
+    });
+}
 // Nova função para obter seção de jogos compartilhados
 async function getSharedGamesSection() {
     try {
@@ -1359,7 +1360,6 @@ async function getSharedGamesSection() {
         return '<div class="secao"><h3>Compartilhar Jogos com Membros</h3><p>Erro ao carregar dados.</p></div>';
     }
 }
-
 // Nova função para toggle compartilhamento de jogo
 async function toggleShareGame(game, share) {
     try {
@@ -1376,7 +1376,6 @@ async function toggleShareGame(game, share) {
         alert('Erro ao atualizar compartilhamento');
     }
 }
-
 // Nova: Função para toggle co-founder
 async function toggleCoFounder(secondary, isCoFounder) {
     if (!confirm(`Confirmar ${isCoFounder ? 'remoção de co-fundador' : 'promoção a co-fundador'} para ${secondary}?`)) return;
@@ -1397,7 +1396,6 @@ async function toggleCoFounder(secondary, isCoFounder) {
         alert('Erro ao atualizar co-founder');
     }
 }
-
 async function carregarPendencias() {
     try {
         const pendencias = await safeApi(`/pendencias`);
@@ -1418,7 +1416,6 @@ async function carregarPendencias() {
         document.getElementById("pendencias-lista").innerHTML = '<li>Erro ao carregar pendências.</li>';
     }
 }
-
 async function enviarConvidar(email, btn = null, feedbackDiv = null, input = null) {
     if (!confirm(`Enviar convite para ${email}?`)) return;
     if (btn) btn.disabled = true;
@@ -1445,7 +1442,6 @@ async function enviarConvidar(email, btn = null, feedbackDiv = null, input = nul
         if (input) setTimeout(() => { input.disabled = false; }, 3000);
     }
 }
-
 // Função auxiliar para mostrar feedback no botão/div
 function showFeedback(feedbackDiv, message, type, btn = null) {
     if (feedbackDiv) {
@@ -1472,7 +1468,6 @@ function showFeedback(feedbackDiv, message, type, btn = null) {
         }, 3000);
     }
 }
-
 // Nova função para mostrar popup de sucesso temporário
 function mostrarSucesso(msg) {
     const overlay = criarOverlay();
@@ -1495,14 +1490,12 @@ function mostrarSucesso(msg) {
         <p id="mensagemSucesso" style="color: #48bb78; margin: 0;">${msg}</p>
     `;
     document.body.appendChild(modalSucesso);
-
     const fecharModalSucesso = document.getElementById("fecharModalSucesso");
     fecharModalSucesso.addEventListener("click", () => {
         modalSucesso.remove();
         const overlay = document.getElementById("overlay");
         if (overlay) overlay.remove();
     });
-
     // Auto-remove após 1 segundo
     setTimeout(() => {
         modalSucesso.remove();
@@ -1510,7 +1503,6 @@ function mostrarSucesso(msg) {
         if (overlay) overlay.remove();
     }, 1000);
 }
-
 async function aceitarConvidar(from) {
     if (!confirm(`Aceitar convite de ${from}?`)) return;
     try {
@@ -1530,7 +1522,6 @@ async function aceitarConvidar(from) {
         alert('Erro ao aceitar convite');
     }
 }
-
 async function recusarConvidar(from) {
     if (!confirm(`Recusar convite de ${from}?`)) return;
     try {
@@ -1549,7 +1540,6 @@ async function recusarConvidar(from) {
         alert('Erro ao recusar convite');
     }
 }
-
 async function sairDoTime(primary) {
     if (!confirm(`Sair do time de ${primary}?`)) return;
     try {
@@ -1570,7 +1560,6 @@ async function sairDoTime(primary) {
         alert('Erro ao sair do time');
     }
 }
-
 async function vincularUsuario(email) {
     if (!confirm(`Vincular ${email} ao seu time?`)) return;
     try {
@@ -1589,7 +1578,6 @@ async function vincularUsuario(email) {
         alert('Erro ao vincular usuário');
     }
 }
-
 async function desvincularUsuario(email, role) {
     if (!confirm(`Desvincular ${email} do seu time?`)) return;
     let endpoint = '/dissociate-self';
@@ -1614,7 +1602,6 @@ async function desvincularUsuario(email, role) {
         alert('Erro ao desvincular usuário');
     }
 }
-
 async function banirUsuario(email, role) {
     if (!confirm(`Banir ${email} do seu time?`)) return;
     let endpoint = '/ban-user';
@@ -1639,7 +1626,6 @@ async function banirUsuario(email, role) {
         alert('Erro ao banir usuário');
     }
 }
-
 async function desbanirUsuario(email, role) {
     if (!confirm(`Desbanir ${email}?`)) return;
     let endpoint = '/unban-user';
@@ -1664,7 +1650,6 @@ async function desbanirUsuario(email, role) {
         alert('Erro ao desbanir usuário');
     }
 }
-
 /* ------------------ Funções Auxiliares de Filtro e Ordenação ------------------ */
 function ordenarItens(itens, ordem, campo) {
     return [...itens].sort((a, b) => {
@@ -1675,14 +1660,12 @@ function ordenarItens(itens, ordem, campo) {
         return 0;
     });
 }
-
 function filtrarItens(itens, termo, campo) {
     if (!termo) return itens;
     return itens.filter(item =>
         (item[campo] || "").toLowerCase().includes(termo.toLowerCase())
     );
 }
-
 /* ------------------ RECEITAS ------------------ */
 async function montarReceitas() {
     const isAdmin = isUserAdmin();
@@ -1695,23 +1678,21 @@ async function montarReceitas() {
             <option value="za">Alfabética Z-A</option>
         </select>
         <label><input type="checkbox" id="filtroFavoritas"> Somente Favoritas</label>
-        ${isAdmin ? '<button id="btnNovaReceita" class="primary">+ Nova Receita</button>' : ''}
+        ${hasPermission('criarReceitas') ? '<button id="btnNovaReceita" class="primary">+ Nova Receita</button>' : ''}
     </div>
     <div id="listaReceitas" class="lista"></div>
     `;
-    if (isAdmin) {
+    if (hasPermission('criarReceitas')) {
         document.getElementById("btnNovaReceita").addEventListener("click", () => abrirPopupReceita(null));
     }
     const buscaInput = document.getElementById("buscaReceitas");
     const ordemSelect = document.getElementById("ordemReceitas");
     const filtroFavoritas = document.getElementById("filtroFavoritas");
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const savedFilters = JSON.parse(localStorage.getItem(`receitasFilters_${currentGame}`)) || {};
     buscaInput.value = savedFilters.termoBusca || "";
     ordemSelect.value = savedFilters.ordem || "az";
     filtroFavoritas.checked = savedFilters.onlyFavorites || false;
-
     const saveFilters = () => {
         localStorage.setItem(`receitasFilters_${currentGame}`, JSON.stringify({
             termoBusca: buscaInput.value,
@@ -1719,9 +1700,7 @@ async function montarReceitas() {
             onlyFavorites: filtroFavoritas.checked
         }));
     };
-
     const debouncedCarregarListaReceitas = debounce(carregarListaReceitas, 300);
-
     buscaInput.addEventListener("input", () => {
         debouncedCarregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
         saveFilters();
@@ -1736,7 +1715,6 @@ async function montarReceitas() {
     });
     await carregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
 }
-
 async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorites = false) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
@@ -1757,36 +1735,32 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
         const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
         const estoque = {};
         estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
-
         if (termoBusca) {
             receitas = receitas.filter(r => r.nome.toLowerCase().includes(termoBusca.toLowerCase()));
         }
-
         if (onlyFavorites) {
             receitas = receitas.filter(r => r.favorita);
         }
-
         receitas = receitas.sort((a, b) => {
             if (a.favorita !== b.favorita) return b.favorita - a.favorita; // Favoritas primeiro
             const valorA = a.nome.toLowerCase();
             const valorB = b.nome.toLowerCase();
             return ordem === "az" ? valorA.localeCompare(valorB) : valorB.localeCompare(valorA);
         });
-
         if (!termoBusca && !onlyFavorites) {
             receitas = receitas.slice(0, 10);
         }
-
         const div = document.getElementById("listaReceitas");
         const isAdmin = isUserAdmin();
         div.innerHTML = receitas.filter(r => r.nome).map(r => {
             const id = `receita-${r.nome.replace(/\s/g, '-')}`;
             const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
             const savedQtd = quantities[r.nome] || 1;
-            const btnConcluirHtml = isAdmin ? `<button class="btn-concluir" data-receita="${r.nome}">Concluir</button>` : '';
-            const btnEditarHtml = isAdmin ? `<button class="btn-editar" data-nome="${r.nome}">Editar</button>` : '';
-            const btnArquivarHtml = isAdmin ? `<button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>` : '';
-            const btnDuplicarHtml = isAdmin ? `<button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>` : '';
+            const btnConcluirHtml = hasPermission('concluirReceitas') ? `<button class="btn-concluir" data-receita="${r.nome}">Concluir</button>` : '';
+            const btnEditarHtml = hasPermission('editarReceitas') ? `<button class="btn-editar" data-nome="${r.nome}">Editar</button>` : '';
+            const btnArquivarHtml = hasPermission('concluirReceitas') ? `<button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>` : '';
+            const btnDuplicarHtml = hasPermission('duplicarReceitas') ? `<button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>` : '';
+            const btnFavoritarHtml = hasPermission('favoritarReceitas') ? `<button class="btn-favoritar ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desfavoritar' : 'Favoritar'}</button>` : '';
             return `
         <div class="item ${r.favorita ? 'favorita' : ''}" data-receita="${r.nome}">
           <div class="receita-header">
@@ -1797,12 +1771,12 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
             ${btnConcluirHtml}
             ${btnEditarHtml}
             ${btnDuplicarHtml}
-            <button class="btn-favoritar ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desfavoritar' : 'Favoritar'}</button>${btnArquivarHtml}</div>
+            ${btnFavoritarHtml}
+            ${btnArquivarHtml}</div>
           </div>
           <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
         </div>`;
         }).join("");
-
         document.querySelectorAll(".toggle-detalhes").forEach(btn => {
             btn.addEventListener("click", async () => {
                 const targetId = btn.dataset.target;
@@ -1819,11 +1793,10 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
                     const receitaNome = receitaElement.dataset.receita;
                     const qtd = Math.max(Number(receitaElement.querySelector(".qtd-desejada").value) || 0.001, 0.001);
                     await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
-                    if (isAdmin) await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
+                    if (hasPermission('concluirReceitas')) await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
                 }
             });
         });
-
         document.querySelectorAll(".qtd-desejada").forEach(input => {
             input.addEventListener("input", async () => {
                 const receitaElement = input.closest(".item");
@@ -1834,12 +1807,11 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
                 const detalhes = receitaElement.querySelector(".detalhes");
                 if (detalhes && detalhes.style.display !== "none") {
                     await atualizarDetalhes(receitaNome, qtd, componentes, estoque);
-                    if (isAdmin) await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
+                    if (hasPermission('concluirReceitas')) await atualizarBotaoConcluir(receitaNome, qtd, componentes, estoque);
                 }
             });
         });
-
-        if (isAdmin) {
+        if (hasPermission('concluirReceitas')) {
             document.querySelectorAll(".btn-concluir").forEach(btn => {
                 btn.addEventListener("click", async () => {
                     const receitaNome = btn.dataset.receita;
@@ -1847,7 +1819,6 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
                     await concluirReceita(receitaNome, qtd, componentes, estoque);
                 });
             });
-
             document.querySelectorAll(".btn-arquivar").forEach(btn => {
                 btn.addEventListener("click", () => {
                     const nome = btn.dataset.nome;
@@ -1855,7 +1826,8 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
                     arquivarReceita(nome);
                 });
             });
-
+        }
+        if (hasPermission('editarReceitas')) {
             document.querySelectorAll(".btn-editar").forEach(btn => {
                 btn.addEventListener("click", () => {
                     const nome = btn.dataset.nome;
@@ -1863,7 +1835,8 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
                     editarReceita(nome);
                 });
             });
-
+        }
+        if (hasPermission('duplicarReceitas')) {
             document.querySelectorAll(".btn-duplicar").forEach(btn => {
                 btn.addEventListener("click", () => {
                     const nome = btn.dataset.nome;
@@ -1872,17 +1845,17 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
                 });
             });
         }
-
-        document.querySelectorAll(".btn-favoritar").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                const nome = btn.dataset.nome;
-                const isFavorita = btn.classList.contains('favorita');
-                await toggleFavorita(nome, !isFavorita);
+        if (hasPermission('favoritarReceitas')) {
+            document.querySelectorAll(".btn-favoritar").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const nome = btn.dataset.nome;
+                    const isFavorita = btn.classList.contains('favorita');
+                    await toggleFavorita(nome, !isFavorita);
+                });
             });
-        });
-
+        }
         // Verificar botões inicialmente
-        if (isAdmin) {
+        if (hasPermission('concluirReceitas')) {
             document.querySelectorAll(".item").forEach(async item => {
                 const receitaNome = item.dataset.receita;
                 const qtd = Math.max(Number(item.querySelector(".qtd-desejada").value) || 0.001, 0.001);
@@ -1895,7 +1868,6 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
         div.innerHTML = '<p>Erro ao carregar receitas.</p>';
     }
 }
-
 async function toggleFavorita(nome, favorita) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -1913,18 +1885,15 @@ async function toggleFavorita(nome, favorita) {
         mostrarErro("Erro ao favoritar receita: " + error.message);
     }
 }
-
 async function arquivarReceita(receitaNome) {
     console.log(`[ARQUIVAR] Iniciando arquivamento da receita: ${receitaNome}`);
     if (!confirm(`Confirmar arquivamento de "${receitaNome}"?`)) {
         console.log(`[ARQUIVAR] Arquivamento de "${receitaNome}" cancelado pelo usuário.`);
         return;
     }
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     let quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
-
     try {
         // Carregar receitas atuais
         const receitasAtuais = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
@@ -1935,7 +1904,6 @@ async function arquivarReceita(receitaNome) {
             mostrarErro("Receita não encontrada para arquivamento.");
             return;
         }
-
         // Remover receita de receitas.json
         const receitaArquivada = receitasAtuais.splice(receitaIndex, 1)[0];
         console.log(`[ARQUIVAR] Removendo receita "${receitaNome}" de receitas.json`);
@@ -1950,7 +1918,6 @@ async function arquivarReceita(receitaNome) {
             mostrarErro("Erro ao remover receita: " + (receitasData.erro || "Falha desconhecida"));
             return;
         }
-
         // Adicionar receita a arquivados.json
         let arquivados = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`).catch(() => []);
         console.log(`[ARQUIVAR] Arquivados atuais:`, arquivados);
@@ -1967,11 +1934,9 @@ async function arquivarReceita(receitaNome) {
             mostrarErro("Erro ao arquivar receita: " + (arquivadosData.erro || "Falha desconhecida"));
             return;
         }
-
         // Remover quantidade salva no localStorage
         delete quantities[receitaNome];
         localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
-
         // Atualizar UI
         console.log(`[ARQUIVAR] Atualizando interface do usuário para receita: ${receitaNome}`);
         await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az");
@@ -1990,7 +1955,6 @@ async function arquivarReceita(receitaNome) {
         mostrarErro("Erro ao arquivar receita: " + error.message);
     }
 }
-
 async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, collapsible = false, hidePrefix = false) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -2000,26 +1964,22 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, col
             console.error(`[DETALHES] Receita "${receitaNome}" não encontrada`);
             return;
         }
-
         const detalhes = document.querySelector(`[data-receita="${receitaNome}"] .detalhes`);
         if (!detalhes) {
             console.error(`[DETALHES] Elemento com detalhes para receita "${receitaNome}" não encontrado`);
             return;
         }
-
         let requisitos = {};
         receita.componentes.forEach(comp => {
             const quantidadeNecessaria = comp.quantidade * qtd;
             mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
         });
-
         let html = "<ul>";
         let counter = 1;
         for (const comp of receita.componentes) {
             const quantidadeNecessaria = comp.quantidade * qtd;
             const disp = estoque[comp.nome] !== undefined ? estoque[comp.nome] : 0;
             const falta = Math.max(0, quantidadeNecessaria - disp);
-
             let classeLinha = '';
             if (disp >= quantidadeNecessaria) {
                 classeLinha = 'comp-verde'; // Verde e negrito
@@ -2028,14 +1988,12 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, col
             } else {
                 classeLinha = 'comp-vermelho'; // Vermelho, sem negrito
             }
-
             const component = componentesData.find(c => c.nome === comp.nome);
             const hasSubs = component && component.associados && component.associados.length > 0;
             let toggleHtml = '';
             if (collapsible && hasSubs) {
                 toggleHtml = `<button class="toggle-sub">▶</button>`;
             }
-
             html += `
             <li class="${classeLinha}">
               ${toggleHtml}
@@ -2046,7 +2004,6 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, col
         }
         html += "</ul>";
         detalhes.innerHTML = html;
-
         if (collapsible) {
             detalhes.querySelectorAll('.toggle-sub').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -2068,16 +2025,12 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, col
         console.error(`[DETALHES] Erro ao atualizar detalhes para ${receitaNome}:`, error);
     }
 }
-
 function getComponentChain(componentName, quantityNeeded, componentesData, estoque, prefix = "", collapsible = false, hidePrefix = false) {
     const component = componentesData.find(c => c.nome === componentName);
     const disp = estoque[componentName] !== undefined ? estoque[componentName] : 0;
-
     // Se o componente tem estoque suficiente, não exibir subcomponentes
     if (disp >= quantityNeeded) return "";
-
     if (!component || !component.associados || component.associados.length === 0) return "";
-
     let ulStyle = "";
     if (collapsible) {
         ulStyle = ' style="display:none;"';
@@ -2090,7 +2043,6 @@ function getComponentChain(componentName, quantityNeeded, componentesData, estoq
         const subNec = a.quantidade * numCrafts;
         const subDisp = estoque[a.nome] !== undefined ? estoque[a.nome] : 0;
         const subFalta = Math.max(0, subNec - subDisp);
-
         let classeLinha = '';
         if (subDisp >= subNec) {
             classeLinha = 'comp-verde'; // Verde e negrito
@@ -2099,14 +2051,12 @@ function getComponentChain(componentName, quantityNeeded, componentesData, estoq
         } else {
             classeLinha = 'comp-vermelho'; // Vermelho, sem negrito
         }
-
         const subComponent = componentesData.find(c => c.nome === a.nome);
         const hasSubs = subComponent && subComponent.associados && subComponent.associados.length > 0;
         let toggleHtml = '';
         if (collapsible && hasSubs) {
             toggleHtml = `<button class="toggle-sub">▶</button>`;
         }
-
         const level = prefix.split('.').length - 1;
         const arrowWidth = 10; // Assumindo largura da setinha como 10px
         html += `
@@ -2120,20 +2070,16 @@ function getComponentChain(componentName, quantityNeeded, componentesData, estoq
     html += "</ul>";
     return html;
 }
-
 function calculateComponentRequirements(componentName, quantityNeeded, componentesData, estoque) {
     const disp = estoque[componentName] !== undefined ? estoque[componentName] : 0;
-
     // Se o componente tem estoque suficiente, retornar apenas ele
     if (disp >= quantityNeeded) {
         return { [componentName]: quantityNeeded };
     }
-
     const component = componentesData.find(c => c.nome === componentName);
     if (!component || !component.associados || component.associados.length === 0) {
         return { [componentName]: quantityNeeded };
     }
-
     let req = {};
     const qtdProd = component.quantidadeProduzida || 1;
     const numCrafts = Math.ceil((quantityNeeded - disp) / qtdProd);
@@ -2141,18 +2087,15 @@ function calculateComponentRequirements(componentName, quantityNeeded, component
         const subNec = a.quantidade * numCrafts;
         mergeReq(req, calculateComponentRequirements(a.nome, subNec, componentesData, estoque));
     });
-
     // Incluir o componente principal apenas se não tiver estoque suficiente
     req[componentName] = quantityNeeded;
     return req;
 }
-
 function mergeReq(target, source) {
     for (const [key, val] of Object.entries(source)) {
         target[key] = (target[key] || 0) + val;
     }
 }
-
 async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -2162,38 +2105,30 @@ async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque
             console.error(`[CONCLUIR] Receita "${receitaNome}" não encontrada`);
             return;
         }
-
         let requisitos = {};
         receita.componentes.forEach(comp => {
             const quantidadeNecessaria = comp.quantidade * qtd;
             mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
         });
-
         const btn = document.querySelector(`[data-receita="${receitaNome}"] .btn-concluir`);
         if (!btn) return;
-
         const estoqueAtualizado = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
         const estoqueMap = {};
         estoqueAtualizado.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
-
         const podeConcluir = Object.entries(requisitos).every(([nome, nec]) => {
             const disp = estoqueMap[nome] || 0;
             return disp >= nec;
         });
-
         btn.disabled = !podeConcluir;
     } catch (error) {
         console.error(`[CONCLUIR] Erro ao atualizar botão para ${receitaNome}:`, error);
     }
 }
-
 async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
     console.log(`[CONCLUIR] Iniciando conclusão da receita: ${receitaNome}, quantidade: ${qtd}`);
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     let quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
-
     try {
         const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
         console.log("[CONCLUIR] Receitas recebidas do servidor:", receitas);
@@ -2203,23 +2138,19 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             mostrarErro("Receita não encontrada.");
             return;
         }
-
         let requisitos = {};
         receita.componentes.forEach(comp => {
             const quantidadeNecessaria = comp.quantidade * qtd;
             mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
         });
-
         const podeConcluir = Object.entries(requisitos).every(([nome, nec]) => {
             const disp = estoque[nome] !== undefined ? estoque[nome] : 0;
             return disp >= nec;
         });
-
         if (!podeConcluir) {
             mostrarErro("Estoque insuficiente para concluir a receita.");
             return;
         }
-
         // Debitar do estoque
         for (const [componente, quantidade] of Object.entries(requisitos)) {
             console.log(`[CONCLUIR] Debitando ${quantidade} de ${componente} do estoque`);
@@ -2233,7 +2164,6 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
                 return;
             }
         }
-
         // Registrar no log
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
         const userEmail = sessionStorage.getItem('userEmail');
@@ -2243,7 +2173,7 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             quantidade,
             operacao: "debitar",
             origem: `Conclusão de ${receitaNome}`,
-            user: userEmail  // Novo: Adicionar usuário
+            user: userEmail // Novo: Adicionar usuário
         }));
         console.log("[CONCLUIR] Registrando no log:", logEntries);
         const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
@@ -2255,7 +2185,6 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             mostrarErro("Erro ao registrar log.");
             return;
         }
-
         // Arquivar a receita e remover de receitas
         let receitasAtuais = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`);
         console.log("[CONCLUIR] Receitas atuais antes da remoção:", receitasAtuais);
@@ -2265,7 +2194,6 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             mostrarErro("Receita não encontrada para arquivamento.");
             return;
         }
-
         const receitaArquivada = receitasAtuais.splice(receitaIndex, 1)[0];
         console.log(`[CONCLUIR] Removendo receita "${receitaNome}" de receitas.json`);
         console.log("[CONCLUIR] Receitas após remoção:", receitasAtuais);
@@ -2280,7 +2208,6 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             mostrarErro("Erro ao remover receita: " + (receitasData.erro || "Falha desconhecida"));
             return;
         }
-
         let arquivados = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`).catch(() => []);
         arquivados.push(receitaArquivada);
         console.log(`[CONCLUIR] Adicionando receita "${receitaNome}" a arquivados.json`);
@@ -2295,11 +2222,9 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             mostrarErro("Erro ao arquivar receita.");
             return;
         }
-
         // Remover quantidade salva no localStorage
         delete quantities[receitaNome];
         localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
-
         // Atualizar UI
         console.log("[CONCLUIR] Atualizando interface do usuário");
         const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
@@ -2321,12 +2246,10 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
         mostrarErro("Erro ao concluir receita: " + error.message);
     }
 }
-
 async function editarReceita(nome) {
     console.log(`[EDITAR] Abrindo popup para editar receita: ${nome}`);
     abrirPopupReceita(nome);
 }
-
 async function duplicarReceita(nome) {
     console.log(`[DUPLICAR] Iniciando duplicação da receita: ${nome}`);
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
@@ -2338,7 +2261,6 @@ async function duplicarReceita(nome) {
             mostrarErro("Receita não encontrada para duplicação.");
             return;
         }
-
         // Gerar um nome único sugerido
         let nomeSugerido = `${nome} 1`;
         let contador = 1;
@@ -2346,14 +2268,12 @@ async function duplicarReceita(nome) {
             contador++;
             nomeSugerido = `${nome} ${contador}`;
         }
-
         abrirPopupReceita(nome, true, nomeSugerido);
     } catch (error) {
         console.error(`[DUPLICAR] Erro ao duplicar receita ${nome}:`, error);
         mostrarErro("Erro ao duplicar receita.");
     }
 }
-
 function abrirPopupReceita(nome = null, duplicar = false, nomeSugerido = null) {
     const popup = document.getElementById("popupReceita");
     const titulo = document.getElementById("tituloPopupReceita");
@@ -2361,20 +2281,16 @@ function abrirPopupReceita(nome = null, duplicar = false, nomeSugerido = null) {
     const container = document.getElementById("receitaAssociadosContainer");
     const inputNome = document.getElementById("receitaNome");
     const inputNomeOriginal = document.getElementById("inputNomeOriginalReceita");
-
     container.innerHTML = "";
     inputNome.value = "";
     inputNomeOriginal.value = "";
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-
     if (nome && !duplicar) {
-        if (!isUserAdmin()) {
-            alert('Apenas fundadores ou co-fundadores podem editar receitas.');
+        if (!hasPermission('editarReceitas')) {
+            alert('Você não tem permissão para editar receitas.');
             return;
         }
     }
-
     if (nome) {
         titulo.textContent = duplicar ? "Duplicar Receita" : "Editar Receita";
         safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`).then(list => {
@@ -2400,28 +2316,22 @@ function abrirPopupReceita(nome = null, duplicar = false, nomeSugerido = null) {
         titulo.textContent = "Nova Receita";
         popup.style.display = "flex";
     }
-
     document.getElementById("btnAddReceitaAssoc").onclick = () => adicionarLinhaReceita();
     form.onsubmit = async e => {
         e.preventDefault();
         console.log("[FORM] Formulário submetido");
-
         const nomeVal = inputNome.value.trim();
         const componentes = Array.from(container.querySelectorAll(".associado-row")).map(r => ({
             nome: r.querySelector(".assoc-nome").value,
             quantidade: Math.max(Number(r.querySelector(".assoc-qtd").value) || 0.001, 0.001)
         })).filter(x => x.nome && x.quantidade > 0);
-
         console.log("[FORM] Dados coletados:", { nomeVal, componentes });
-
         if (!nomeVal) {
             mostrarErro("Nome da receita é obrigatório.");
             return;
         }
-
         const payload = { nome: nomeVal, componentes };
         console.log("[FORM] Payload enviado:", payload);
-
         let endpoint = `/receitas?game=${encodeURIComponent(currentGame)}`;
         try {
             if (inputNomeOriginal.value && !duplicar) {
@@ -2456,7 +2366,6 @@ function abrirPopupReceita(nome = null, duplicar = false, nomeSugerido = null) {
     };
     document.getElementById("btnCancelarReceita").onclick = () => popup.style.display = "none";
 }
-
 async function adicionarLinhaReceita(dados = {}) {
     const container = document.getElementById("receitaAssociadosContainer");
     const row = document.createElement("div");
@@ -2485,7 +2394,6 @@ async function adicionarLinhaReceita(dados = {}) {
     row.querySelector("button").addEventListener("click", () => row.remove());
     container.appendChild(row);
 }
-
 /* ------------------ COMPONENTES ------------------ */
 async function montarComponentes() {
     const isAdmin = isUserAdmin();
@@ -2500,23 +2408,21 @@ async function montarComponentes() {
         <select id="filtroCategoriaComponentes">
             <option value="">Todas as categorias</option>
         </select>
-        ${isAdmin ? '<button id="btnNovoComponente" class="primary">+ Novo Componente</button>' : ''}
+        ${hasPermission('criarComponente') ? '<button id="btnNovoComponente" class="primary">+ Novo Componente</button>' : ''}
     </div>
     <div id="lista-componentes" class="lista"></div>
     `;
-    if (isAdmin) {
+    if (hasPermission('criarComponente')) {
         document.getElementById("btnNovoComponente").addEventListener("click", () => abrirPopupComponente());
     }
     const buscaInput = document.getElementById("buscaComponentes");
     const ordemSelect = document.getElementById("ordemComponentes");
     const categoriaSelect = document.getElementById("filtroCategoriaComponentes");
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const savedFilters = JSON.parse(localStorage.getItem(`componentesFilters_${currentGame}`)) || {};
     buscaInput.value = savedFilters.termoBusca || "";
     ordemSelect.value = savedFilters.ordem || "az";
     categoriaSelect.value = savedFilters.categoria || "";
-
     const saveFilters = () => {
         localStorage.setItem(`componentesFilters_${currentGame}`, JSON.stringify({
             termoBusca: buscaInput.value,
@@ -2524,9 +2430,7 @@ async function montarComponentes() {
             categoria: categoriaSelect.value
         }));
     };
-
     const debouncedCarregarComponentesLista = debounce(carregarComponentesLista, 300);
-
     buscaInput.addEventListener("input", () => {
         debouncedCarregarComponentesLista(buscaInput.value, ordemSelect.value, categoriaSelect.value);
         saveFilters();
@@ -2543,7 +2447,6 @@ async function montarComponentes() {
     await carregarCategoriasDatalist();
     await carregarCategoriasSelect();
 }
-
 async function carregarCategoriasSelect() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -2556,7 +2459,6 @@ async function carregarCategoriasSelect() {
         console.error('[CATEGORIAS SELECT] Erro ao carregar categorias:', error);
     }
 }
-
 async function carregarCategoriasDatalist() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -2570,7 +2472,6 @@ async function carregarCategoriasDatalist() {
         console.error('[CATEGORIAS DATALIST] Erro ao carregar categorias:', error);
     }
 }
-
 async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria = "") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     let url = `/componentes?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
@@ -2581,18 +2482,15 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria
     }
     try {
         let comps = await safeApi(url);
-
         if (categoria) {
             comps = comps.filter(c => c.categoria === categoria);
         }
-
-        const isAdmin = isUserAdmin();
         const div = document.getElementById("lista-componentes");
         if (div) {
             div.innerHTML = comps.map(c => {
                 const assoc = (c.associados || []).map(a => `${formatQuantity(a.quantidade)} x ${a.nome}`).join(", ");
-                const btnEditarHtml = isAdmin ? `<button onclick="abrirPopupComponente('${escapeJsString(c.nome)}')" class="primary">Editar</button>` : '';
-                const btnExcluirHtml = isAdmin ? `<button onclick="excluirComponente('${escapeJsString(c.nome)}')" class="warn">Excluir</button>` : '';
+                const btnEditarHtml = hasPermission('editarComponente') ? `<button onclick="abrirPopupComponente('${escapeJsString(c.nome)}')" class="primary">Editar</button>` : '';
+                const btnExcluirHtml = hasPermission('excluirComponente') ? `<button onclick="excluirComponente('${escapeJsString(c.nome)}')" class="warn">Excluir</button>` : '';
                 return `
           <div class="item">
             <div>
@@ -2614,8 +2512,11 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria
         if (div) div.innerHTML = '<p>Erro ao carregar componentes.</p>';
     }
 }
-
 async function excluirComponente(nome) {
+    if (!hasPermission('excluirComponente')) {
+        alert('Você não tem permissão para excluir componentes.');
+        return;
+    }
     if (!confirm(`Confirmar exclusão do componente "${nome}"? Isso removerá referências em receitas e estoque.`)) return;
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -2640,7 +2541,6 @@ async function excluirComponente(nome) {
         mostrarErro("Erro ao excluir componente: " + error.message);
     }
 }
-
 function escapeHtml(s) {
     return s.replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -2648,15 +2548,17 @@ function escapeHtml(s) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
 }
-
 function escapeJsString(s) {
     return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
-
 /* ------------------ Popup de Componente ------------------ */
 function abrirPopupComponente(nome = null) {
-    if (nome && !isUserAdmin()) {
-        alert('Apenas fundadores ou co-fundadores podem editar componentes.');
+    if (nome && !hasPermission('editarComponente')) {
+        alert('Você não tem permissão para editar componentes.');
+        return;
+    }
+    if (!nome && !hasPermission('criarComponente')) {
+        alert('Você não tem permissão para criar componentes.');
         return;
     }
     const popup = document.getElementById("popupComponente");
@@ -2667,15 +2569,12 @@ function abrirPopupComponente(nome = null) {
     const inputCategoria = document.getElementById("inputCategoria");
     const inputQuantidadeProduzida = document.getElementById("inputQuantidadeProduzida");
     const inputNomeOriginal = document.getElementById("inputNomeOriginal");
-
     container.innerHTML = "";
     inputNome.value = "";
     inputCategoria.value = "";
     inputQuantidadeProduzida.value = formatQuantity(0.001);
     inputNomeOriginal.value = "";
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-
     if (nome) {
         titulo.textContent = "Editar Componente";
         safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`).then(list => {
@@ -2697,9 +2596,7 @@ function abrirPopupComponente(nome = null) {
         carregarCategoriasDatalist();
         popup.style.display = "flex";
     }
-
     document.getElementById("btnAddAssociado").onclick = () => adicionarAssociadoRow();
-
     form.onsubmit = async e => {
         e.preventDefault();
         const nomeVal = inputNome.value.trim();
@@ -2709,16 +2606,13 @@ function abrirPopupComponente(nome = null) {
             nome: row.querySelector(".assoc-nome").value,
             quantidade: Math.max(Number(row.querySelector(".assoc-qtd").value) || 0.001, 0.001)
         })).filter(it => it.nome && it.quantidade > 0);
-
         if (!nomeVal) return mostrarErro("Nome inválido");
-
         const payload = { nome: nomeVal, categoria: categoriaVal, associados, quantidadeProduzida: qtdProd };
         let endpoint = `/componentes?game=${encodeURIComponent(currentGame)}`;
         if (inputNomeOriginal.value) {
             payload.nomeOriginal = inputNomeOriginal.value;
             endpoint = `/componentes/editar?game=${encodeURIComponent(currentGame)}`;
         }
-
         try {
             const data = await safeApi(endpoint, {
                 method: "POST",
@@ -2726,7 +2620,6 @@ function abrirPopupComponente(nome = null) {
                 body: JSON.stringify(payload)
             });
             if (!data.sucesso) return mostrarErro(data.erro || "Erro ao salvar componente");
-
             popup.style.display = "none";
             await carregarComponentesLista(document.getElementById("buscaComponentes")?.value || "", document.getElementById("ordemComponentes")?.value || "az");
             await carregarCategoriasDatalist();
@@ -2734,11 +2627,9 @@ function abrirPopupComponente(nome = null) {
             mostrarErro("Erro ao salvar componente: " + error.message);
         }
     };
-
     document.getElementById("btnCancelarComponente").onclick = () => popup.style.display = "none";
     popup.style.display = "flex";
 }
-
 async function adicionarAssociadoRow(nome = "", quantidade = "") {
     const container = document.getElementById("associadosContainer");
     const row = document.createElement("div");
@@ -2767,7 +2658,6 @@ async function adicionarAssociadoRow(nome = "", quantidade = "") {
     row.querySelector("button").addEventListener("click", () => row.remove());
     container.appendChild(row);
 }
-
 /* ------------------ ESTOQUE ------------------ */
 async function montarEstoque() {
     const isAdmin = isUserAdmin();
@@ -2794,16 +2684,16 @@ async function montarEstoque() {
           <input id="inputQuantidadeEstoque" type="number" min="0.001" step="any" value="0.001" />
           <button class="primary" type="submit">Confirmar</button>
         </form>
-        ${isAdmin ? `
+        ${hasPermission('importarEstoque') ? `
         <div class="estoque--acoes">
           <button id="btnExportEstoque" class="primary">Exportar Estoque (XLS)</button>
           <label id="btnImportEstoque" for="fileImportEstoque" class="primary">Importar Estoque (XLS)</label>
           <input type="file" id="fileImportEstoque" accept=".xls,.xlsx" style="display: none;">
-        ${isAdmin ? '<button id="btnZerarEstoque" class="warn">Zerar todo o estoque</button>' : ''}
+        ${hasPermission('excluirComponente') ? '<button id="btnZerarEstoque" class="warn">Zerar todo o estoque</button>' : ''}
         </div>
         ` : ''}
-        
-        ${isAdmin ? '<button id="btnNovoComponenteEstoque" class="primary">+ Novo Componente</button>' : ''}
+       
+        ${hasPermission('criarComponente') ? '<button id="btnNovoComponenteEstoque" class="primary">+ Novo Componente</button>' : ''}
         <div id="listaEstoque" class="lista"></div>
       </div>
       <div style="flex:1">
@@ -2820,14 +2710,11 @@ async function montarEstoque() {
       </div>
     </div>
     `;
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-
     // Carregar componentes para o datalist do estoque
     safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`).then(comps => {
         const datalist = document.getElementById("componentesDatalist");
         datalist.innerHTML = comps.map(c => `<option value="${c.nome}">`).join("");
-
         // Atualizar datalist dinamicamente enquanto digita no estoque
         const inputComponente = document.getElementById("selectComponenteEstoque");
         inputComponente.addEventListener("input", () => {
@@ -2839,21 +2726,18 @@ async function montarEstoque() {
     }).catch(error => {
         console.error('[ESTOQUE DATALIST] Erro ao carregar componentes:', error);
     });
-
     const buscaEstoque = document.getElementById("buscaEstoque");
     const ordemEstoque = document.getElementById("ordemEstoque");
     const buscaLogComponente = document.getElementById("buscaLogComponente");
     const filtroLogUser = document.getElementById("filtroLogUser");
     const filtroLogData = document.getElementById("filtroLogData");
     const limparFiltrosLog = document.getElementById("limparFiltrosLog");
-
     const savedFilters = JSON.parse(localStorage.getItem(`estoqueFilters_${currentGame}`)) || {};
     buscaEstoque.value = savedFilters.termoBuscaEstoque || "";
     ordemEstoque.value = savedFilters.ordemEstoque || "az";
     buscaLogComponente.value = savedFilters.termoBuscaLog || "";
     filtroLogUser.value = savedFilters.userLog || "";
     filtroLogData.value = savedFilters.dataLog || "";
-
     const saveFilters = () => {
         localStorage.setItem(`estoqueFilters_${currentGame}`, JSON.stringify({
             termoBuscaEstoque: buscaEstoque.value,
@@ -2863,10 +2747,8 @@ async function montarEstoque() {
             dataLog: filtroLogData.value
         }));
     };
-
     const debouncedCarregarEstoque = debounce(carregarEstoque, 300);
     const debouncedCarregarLog = debounce(carregarLog, 300);
-
     buscaEstoque.addEventListener("input", () => {
         debouncedCarregarEstoque(buscaEstoque.value, ordemEstoque.value);
         saveFilters();
@@ -2875,18 +2757,15 @@ async function montarEstoque() {
         debouncedCarregarEstoque(buscaEstoque.value, ordemEstoque.value);
         saveFilters();
     });
-
     // Carregar componentes únicos para o datalist do log
     safeApi(`/log?game=${encodeURIComponent(currentGame)}`).then(logs => {
         const componentesUnicos = [...new Set(logs.map(log => log.componente).filter(Boolean))];
         const logDatalist = document.getElementById("logComponentesDatalist");
         logDatalist.innerHTML = componentesUnicos.map(c => `<option value="${c}">`).join("");
-
         // Carregar usuários únicos para o datalist do log
         const usuariosUnicos = [...new Set(logs.map(log => log.user).filter(Boolean))];
         const logUsersDatalist = document.getElementById("logUsersDatalist");
         logUsersDatalist.innerHTML = usuariosUnicos.map(u => `<option value="${u}">`).join("");
-
         // Atualizar datalist dinamicamente enquanto digita no log
         buscaLogComponente.addEventListener("input", () => {
             const termo = buscaLogComponente.value.toLowerCase();
@@ -2896,7 +2775,6 @@ async function montarEstoque() {
             debouncedCarregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
             saveFilters();
         });
-
         filtroLogUser.addEventListener("input", () => {
             const termo = filtroLogUser.value.toLowerCase();
             const filteredOptions = usuariosUnicos.filter(u => u.toLowerCase().includes(termo))
@@ -2908,12 +2786,10 @@ async function montarEstoque() {
     }).catch(error => {
         console.error('[LOG DATALIST] Erro ao carregar log:', error);
     });
-
     filtroLogData.addEventListener("change", () => {
         debouncedCarregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
         saveFilters();
     });
-
     // Limpar filtros
     limparFiltrosLog.addEventListener("click", () => {
         buscaLogComponente.value = "";
@@ -2922,7 +2798,6 @@ async function montarEstoque() {
         carregarLog("", "", "");
         saveFilters();
     });
-
     document.getElementById("formEstoque").onsubmit = async e => {
         e.preventDefault();
         const componente = document.getElementById("selectComponenteEstoque").value;
@@ -2930,7 +2805,6 @@ async function montarEstoque() {
         const operacao = document.getElementById("selectOperacao").value;
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
         const userEmail = sessionStorage.getItem('userEmail');
-
         try {
             const data = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
@@ -2938,14 +2812,13 @@ async function montarEstoque() {
                 body: JSON.stringify({ componente, quantidade, operacao })
             });
             if (!data.sucesso) return mostrarErro(data.erro || "Erro ao movimentar estoque");
-
             const logEntry = {
                 dataHora,
                 componente,
                 quantidade,
                 operacao,
                 origem: "Movimentação manual",
-                user: userEmail  // Novo: Adicionar usuário
+                user: userEmail // Novo: Adicionar usuário
             };
             const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
                 method: "POST",
@@ -2953,16 +2826,14 @@ async function montarEstoque() {
                 body: JSON.stringify(logEntry)
             });
             if (!logData.sucesso) return mostrarErro("Erro ao registrar log.");
-
             await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
             await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
         } catch (error) {
             mostrarErro("Erro ao movimentar estoque: " + error.message);
         }
     };
-
     // Novo: Exportar Estoque
-    if (isAdmin) {
+    if (hasPermission('exportarEstoque')) {
         const btnExportEstoque = document.getElementById("btnExportEstoque");
         btnExportEstoque.addEventListener("click", async () => {
             try {
@@ -2976,8 +2847,9 @@ async function montarEstoque() {
                 mostrarErro("Erro ao exportar estoque: " + error.message);
             }
         });
-
-        // Novo: Importar Estoque
+    }
+    // Novo: Importar Estoque
+    if (hasPermission('importarEstoque')) {
         const fileInput = document.getElementById("fileImportEstoque");
         fileInput.addEventListener("change", async (e) => {
             const file = e.target.files[0];
@@ -3024,13 +2896,12 @@ async function montarEstoque() {
             reader.readAsArrayBuffer(file);
         });
     }
-
     const btnZerarEstoque = document.getElementById("btnZerarEstoque");
     if (btnZerarEstoque) {
-        btnZerarEstoque.disabled = !isAdmin;
+        btnZerarEstoque.disabled = !hasPermission('excluirComponente');
         btnZerarEstoque.addEventListener("click", async () => {
-            if (!isAdmin) {
-                alert('Apenas fundadores ou co-fundadores podem zerar o estoque.');
+            if (!hasPermission('excluirComponente')) {
+                alert('Você não tem permissão para zerar o estoque.');
                 return;
             }
             if (confirm("Tem certeza que deseja zerar todo o estoque? Essa ação não pode ser desfeita.")) {
@@ -3051,21 +2922,22 @@ async function montarEstoque() {
             }
         });
     }
-
     // Novo: Botão para novo componente na aba de estoque
-    if (isAdmin) {
+    if (hasPermission('criarComponente')) {
         const btnNovoCompEst = document.getElementById("btnNovoComponenteEstoque");
         btnNovoCompEst.addEventListener("click", () => abrirPopupComponenteEstoque(true)); // true para novo
     }
-
     await carregarEstoque(buscaEstoque.value, ordemEstoque.value);
     await carregarLog(buscaLogComponente.value, filtroLogUser.value, filtroLogData.value);
 }
-
 // Nova função para abrir popup de componente no contexto de estoque (novo ou editar)
 function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual = 0) {
-    if (!isUserAdmin()) {
-        alert('Apenas fundadores ou co-fundadores podem editar componentes.');
+    if (!isNew && !hasPermission('editarComponente')) {
+        alert('Você não tem permissão para editar componentes.');
+        return;
+    }
+    if (isNew && !hasPermission('criarComponente')) {
+        alert('Você não tem permissão para criar componentes.');
         return;
     }
     const overlay = criarOverlay();
@@ -3104,12 +2976,9 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
         </form>
     `;
     document.body.appendChild(popup);
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-
     // Carregar categorias para datalist
     carregarCategoriasDatalistEstoque();
-
     // Se editando, carregar dados existentes
     if (!isNew) {
         safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`).then(list => {
@@ -3124,10 +2993,8 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
             mostrarErroEstoque("Erro ao carregar componente.");
         });
     }
-
     // Event listener para adicionar row de associado
     document.getElementById("btnAddAssociadoEstoque").addEventListener("click", () => adicionarAssociadoRowEstoque());
-
     // Submit form
     document.getElementById("formComponenteEstoque").addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -3141,14 +3008,12 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
             quantidade: Math.max(Number(row.querySelector(".assoc-qtd").value) || 0.001, 0.001)
         })).filter(it => it.nome && it.quantidade > 0);
         const nomeOriginal = document.getElementById("inputNomeOriginalEstoque").value;
-
         const erroEl = document.getElementById("erroComponenteEstoque");
         if (!nomeVal) {
             erroEl.textContent = "Nome do componente é obrigatório";
             erroEl.style.display = "block";
             return;
         }
-
         const payloadComp = {
             nome: nomeVal,
             categoria: categoriaVal,
@@ -3156,11 +3021,9 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
             quantidadeProduzida: qtdProd
         };
         if (nomeOriginal) payloadComp.nomeOriginal = nomeOriginal;
-
         const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
         const userEmail = sessionStorage.getItem('userEmail');
         let logEntries = [];
-
         try {
             // Salvar/atualizar componente
             let endpointComp = `/componentes?game=${encodeURIComponent(currentGame)}`;
@@ -3175,7 +3038,6 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
                 erroEl.style.display = "block";
                 return;
             }
-
             // Log para criação/edição de componente
             logEntries.push({
                 dataHora,
@@ -3185,7 +3047,6 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
                 origem: isNew ? "Criação de novo componente" : `Edição de componente (nome: ${nomeOriginal} -> ${nomeVal}${categoriaVal !== (document.getElementById("inputCategoriaEstoque").dataset.original || '') ? `, categoria: ${document.getElementById("inputCategoriaEstoque").dataset.original || '—'} -> ${categoriaVal || '—'}` : ''})`,
                 user: userEmail
             });
-
             // Atualizar estoque para a quantidade desejada
             if (targetQtd !== currentQtd) {
                 let operacaoEstoque, absQtdEstoque;
@@ -3212,7 +3073,6 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
                         erroEl.style.display = "block";
                         return;
                     }
-
                     // Log para movimentação de estoque
                     logEntries.push({
                         dataHora,
@@ -3224,7 +3084,6 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
                     });
                 }
             }
-
             // Registrar logs
             if (logEntries.length > 0) {
                 const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
@@ -3236,7 +3095,6 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
                     console.error("Erro ao registrar log:", logData.erro);
                 }
             }
-
             popup.remove();
             overlay.remove();
             // Atualizar listas
@@ -3260,12 +3118,10 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
             erroEl.style.display = "block";
         }
     });
-
     document.getElementById("btnCancelarComponenteEstoque").addEventListener("click", () => {
         popup.remove();
         overlay.remove();
     });
-
     // Função auxiliar para carregar categorias no datalist do estoque
     async function carregarCategoriasDatalistEstoque() {
         try {
@@ -3276,7 +3132,6 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
             console.error('[CATEGORIAS] Erro:', error);
         }
     }
-
     // Função auxiliar para adicionar row de associado no estoque
     async function adicionarAssociadoRowEstoque(nome = "", quantidade = "") {
         const container = document.getElementById("associadosContainerEstoque");
@@ -3304,7 +3159,6 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
         row.querySelector("button").addEventListener("click", () => row.remove());
         container.appendChild(row);
     }
-
     // Função auxiliar para mostrar erro no popup de estoque
     function mostrarErroEstoque(msg) {
         const erroEl = document.getElementById("erroComponenteEstoque");
@@ -3314,14 +3168,12 @@ function abrirPopupComponenteEstoque(isNew = true, nome = null, quantidadeAtual 
         }
     }
 }
-
 // Modificação da função editarEstoqueItem para incluir edição completa de componente
 async function editarEstoqueItem(componente, quantidadeAtual) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     let categoriaAtual = ''; // Definir fora do try para evitar ReferenceError
     let qtdProdAtual = 0.001;
     let associadosAtuais = [];
-
     try {
         const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
         const comp = componentes.find(c => c.nome === componente);
@@ -3335,11 +3187,9 @@ async function editarEstoqueItem(componente, quantidadeAtual) {
         mostrarErro("Erro ao carregar dados do componente.");
         return;
     }
-
     // Chamar a nova função para abrir popup completo
     abrirPopupComponenteEstoque(false, componente, quantidadeAtual);
 }
-
 async function carregarEstoque(termoBusca = "", ordem = "az") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     let url = `/estoque?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
@@ -3350,12 +3200,10 @@ async function carregarEstoque(termoBusca = "", ordem = "az") {
     }
     try {
         const estoque = await safeApi(url);
-
-        const isAdmin = isUserAdmin();
         const listaEstoque = document.getElementById("listaEstoque");
         if (listaEstoque) {
             listaEstoque.innerHTML = estoque.map(e =>
-                `<div class = "estoque-item-container"><div class="item"><strong>${e.componente || "(Sem nome)"}</strong> - ${formatQuantity(e.quantidade)}x</div> <button class="primary" onclick="editarEstoqueItem('${escapeJsString(e.componente)}', ${e.quantidade})">Editar</button> ${isAdmin ? `<button class="warn" onclick="excluirEstoqueItem('${escapeJsString(e.componente)}')">Excluir</button>` : ''}</div>`
+                `<div class = "estoque-item-container"><div class="item"><strong>${e.componente || "(Sem nome)"}</strong> - ${formatQuantity(e.quantidade)}x</div> <button class="primary" onclick="editarEstoqueItem('${escapeJsString(e.componente)}', ${e.quantidade})">Editar</button> ${hasPermission('excluirComponente') ? `<button class="warn" onclick="excluirEstoqueItem('${escapeJsString(e.componente)}')">Excluir</button>` : ''}</div>`
             ).join("");
         }
     } catch (error) {
@@ -3364,8 +3212,11 @@ async function carregarEstoque(termoBusca = "", ordem = "az") {
         if (listaEstoque) listaEstoque.innerHTML = '<p>Erro ao carregar estoque.</p>';
     }
 }
-
 async function excluirEstoqueItem(nome) {
+    if (!hasPermission('excluirComponente')) {
+        alert('Você não tem permissão para excluir itens do estoque.');
+        return;
+    }
     if (!confirm(`Confirmar exclusão do item "${nome}" do estoque? Isso também excluirá o componente e afetará receitas e outros módulos.`)) return;
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -3374,45 +3225,43 @@ async function excluirEstoqueItem(nome) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ nome })
         });
-        if (!data.sucesso) return mostrarErro(data.erro || "Erro ao excluir item do estoque");
-        await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
-        if (document.getElementById("lista-componentes")) {
-            await carregarComponentesLista(document.getElementById("buscaComponentes")?.value || "", document.getElementById("ordemComponentes")?.value || "az", document.getElementById("filtroCategoriaComponentes")?.value || "");
-        }
-        if (document.getElementById("listaReceitas")) {
-            await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
-        }
-        if (document.getElementById("listaFarmar")) {
-            await carregarListaFarmar(document.getElementById("buscaFarmar")?.value || "", document.getElementById("ordemFarmar")?.value || "pendente-desc", document.getElementById("filtroReceitaFarmar")?.value || "");
+        if (data.sucesso) {
+            await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
+            if (document.getElementById("lista-componentes")) {
+                await carregarComponentesLista(document.getElementById("buscaComponentes")?.value || "", document.getElementById("ordemComponentes")?.value || "az", document.getElementById("filtroCategoriaComponentes")?.value || "");
+            }
+            if (document.getElementById("listaReceitas")) {
+                await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
+            }
+            if (document.getElementById("listaFarmar")) {
+                await carregarListaFarmar(document.getElementById("buscaFarmar")?.value || "", document.getElementById("ordemFarmar")?.value || "pendente-desc", document.getElementById("filtroReceitaFarmar")?.value || "");
+            }
+        } else {
+            mostrarErro(data.erro || "Erro ao excluir item do estoque");
         }
     } catch (error) {
         mostrarErro("Erro ao excluir item do estoque: " + error.message);
     }
 }
-
 async function carregarLog(componenteFiltro = "", userFiltro = "", dataFiltro = "") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
         const logs = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`);
         let logsFiltrados = logs.reverse();
-
         // Filtro por componente
         if (componenteFiltro) {
             logsFiltrados = logsFiltrados.filter(l => l.componente && l.componente.toLowerCase().includes(componenteFiltro.toLowerCase()));
         }
-
         // Filtro por usuário
         if (userFiltro) {
             logsFiltrados = logsFiltrados.filter(l => l.user && l.user.toLowerCase().includes(userFiltro.toLowerCase()));
         }
-
         // Filtro por data (convertendo dataFiltro de YYYY-MM-DD para DD/MM/YYYY para matching com dataHora)
         if (dataFiltro) {
             const [ano, mes, dia] = dataFiltro.split('-');
-            const dataFormatada = `${dia}/${mes}/${ano}`;  // Novo: Converter para formato DD/MM/YYYY
+            const dataFormatada = `${dia}/${mes}/${ano}`; // Novo: Converter para formato DD/MM/YYYY
             logsFiltrados = logsFiltrados.filter(l => l.dataHora && l.dataHora.startsWith(dataFormatada));
         }
-
         const div = document.getElementById("logMovimentacoes");
         if (div) {
             div.innerHTML = logsFiltrados.map(l => {
@@ -3420,7 +3269,7 @@ async function carregarLog(componenteFiltro = "", userFiltro = "", dataFiltro = 
                 const qtd = l.quantidade ?? 0;
                 const nome = l.componente ?? "(Sem nome)";
                 const hora = l.dataHora ?? "(Sem data)";
-                const user = l.user ? ` por ${l.user}` : '';  // Novo: Exibir usuário
+                const user = l.user ? ` por ${l.user}` : ''; // Novo: Exibir usuário
                 const origem = l.origem ? ` (Origem: ${l.origem})` : "";
                 return `<div class="item"><span>[${hora}]</span> ${simb}${formatQuantity(qtd)} x ${nome}${user}${origem}</div>`;
             }).join("");
@@ -3431,7 +3280,6 @@ async function carregarLog(componenteFiltro = "", userFiltro = "", dataFiltro = 
         if (div) div.innerHTML = '<p>Erro ao carregar log.</p>';
     }
 }
-
 /* ------------------ ARQUIVADOS ------------------ */
 async function montarArquivados() {
     conteudo.innerHTML = `
@@ -3440,17 +3288,15 @@ async function montarArquivados() {
     `;
     await carregarArquivados();
 }
-
 async function carregarArquivados() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
         const arquivados = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`).catch(() => []);
-        const isAdmin = isUserAdmin();
         const div = document.getElementById("listaArquivados");
         if (div) {
             div.innerHTML = arquivados.map(r => {
                 const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
-                const btnExcluirHtml = isAdmin ? `<button class="warn" onclick="excluirArquivado('${escapeJsString(r.nome)}')">Excluir</button>` : '';
+                const btnExcluirHtml = hasPermission('concluirReceitas') ? `<button class="warn" onclick="excluirArquivado('${escapeJsString(r.nome)}')">Excluir</button>` : '';
                 return `
                 <div class="item">
                   <div>
@@ -3467,10 +3313,9 @@ async function carregarArquivados() {
         if (div) div.innerHTML = '<p>Erro ao carregar arquivados.</p>';
     }
 }
-
 async function excluirArquivado(nome) {
-    if (!isUserAdmin()) {
-        alert('Apenas fundadores ou co-fundadores podem excluir itens arquivados.');
+    if (!hasPermission('concluirReceitas')) {
+        alert('Você não tem permissão para excluir itens arquivados.');
         return;
     }
     if (!confirm(`Confirmar exclusão da receita arquivada "${nome}"?`)) return;
@@ -3497,7 +3342,6 @@ async function excluirArquivado(nome) {
         mostrarErro("Erro ao excluir receita arquivada: " + error.message);
     }
 }
-
 /* ------------------ O QUE FARMAR? ------------------ */
 async function montarFarmar() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
@@ -3506,7 +3350,6 @@ async function montarFarmar() {
         // Garantir que pegue todas as receitas (evita limite de produção na produção)
         const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}&limit=9999`);
         const receitasFavoritas = receitas.filter(r => r.favorita);
-
         conteudo.innerHTML = `
         <h2>O Que farmar?</h2>
         <div id="suggestedSequence">
@@ -3537,7 +3380,6 @@ async function montarFarmar() {
         </div>
         <div id="listaFarmar" class="lista"></div>
         `;
-
         const buscaInput = document.getElementById("buscaFarmar");
         const filtroReceitaContainer = document.getElementById("filtroReceitaFarmar");
         const searchReceita = document.getElementById("searchReceitaFarmar");
@@ -3547,12 +3389,10 @@ async function montarFarmar() {
         const categoriaSelect = document.getElementById("filtroCategoriaFarmar");
         const ordemSelect = document.getElementById("ordemFarmar");
         const limparFiltrosFarmar = document.getElementById("limparFiltrosFarmar");
-
         const savedFilters = JSON.parse(localStorage.getItem(`farmarFilters_${currentGame}`)) || {};
         buscaInput.value = savedFilters.termoBusca || "";
         ordemSelect.value = savedFilters.ordem || "pendente-desc";
         categoriaSelect.value = savedFilters.categoria || "";
-
         // Popular a lista de receitas com checkboxes
         receitasFavoritas.forEach(receita => {
             const li = document.createElement("li");
@@ -3564,22 +3404,18 @@ async function montarFarmar() {
             `;
             listaReceitas.appendChild(li);
         });
-
         // Aplicar seleções salvas
         const savedSelected = savedFilters.selectedReceitas || [];
         Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
             cb.checked = savedSelected.includes(cb.value);
         });
-
         const updateBadges = () => {
             const total = receitasFavoritas.length;
             const selected = listaReceitas.querySelectorAll('input[type="checkbox"]:checked').length;
             selectedBadge.textContent = selected;
             unselectedBadge.textContent = total - selected;
         };
-
         updateBadges();
-
         const saveFilters = () => {
             const selected = Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
             localStorage.setItem(`farmarFilters_${currentGame}`, JSON.stringify({
@@ -3589,19 +3425,16 @@ async function montarFarmar() {
                 selectedReceitas: selected
             }));
         };
-
         // Toggle dropdown ao clicar no input de busca
         searchReceita.addEventListener("focus", () => {
             listaReceitas.style.display = "block";
         });
-
         // Fechar dropdown ao clicar fora
         document.addEventListener("click", (e) => {
             if (!filtroReceitaContainer.contains(e.target)) {
                 listaReceitas.style.display = "none";
             }
         });
-
         // Filtrar itens ao digitar
         searchReceita.addEventListener("input", () => {
             const termo = searchReceita.value.toLowerCase();
@@ -3610,45 +3443,40 @@ async function montarFarmar() {
                 li.style.display = text.includes(termo) ? "block" : "none";
             });
         });
-
         // Atualizar ao mudar checkboxes
-        listaReceitas.addEventListener("change", () => {
+        listaReceitas.addEventListener("change", async () => {
             updateBadges();
             const selected = Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-            updateCategoriaFilterOptions(buscaInput.value, selected);
-            carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+            await updateCategoriaFilterOptions(buscaInput.value, selected);
+            await carregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
             saveFilters();
         });
-
         const debouncedCarregarListaFarmar = debounce(carregarListaFarmar, 300);
-
-        buscaInput.addEventListener("input", () => {
+        buscaInput.addEventListener("input", async () => {
             const selected = Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-            updateCategoriaFilterOptions(buscaInput.value, selected);
-            debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+            await updateCategoriaFilterOptions(buscaInput.value, selected);
+            await debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
             saveFilters();
         });
-        categoriaSelect.addEventListener("change", () => {
-            debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+        categoriaSelect.addEventListener("change", async () => {
+            await debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
             saveFilters();
         });
-        ordemSelect.addEventListener("change", () => {
-            debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
+        ordemSelect.addEventListener("change", async () => {
+            await debouncedCarregarListaFarmar(buscaInput.value, ordemSelect.value, '', categoriaSelect.value);
             saveFilters();
         });
-
-        limparFiltrosFarmar.addEventListener("click", () => {
+        limparFiltrosFarmar.addEventListener("click", async () => {
             buscaInput.value = "";
             searchReceita.value = "";
             Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]')).forEach(cb => cb.checked = false);
             updateBadges();
             categoriaSelect.value = "";
             ordemSelect.value = "pendente-desc";
-            updateCategoriaFilterOptions("", []);
-            carregarListaFarmar("", "pendente-desc", '', "");
+            await updateCategoriaFilterOptions("", []);
+            await carregarListaFarmar("", "pendente-desc", '', "");
             saveFilters();
         });
-
         // Inicializar opções de categoria
         const initialSelected = Array.from(listaReceitas.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
         await updateCategoriaFilterOptions("", initialSelected);
@@ -3658,7 +3486,6 @@ async function montarFarmar() {
         conteudo.innerHTML = '<h2>Favoritos</h2><p>Erro ao carregar dados.</p>';
     }
 }
-
 // Nova função para atualizar opções do filtro de categoria baseado em itens filtrados por busca e receitas
 async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
@@ -3670,13 +3497,10 @@ async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
         const receitasFavoritas = receitas.filter(r => r.favorita);
         const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}&limit=9999`);
         const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}&limit=9999`);
-
         const receitasFiltradas = selectedReceitas.length > 0 ? receitasFavoritas.filter(r => selectedReceitas.includes(r.nome)) : receitasFavoritas;
-
         const bases = new Map();
         const estoqueMap = {};
         estoqueList.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
-
         for (const receita of receitasFiltradas) {
             const recipeQuantity = quantities[receita.nome] || 1;
             let req = {};
@@ -3692,29 +3516,24 @@ async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
                 bases.get(baseNome).receitas.add(receita.nome);
             }
         }
-
         let listaMateriasTemp = Array.from(bases.entries()).map(([nome, data]) => {
             const disp = estoqueMap[nome] || 0;
             const pendente = Math.max(0, data.nec - disp);
             return { nome, nec: data.nec, disp, pendente, receitas: Array.from(data.receitas) };
         });
-
         // Aplicar filtro de busca para determinar itens relevantes
         listaMateriasTemp = filtrarItens(listaMateriasTemp, termoBusca, "nome");
-
         // Extrair categorias únicas dos itens relevantes
         const categoriasUnicas = [...new Set(listaMateriasTemp.map(m => {
             const comp = componentes.find(c => c.nome === m.nome);
             return comp ? comp.categoria : null;
         }).filter(cat => cat))].sort();
-
         // Atualizar select de categorias
         const categoriaSelect = document.getElementById("filtroCategoriaFarmar");
         if (categoriaSelect) {
             const currentValue = categoriaSelect.value;
             categoriaSelect.innerHTML = '<option value="">Todas as categorias</option>' +
                 categoriasUnicas.map(cat => `<option value="${cat}">${cat}</option>`).join("");
-
             // Se o valor atual não está mais disponível, resetar para vazio
             if (currentValue && !categoriasUnicas.includes(currentValue)) {
                 categoriaSelect.value = "";
@@ -3726,14 +3545,12 @@ async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
         console.error('[UPDATE CATEGORIA OPTIONS] Erro:', error);
     }
 }
-
 async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", receitaFiltro = "", categoriaFiltro = "") {
     // Correção: Verificar se a seção farmar existe antes de prosseguir (evita chamadas desnecessárias de outras seções)
     if (!document.getElementById("listaFarmar")) {
         console.log("[FARMAR] Seção não encontrada, pulando atualização.");
         return;
     }
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     const quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
@@ -3743,17 +3560,11 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
         const receitasFavoritas = receitas.filter(r => r.favorita);
         const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}&limit=9999`);
         const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}&limit=9999`);
-
         const selectedReceitas = Array.from(document.querySelectorAll('#listaReceitasFarmar input[type="checkbox"]:checked')).map(cb => cb.value);
-
         const receitasFiltradas = selectedReceitas.length > 0 ? receitasFavoritas.filter(r => selectedReceitas.includes(r.nome)) : receitasFavoritas;
-
         const bases = new Map();
-
-
         const estoqueMap = {};
         estoqueList.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
-
         for (const receita of receitasFiltradas) {
             if (!receita.nome) continue;
             const recipeQuantity = quantities[receita.nome] || 1;
@@ -3770,22 +3581,18 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                 bases.get(baseNome).receitas.add(receita.nome);
             }
         }
-
         let listaMaterias = Array.from(bases.entries()).map(([nome, data]) => {
             const disp = estoqueMap[nome] || 0;
             const pendente = Math.max(0, data.nec - disp);
             return { nome, nec: data.nec, disp, pendente, receitas: Array.from(data.receitas) };
         });
-
         listaMaterias = filtrarItens(listaMaterias, termoBusca, "nome");
-
         if (categoriaFiltro) {
             listaMaterias = listaMaterias.filter(m => {
                 const comp = componentes.find(c => c.nome === m.nome);
                 return comp && comp.categoria === categoriaFiltro;
             });
         }
-
         if (ordem === "pendente-desc") {
             listaMaterias.sort((a, b) => b.pendente - a.pendente);
         } else if (ordem === "pendente-asc") {
@@ -3793,8 +3600,6 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
         } else {
             listaMaterias = ordenarItens(listaMaterias, ordem, "nome");
         }
-
-        const isAdmin = isUserAdmin();
         const div = document.getElementById("listaFarmar");
         if (div) {
             div.innerHTML = listaMaterias.map(m => {
@@ -3805,7 +3610,7 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                 const id = `farmar-${m.nome.replace(/\s/g, '-')}`;
                 const component = componentes.find(c => c.nome === m.nome);
                 const hasSubs = component && component.associados && component.associados.length > 0;
-                const btnFabricarHtml = isAdmin && hasSubs ? `<button class="btn-fabricar" data-componente="${m.nome}" data-pendente="${m.pendente}" data-qtdprod="${component.quantidadeProduzida || 1}">Fabricar Tudo</button>` : '';
+                const btnFabricarHtml = hasPermission('fabricarComponentes') && hasSubs ? `<button class="btn-fabricar" data-componente="${m.nome}" data-pendente="${m.pendente}" data-qtdprod="${component.quantidadeProduzida || 1}">Fabricar Tudo</button>` : '';
                 return `
                 <div class="item" style="background-color: ${color}; color: white;" data-componente="${m.nome}">
                     <div class="comp-item">
@@ -3823,7 +3628,6 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                     ${btnFabricarHtml}
                 </div>
             `}).join("");
-
             // Adicionar event listeners para toggles em farmar
             document.querySelectorAll("#listaFarmar .toggle-detalhes").forEach(btn => {
                 btn.addEventListener('click', async () => {
@@ -3842,9 +3646,8 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                     }
                 });
             });
-
             // Verificar botões fabricar inicialmente
-            if (isAdmin) {
+            if (hasPermission('fabricarComponentes')) {
                 document.querySelectorAll("#listaFarmar .item").forEach(async item => {
                     const componenteNome = item.dataset.componente;
                     const componente = componentes.find(c => c.nome === componenteNome);
@@ -3867,7 +3670,6 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                         if (btn) btn.disabled = !canFabricate;
                     }
                 });
-
                 // Adicionar event listeners para botões fabricar
                 document.querySelectorAll("#listaFarmar .btn-fabricar").forEach(btn => {
                     btn.addEventListener("click", async () => {
@@ -3883,7 +3685,6 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
         } else {
             console.log("[FARMAR] Skip updating farmar list as div not found.");
         }
-
         // Computar e exibir sequência sugerida
         let listaMateriasPendentes = listaMaterias.filter(m => m.pendente > 0);
         if (listaMateriasPendentes.length > 0) {
@@ -3898,7 +3699,6 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
         if (div) div.innerHTML = '<p>Erro ao carregar favoritos.</p>';
     }
 }
-
 function getSuggestedSequence(componentes, listaMateriasPendentes) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const savedKey = `suggestedSequence_${currentGame}`;
@@ -3921,18 +3721,16 @@ function getSuggestedSequence(componentes, listaMateriasPendentes) {
     // Fallback to compute
     return computeSuggestedSequence(componentes, listaMateriasPendentes);
 }
-
-function renderSequence(sequence, listaMateriasPendentes, componentes, isAdmin = isUserAdmin()) {
+function renderSequence(sequence, listaMateriasPendentes, componentes) {
     const sequenceList = document.getElementById("sequenceList");
     sequenceList.innerHTML = sequence.map((item, index) => {
         const pendente = listaMateriasPendentes.find(m => m.nome === item.nome)?.pendente || 0;
         const action = item.hasSubs ? "Fabricar" : "Coletar";
-        const buttons = true ? `<button class="btn-seq-up" data-index="${index}">↑</button><button class="btn-seq-down" data-index="${index}">↓</button>` : '';  // Modificado: Sempre mostrar botões para usuários logados
+        const buttons = true ? `<button class="btn-seq-up" data-index="${index}">↑</button><button class="btn-seq-down" data-index="${index}">↓</button>` : ''; // Modificado: Sempre mostrar botões para usuários logados
         return `<li data-nome="${item.nome}" data-index="${index}">${index + 1}. ${action} ${item.nome} (Pendente: ${formatQuantity(pendente)})${buttons}</li>`;
     }).join("");
-
     // Adicionar event listeners para reordenação se admin
-    if (true) {  // Modificado: Sempre adicionar listeners para usuários logados
+    if (true) { // Modificado: Sempre adicionar listeners para usuários logados
         sequenceList.querySelectorAll('.btn-seq-up').forEach(btn => {
             btn.addEventListener('click', () => handleSequenceReorder('up', btn, btn, sequence, listaMateriasPendentes, componentes));
         });
@@ -3941,12 +3739,10 @@ function renderSequence(sequence, listaMateriasPendentes, componentes, isAdmin =
         });
     }
 }
-
 function handleSequenceReorder(direction, btn, currentSequence, listaMateriasPendentes, componentes) {
     const li = btn.closest('li');
     const index = parseInt(li.dataset.index);
     let newSequence = [...currentSequence];
-
     if (direction === 'up' && index > 0) {
         [newSequence[index - 1], newSequence[index]] = [newSequence[index], newSequence[index - 1]];
     } else if (direction === 'down' && index < newSequence.length - 1) {
@@ -3954,22 +3750,17 @@ function handleSequenceReorder(direction, btn, currentSequence, listaMateriasPen
     } else {
         return; // Não pode mover
     }
-
     // Salvar nova ordem no localStorage
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const savedKey = `suggestedSequence_${currentGame}`;
     localStorage.setItem(savedKey, JSON.stringify(newSequence.map(s => s.nome)));
-
     // Re-renderizar com nova sequência
     renderSequence(newSequence, listaMateriasPendentes, componentes);
 }
-
 function computeSuggestedSequence(componentes, listaMaterias) {
     const allComponents = new Set(listaMaterias.map(m => m.nome));
-
     const adj = new Map(); // pré-req -> dependentes
     const indegree = new Map();
-
     for (let comp of componentes) {
         if (!allComponents.has(comp.nome)) continue;
         indegree.set(comp.nome, indegree.get(comp.nome) || 0);
@@ -3980,18 +3771,15 @@ function computeSuggestedSequence(componentes, listaMaterias) {
             indegree.set(comp.nome, (indegree.get(comp.nome) || 0) + 1);
         }
     }
-
     // Adicionar componentes sem entries
     for (let c of allComponents) {
         if (!indegree.has(c)) indegree.set(c, 0);
         if (!adj.has(c)) adj.set(c, []);
     }
-
     let queue = [];
     for (let [c, d] of indegree) {
         if (d === 0) queue.push(c);
     }
-
     let order = [];
     while (queue.length > 0) {
         let u = queue.shift();
@@ -4003,12 +3791,14 @@ function computeSuggestedSequence(componentes, listaMaterias) {
             if (indegree.get(v) === 0) queue.push(v);
         }
     }
-
     // Se houver ciclo, order.length < allComponents.size, mas assumimos sem ciclos
     return order;
 }
-
 async function fabricarComponente(nome, numCrafts = 1) {
+    if (!hasPermission('fabricarComponentes')) {
+        alert('Você não tem permissão para fabricar componentes.');
+        return;
+    }
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
         const data = await safeApi(`/fabricar?game=${encodeURIComponent(currentGame)}`, {
@@ -4032,7 +3822,6 @@ async function fabricarComponente(nome, numCrafts = 1) {
         mostrarErro("Erro ao fabricar componente: " + error.message);
     }
 }
-
 /* ------------------ ROADMAP ------------------ */
 async function montarRoadmap() {
     const isAdmin = isUserAdmin();
@@ -4041,32 +3830,27 @@ async function montarRoadmap() {
     <div class="filtros">
         <label><input type="checkbox" id="filtroProntasRoadmap"> Visualizar somente receitas prontas</label>
     </div>
-    ${isAdmin ? '<button id="btnInserirNovaReceita" class="primary">Inserir nova receita</button>' : ''}
+    ${hasPermission('criarRoadmap') ? '<button id="btnInserirNovaReceita" class="primary">Inserir nova receita</button>' : ''}
     <div id="listaRoadmap" class="lista" style="flex-direction: column;"></div>
     `;
-    if (isAdmin) {
+    if (hasPermission('criarRoadmap')) {
         document.getElementById("btnInserirNovaReceita").addEventListener("click", mostrarPopupAdicionarReceitaRoadmap);
     }
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const savedFilters = JSON.parse(localStorage.getItem(`roadmapFilters_${currentGame}`)) || {};
     const filtroProntas = document.getElementById("filtroProntasRoadmap");
     filtroProntas.checked = savedFilters.onlyCompleted || false;
-
     const saveFilters = () => {
         localStorage.setItem(`roadmapFilters_${currentGame}`, JSON.stringify({
             onlyCompleted: filtroProntas.checked
         }));
     };
-
     filtroProntas.addEventListener("change", () => {
         carregarListaRoadmap(filtroProntas.checked);
         saveFilters();
     });
-
     await carregarListaRoadmap(filtroProntas.checked);
 }
-
 async function carregarListaRoadmap(onlyCompleted = false) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
@@ -4078,15 +3862,10 @@ async function carregarListaRoadmap(onlyCompleted = false) {
         const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
         const estoque = {};
         estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
-
-        const isAdmin = isUserAdmin();
-        const btnExcluirDisabled = !isAdmin ? 'disabled' : '';
-
         let roadmapToRender = roadmap;
         if (onlyCompleted) {
             roadmapToRender = roadmap.filter(item => item.completed);
         }
-
         const div = document.getElementById("listaRoadmap");
         div.innerHTML = roadmapToRender.map((item, visualIndex) => {
             if (onlyCompleted && !item.completed) return '';
@@ -4096,11 +3875,11 @@ async function carregarListaRoadmap(onlyCompleted = false) {
             const id = `roadmap-${item.name.replace(/\s/g, '-')}-${visualIndex}`;
             const comps = (receita.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
             const savedQtd = quantities[item.name] || 1;
-            const checkboxHtml = isAdmin ? `<label><input type="checkbox" class="checkbox-completed" ${item.completed ? 'checked' : ''}> Pronto</label>` : '';
+            const checkboxHtml = hasPermission('marcarProntoRoadmap') ? `<label><input type="checkbox" class="checkbox-completed" ${item.completed ? 'checked' : ''}> Pronto</label>` : '';
             const btnUpDisabled = visualIndex === 0 ? 'disabled' : '';
             const btnDownDisabled = visualIndex === (roadmapToRender.length - 1) ? 'disabled' : '';
-            const reordenacaoHtml = isAdmin ? `<button class="btn-move-up" ${btnUpDisabled}>↑</button><button class="btn-move-down" ${btnDownDisabled}>↓</button>` : '';
-            const btnExcluirHtml = isAdmin ? `<button class="btn-excluir-roadmap" ${btnExcluirDisabled}>Excluir</button>` : '';
+            const reordenacaoHtml = hasPermission('reordenarRoadmap') ? `<button class="btn-move-up" ${btnUpDisabled}>↑</button><button class="btn-move-down" ${btnDownDisabled}>↓</button>` : '';
+            const btnExcluirHtml = hasPermission('excluirRoadmap') ? `<button class="btn-excluir-roadmap" >Excluir</button>` : '';
             return `
             <div class="item" style="${item.completed ? 'background-color: green;' : ''}" data-receita="${item.name}">
               <div class="receita-header">
@@ -4121,7 +3900,6 @@ async function carregarListaRoadmap(onlyCompleted = false) {
               <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
             </div>`;
         }).join("");
-
         document.querySelectorAll("#listaRoadmap .toggle-detalhes").forEach(btn => {
             btn.addEventListener("click", async () => {
                 const targetId = btn.dataset.target;
@@ -4137,7 +3915,6 @@ async function carregarListaRoadmap(onlyCompleted = false) {
                 }
             });
         });
-
         document.querySelectorAll("#listaRoadmap .qtd-desejada").forEach(input => {
             input.addEventListener("input", async () => {
                 const itemElement = input.closest(".item");
@@ -4151,8 +3928,7 @@ async function carregarListaRoadmap(onlyCompleted = false) {
                 }
             });
         });
-
-        if (isAdmin) {
+        if (hasPermission('marcarProntoRoadmap')) {
             document.querySelectorAll("#listaRoadmap .checkbox-completed").forEach(cb => {
                 cb.addEventListener("change", async () => {
                     const itemElement = cb.closest(".item");
@@ -4162,7 +3938,8 @@ async function carregarListaRoadmap(onlyCompleted = false) {
                     itemElement.style.backgroundColor = completed ? 'green' : '';
                 });
             });
-
+        }
+        if (hasPermission('reordenarRoadmap')) {
             document.querySelectorAll("#listaRoadmap .btn-move-up").forEach(btn => {
                 btn.addEventListener("click", async () => {
                     const itemElement = btn.closest(".item");
@@ -4171,7 +3948,6 @@ async function carregarListaRoadmap(onlyCompleted = false) {
                     await reordenarRoadmapVisual(name, 'up', onlyCompleted);
                 });
             });
-
             document.querySelectorAll("#listaRoadmap .btn-move-down").forEach(btn => {
                 btn.addEventListener("click", async () => {
                     const itemElement = btn.closest(".item");
@@ -4180,7 +3956,8 @@ async function carregarListaRoadmap(onlyCompleted = false) {
                     await reordenarRoadmapVisual(name, 'down', onlyCompleted);
                 });
             });
-
+        }
+        if (hasPermission('excluirRoadmap')) {
             document.querySelectorAll("#listaRoadmap .btn-excluir-roadmap").forEach(btn => {
                 btn.addEventListener("click", async () => {
                     const itemElement = btn.closest(".item");
@@ -4195,7 +3972,6 @@ async function carregarListaRoadmap(onlyCompleted = false) {
         if (div) div.innerHTML = '<p>Erro ao carregar roadmap.</p>';
     }
 }
-
 // Nova função para reordenar visualmente no roadmap (considera filtro de completas)
 async function reordenarRoadmapVisual(name, direction, onlyCompleted) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
@@ -4231,7 +4007,6 @@ async function reordenarRoadmapVisual(name, direction, onlyCompleted) {
         mostrarErro("Erro ao reordenar roadmap: " + error.message);
     }
 }
-
 // Nova função para atualizar item do roadmap por nome
 async function atualizarRoadmapByName(name, updates) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
@@ -4252,7 +4027,6 @@ async function atualizarRoadmapByName(name, updates) {
         mostrarErro("Erro ao atualizar roadmap: " + error.message);
     }
 }
-
 // Nova função para excluir item do roadmap por nome
 async function excluirRoadmapItemByName(name) {
     if (!confirm("Confirmar exclusão da receita do Roadmap?")) return;
@@ -4279,7 +4053,6 @@ async function excluirRoadmapItemByName(name) {
         mostrarErro("Erro ao excluir do roadmap: " + error.message);
     }
 }
-
 function mostrarPopupAdicionarReceitaRoadmap() {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
@@ -4305,12 +4078,10 @@ function mostrarPopupAdicionarReceitaRoadmap() {
         </form>
     `;
     document.body.appendChild(popup);
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`).then(receitas => {
         const datalist = document.getElementById("receitasDatalistRoadmap");
         datalist.innerHTML = receitas.map(r => `<option value="${r.nome}">`).join("");
-
         const input = document.getElementById("searchReceitaRoadmap");
         input.addEventListener("input", () => {
             const termo = input.value.toLowerCase();
@@ -4320,7 +4091,6 @@ function mostrarPopupAdicionarReceitaRoadmap() {
     }).catch(error => {
         console.error('[ROADMAP DATALIST] Erro ao carregar receitas:', error);
     });
-
     document.getElementById("formAdicionarRoadmap").addEventListener("submit", async (e) => {
         e.preventDefault();
         const nome = document.getElementById("searchReceitaRoadmap").value.trim();
@@ -4354,16 +4124,13 @@ function mostrarPopupAdicionarReceitaRoadmap() {
             mostrarErro("Erro ao adicionar ao roadmap: " + error.message);
         }
     });
-
     document.getElementById("btnCancelarAdicionarRoadmap").addEventListener("click", () => {
         popup.remove();
         overlay.remove();
     });
 }
-
 /* ------------------ CATEGORIAS ------------------ */
 async function montarCategorias() {
-    const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
     <h2>Categorias</h2>
     <div class="filtros">
@@ -4372,30 +4139,26 @@ async function montarCategorias() {
             <option value="az">Alfabética A-Z</option>
             <option value="za">Alfabética Z-A</option>
         </select>
-        ${isAdmin ? '<button id="btnNovaCategoria" class="primary">+ Nova Categoria</button>' : ''}
+        ${hasPermission('criarCategorias') ? '<button id="btnNovaCategoria" class="primary">+ Nova Categoria</button>' : ''}
     </div>
     <div id="lista-categorias" class="lista"></div>
     `;
-    if (isAdmin) {
+    if (hasPermission('criarCategorias')) {
         document.getElementById("btnNovaCategoria").addEventListener("click", () => abrirPopupCategoria(null));
     }
     const buscaInput = document.getElementById("buscaCategorias");
     const ordemSelect = document.getElementById("ordemCategorias");
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const savedFilters = JSON.parse(localStorage.getItem(`categoriasFilters_${currentGame}`)) || {};
     buscaInput.value = savedFilters.termoBusca || "";
     ordemSelect.value = savedFilters.ordem || "az";
-
     const saveFilters = () => {
         localStorage.setItem(`categoriasFilters_${currentGame}`, JSON.stringify({
             termoBusca: buscaInput.value,
             ordem: ordemSelect.value
         }));
     };
-
     const debouncedCarregarCategoriasLista = debounce(carregarCategoriasLista, 300);
-
     buscaInput.addEventListener("input", () => {
         debouncedCarregarCategoriasLista(buscaInput.value, ordemSelect.value);
         saveFilters();
@@ -4406,7 +4169,6 @@ async function montarCategorias() {
     });
     await carregarCategoriasLista(buscaInput.value, ordemSelect.value);
 }
-
 async function carregarCategoriasLista(termoBusca = "", ordem = "az") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -4414,30 +4176,25 @@ async function carregarCategoriasLista(termoBusca = "", ordem = "az") {
         let categorias = Array.isArray(catRes) ? catRes : [];
         const compRes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
         const comps = Array.isArray(compRes) ? compRes : [];
-
         const counts = {};
         comps.forEach(c => {
             if (c.categoria) {
                 counts[c.categoria] = (counts[c.categoria] || 0) + 1;
             }
         });
-
         if (termoBusca) {
             categorias = categorias.filter(c => c.toLowerCase().includes(termoBusca.toLowerCase()));
         }
-
         if (ordem === "az") {
             categorias.sort((a, b) => a.localeCompare(b));
         } else if (ordem === "za") {
             categorias.sort((a, b) => b.localeCompare(a));
         }
-
-        const isAdmin = isUserAdmin();
         const div = document.getElementById("lista-categorias");
         if (div) {
             div.innerHTML = categorias.map(cat => {
                 const count = counts[cat] || 0;
-                const btnExcluirHtml = isAdmin && count === 0 ? `<button onclick="excluirCategoria('${escapeJsString(cat)}')" class="warn">Excluir</button>` : '';
+                const btnExcluirHtml = hasPermission('excluirCategorias') && count === 0 ? `<button onclick="excluirCategoria('${escapeJsString(cat)}')" class="warn">Excluir</button>` : '';
                 return `
           <div class="item">
             <div>
@@ -4455,7 +4212,6 @@ async function carregarCategoriasLista(termoBusca = "", ordem = "az") {
         if (div) div.innerHTML = '<p>Erro ao carregar categorias.</p>';
     }
 }
-
 function abrirPopupCategoria() {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
@@ -4477,9 +4233,7 @@ function abrirPopupCategoria() {
         </form>
     `;
     document.body.appendChild(popup);
-
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
-
     document.getElementById("formCategoria").addEventListener("submit", async (e) => {
         e.preventDefault();
         const nome = document.getElementById("categoriaNome").value.trim();
@@ -4520,14 +4274,16 @@ function abrirPopupCategoria() {
             }
         }
     });
-
     document.getElementById("btnCancelarCategoria").addEventListener("click", () => {
         popup.remove();
         overlay.remove();
     });
 }
-
 async function excluirCategoria(nome) {
+    if (!hasPermission('excluirCategorias')) {
+        alert('Você não tem permissão para excluir categorias.');
+        return;
+    }
     if (!confirm(`Confirmar exclusão da categoria "${nome}"?`)) return;
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -4549,7 +4305,6 @@ async function excluirCategoria(nome) {
         mostrarErro("Erro ao excluir categoria: " + error.message);
     }
 }
-
 /* ------------------ UTIL ------------------ */
 function formatQuantity(quantity) {
     if (quantity == null) return '0';
@@ -4557,14 +4312,12 @@ function formatQuantity(quantity) {
     if (isNaN(quantity)) return '0';
     return Number.isInteger(quantity) ? quantity : quantity.toFixed(3).replace(/\.?0+$/, '');
 }
-
 function mostrarErro(msg) {
     // Remover overlay e modal existentes para evitar conflitos
     const existingOverlay = document.getElementById("overlay");
     if (existingOverlay) existingOverlay.remove();
     const existingModal = document.getElementById("modalErro");
     if (existingModal) existingModal.remove();
-
     const overlay = criarOverlay();
     const modalErro = document.createElement("div");
     modalErro.id = "modalErro";
@@ -4577,7 +4330,6 @@ function mostrarErro(msg) {
     modalErro.style.zIndex = "1000";
     modalErro.style.borderRadius = "5px";
     modalErro.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.1)";
-
     // Criar o botão de fechar antes de append para garantir o listener
     const buttonClose = document.createElement("button");
     buttonClose.id = "fecharModal";
@@ -4586,7 +4338,6 @@ function mostrarErro(msg) {
     buttonClose.style.fontSize = "16px";
     buttonClose.style.cursor = "pointer";
     buttonClose.innerHTML = "❌";
-
     modalErro.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h3>Erro</h3>
@@ -4594,16 +4345,13 @@ function mostrarErro(msg) {
         </div>
         <p id="mensagemErro">${msg}</p>
     `;
-
     // Adicionar listener imediatamente após criar o botão
     buttonClose.addEventListener("click", () => {
         modalErro.remove();
         const currentOverlay = document.getElementById("overlay");
         if (currentOverlay) currentOverlay.remove();
     });
-
     document.body.appendChild(modalErro);
-
     // Re-adicionar listener para segurança (caso haja manipulação DOM)
     const fecharModal = document.getElementById("fecharModal");
     if (fecharModal) {
@@ -4613,7 +4361,6 @@ function mostrarErro(msg) {
             if (currentOverlay) currentOverlay.remove();
         });
     }
-
     // Fechar ao clicar no overlay
     overlay.addEventListener("click", () => {
         modalErro.remove();
