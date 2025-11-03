@@ -3,7 +3,7 @@
 
 async function montarTime() {
     conteudo.innerHTML = `
-        <h2>Time</h2>
+        <h2>Membros</h2>
         <div id="time-lista" class="lista"></div>
     `;
     await carregarListaTime();

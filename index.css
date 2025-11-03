@@ -2392,3 +2392,13 @@ body.bright-mode #popupMinhaConta button#btnLogout {
 #btnUploadFoto {
     width: 115px !important;
 }
+
+#menu-guilda {
+    display: flex;
+    justify-content: space-between;
+}
+
+#submenu-guilda-inline li {
+    padding: 8px 16px 8px 40px;
+    cursor: pointer;
+}

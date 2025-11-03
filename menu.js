@@ -7,8 +7,7 @@ function initMenu() {
     menu.innerHTML = ''; // Limpar menu existente para reordenar
     // Itens principais fora do dropdown
     const mainSections = [
-        { section: "home", text: "Bem vindo!" },
-        { section: "time", text: "Time" }
+        { section: "home", text: "Bem vindo!" }
     ];
     let menuItemsCount = 0
     mainSections.forEach(sec => {
@@ -20,6 +19,36 @@ function initMenu() {
         li.addEventListener("click", () => carregarSecao(sec.section));
         menu.appendChild(li);
     });
+    // Item "Guilda" com submenu inline
+    const liGuilda = document.createElement("li");
+    liGuilda.id = "menu-guilda";
+    liGuilda.classList.add("menu-item-with-submenu"); // Nova classe para estilização
+    const guildaToggle = document.createElement("span");
+    const guildaToggleArrow = document.createElement("span");
+    guildaToggle.innerHTML = "Guilda"; // Setinha inicial (fechado)
+    guildaToggleArrow.classList.add('menu-guilda-SpanArrow')
+    guildaToggleArrow.innerHTML = "▼"
+    liGuilda.appendChild(guildaToggle);
+    liGuilda.appendChild(guildaToggleArrow);
+    liGuilda.addEventListener("click", toggleGuildaSubmenu); // Toggle ao clicar
+    menu.appendChild(liGuilda);
+    // Adicionar o submenu inline para Guilda (inicialmente escondido)
+    const submenuGuildaUl = document.createElement("ul");
+    submenuGuildaUl.id = "submenu-guilda-inline";
+    submenuGuildaUl.className = "submenu-guilda-inline";
+    submenuGuildaUl.style.display = "none"; // Inicialmente fechado
+    const guildaSections = [
+        { section: "time", text: "Membros" }
+    ];
+    submenuGuildaUl.innerHTML = guildaSections.map(sec => `
+        <li onclick="carregarSecao('${sec.section}')">${sec.text}</li>
+    `).join("");
+    // Inserir submenu logo após o liGuilda
+    liGuilda.insertAdjacentElement('afterend', submenuGuildaUl);
+    // Checar localStorage para abrir submenu se salvo como aberto
+    if (localStorage.getItem("guildaMenuOpen") === "true") {
+        toggleGuildaSubmenu(); // Expande automaticamente
+    }
     // Item "Crafting" com submenu inline
     const liCrafting = document.createElement("li");
     liCrafting.id = "menu-crafting";
@@ -63,6 +92,24 @@ function initMenu() {
     liMinhaConta.style.marginTop = "auto";
     liMinhaConta.addEventListener("click", mostrarPopupMinhaConta);
     menu.appendChild(liMinhaConta);
+}
+// Nova função para toggle do submenu inline de Guilda
+function toggleGuildaSubmenu() {
+    const submenu = document.getElementById("submenu-guilda-inline");
+    const toggleSpan = document.querySelector("#menu-guilda span");
+    const toggleSpanArrow = document.querySelector('#menu-guilda .menu-guilda-SpanArrow')
+    const isOpen = submenu.style.display === "block";
+    if (isOpen) {
+        submenu.style.display = "none";
+        toggleSpan.innerHTML = "Guilda"; // Fechado
+        toggleSpanArrow.innerHTML = "▼" // Fechado
+        localStorage.setItem("guildaMenuOpen", "false");
+    } else {
+        submenu.style.display = "block";
+        toggleSpan.innerHTML = "Guilda"; // Aberto
+        toggleSpanArrow.innerHTML = "▲" // Aberto
+        localStorage.setItem("guildaMenuOpen", "true");
+    }
 }
 // Nova função para toggle do submenu inline de Crafting
 function toggleCraftingSubmenu() {
