@@ -2332,9 +2332,9 @@ body.bright-mode #popupMinhaConta button#btnLogout {
 }
 
 .submenu-crafting-inline li {
-    padding: 8px 16px;
+    padding: 8px 16px 8px 32px;
     cursor: pointer;
-    border-top: 1px solid #e2e8f0;
+    /* border-top: 1px solid #e2e8f0; */
 }
 
 .menu li:hover,
