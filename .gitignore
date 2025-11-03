@@ -13,4 +13,4 @@ data
 prompt.txt
 edicao.json
 backups
-system/index.js
+index.js

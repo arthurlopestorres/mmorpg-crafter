@@ -144,7 +144,6 @@ async function montarFarmar() {
         conteudo.innerHTML = '<h2>Favoritos</h2><p>Erro ao carregar dados.</p>';
     }
 }
-// Nova função para atualizar opções do filtro de categoria baseado em itens filtrados por busca e receitas
 async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
@@ -190,27 +189,36 @@ async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
         const categoriaSelect = document.getElementById("filtroCategoriaFarmar");
         if (categoriaSelect) {
             const currentValue = categoriaSelect.value;
-            categoriaSelect.innerHTML = `
-                <option value="">Todas as categorias</option>
-                ${categoriasUnicas.map(cat => `<option value="${cat}">${cat}</option>`).join("")}
-            `;
-            categoriaSelect.value = currentValue;
+            categoriaSelect.innerHTML = '<option value="">Todas as categorias</option>' +
+                categoriasUnicas.map(cat => `<option value="${cat}">${cat}</option>`).join("");
+            // Se o valor atual não está mais disponível, resetar para vazio
+            if (currentValue && !categoriasUnicas.includes(currentValue)) {
+                categoriaSelect.value = "";
+            } else {
+                categoriaSelect.value = currentValue;
+            }
         }
     } catch (error) {
-        console.error('[UPDATE CATEGORIA] Erro:', error);
+        console.error('[UPDATE CATEGORIA OPTIONS] Erro:', error);
     }
 }
-async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", selectedReceitas = "", categoriaFiltro = "") {
+async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", receitaFiltro = "", categoriaFiltro = "") {
+    // Correção: Verificar se a seção farmar existe antes de prosseguir (evita chamadas desnecessárias de outras seções)
+    if (!document.getElementById("listaFarmar")) {
+        console.log("[FARMAR] Seção não encontrada, pulando atualização.");
+        return;
+    }
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     const quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
     try {
+        // Buscar as listas completas (evitar limite padrão do servidor em produção)
         const receitas = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}&limit=9999`);
         const receitasFavoritas = receitas.filter(r => r.favorita);
         const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}&limit=9999`);
         const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}&limit=9999`);
-        const selectedArray = selectedReceitas ? selectedReceitas.split(',') : [];
-        const receitasFiltradas = selectedArray.length > 0 ? receitasFavoritas.filter(r => selectedArray.includes(r.nome)) : receitasFavoritas;
+        const selectedReceitas = Array.from(document.querySelectorAll('#listaReceitasFarmar input[type="checkbox"]:checked')).map(cb => cb.value);
+        const receitasFiltradas = selectedReceitas.length > 0 ? receitasFavoritas.filter(r => selectedReceitas.includes(r.nome)) : receitasFavoritas;
         const bases = new Map();
         const estoqueMap = {};
         estoqueList.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
@@ -276,18 +284,61 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", sel
                     <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
                     ${btnFabricarHtml}
                 </div>
-            `;
-            }).join("");
-            // Adicionar event listeners para os botões "Fabricar Tudo"
-            document.querySelectorAll('.btn-fabricar').forEach(btn => {
+            `}).join("");
+            // Adicionar event listeners para toggles em farmar
+            document.querySelectorAll("#listaFarmar .toggle-detalhes").forEach(btn => {
                 btn.addEventListener('click', async () => {
-                    const componente = btn.dataset.componente;
-                    const pendente = parseFloat(btn.dataset.pendente);
-                    const qtdProd = parseFloat(btn.dataset.qtdprod);
-                    const numCrafts = Math.ceil(pendente / qtdProd);
-                    await fabricarComponente(componente, numCrafts);
+                    const targetId = btn.dataset.target;
+                    const detalhes = document.getElementById(targetId);
+                    const isVisible = detalhes.style.display !== "none";
+                    detalhes.style.display = isVisible ? "none" : "block";
+                    btn.textContent = isVisible ? "▼" : "▲";
+                    if (!isVisible) {
+                        const itemElement = btn.closest(".item");
+                        const componenteNome = itemElement.dataset.componente;
+                        const m = listaMaterias.find(mat => mat.nome === componenteNome);
+                        if (m) {
+                            detalhes.innerHTML = `<ul>${getComponentChain(m.nome, m.nec, componentes, estoqueMap)}</ul>`;
+                        }
+                    }
                 });
             });
+            // Verificar botões fabricar inicialmente
+            if (hasPermission('fabricarComponentes')) {
+                document.querySelectorAll("#listaFarmar .item").forEach(async item => {
+                    const componenteNome = item.dataset.componente;
+                    const componente = componentes.find(c => c.nome === componenteNome);
+                    if (componente && componente.associados && componente.associados.length > 0) {
+                        let qtdProd = componente.quantidadeProduzida || 1;
+                        const m = listaMaterias.find(mat => mat.nome === componenteNome);
+                        let pendente = m ? m.pendente : 0;
+                        let numCrafts = Math.ceil(pendente / qtdProd);
+                        let canFabricate = pendente > 0;
+                        if (canFabricate) {
+                            for (const assoc of componente.associados) {
+                                const subDisp = estoqueMap[assoc.nome] || 0;
+                                if (subDisp < assoc.quantidade * numCrafts) {
+                                    canFabricate = false;
+                                    break;
+                                }
+                            }
+                        }
+                        const btn = item.querySelector(".btn-fabricar");
+                        if (btn) btn.disabled = !canFabricate;
+                    }
+                });
+                // Adicionar event listeners para botões fabricar
+                document.querySelectorAll("#listaFarmar .btn-fabricar").forEach(btn => {
+                    btn.addEventListener("click", async () => {
+                        const componenteNome = btn.dataset.componente;
+                        const pendente = parseFloat(btn.dataset.pendente);
+                        const qtdProd = parseFloat(btn.dataset.qtdprod);
+                        const numCrafts = Math.ceil(pendente / qtdProd);
+                        await fabricarComponente(componenteNome, numCrafts);
+                        btn.disabled = true;
+                    });
+                });
+            }
         } else {
             console.log("[FARMAR] Skip updating farmar list as div not found.");
         }
