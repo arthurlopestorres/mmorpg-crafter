@@ -1,6 +1,6 @@
+//! INCIO FARMAR.JS
 // farmar.js - Funções para módulo "O que farmar?"
 // Dependências: core.js, utils.js
-
 async function montarFarmar() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     try {
@@ -219,29 +219,24 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
         const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}&limit=9999`);
         const selectedReceitas = Array.from(document.querySelectorAll('#listaReceitasFarmar input[type="checkbox"]:checked')).map(cb => cb.value);
         const receitasFiltradas = selectedReceitas.length > 0 ? receitasFavoritas.filter(r => selectedReceitas.includes(r.nome)) : receitasFavoritas;
-        const bases = new Map();
         const estoqueMap = {};
         estoqueList.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
+        const remainingStock = { ...estoqueMap };
+        const totalNec = new Map();
+        const requiredBy = new Map();
         for (const receita of receitasFiltradas) {
             if (!receita.nome) continue;
             const recipeQuantity = quantities[receita.nome] || 1;
-            let req = {};
             receita.componentes.forEach(comp => {
                 const qtdNec = comp.quantidade * recipeQuantity;
-                mergeReq(req, calculateComponentRequirements(comp.nome, qtdNec, componentes, estoqueMap));
+                calculateComponentRequirementsWithRemaining(comp.nome, qtdNec, componentes, remainingStock, totalNec, requiredBy, receita.nome);
             });
-            for (const [baseNome, baseQtd] of Object.entries(req)) {
-                if (!bases.has(baseNome)) {
-                    bases.set(baseNome, { nec: 0, receitas: new Set() });
-                }
-                bases.get(baseNome).nec += baseQtd;
-                bases.get(baseNome).receitas.add(receita.nome);
-            }
         }
-        let listaMaterias = Array.from(bases.entries()).map(([nome, data]) => {
+        let listaMaterias = Array.from(totalNec.keys()).map(nome => {
+            const nec = totalNec.get(nome);
             const disp = estoqueMap[nome] || 0;
-            const pendente = Math.max(0, data.nec - disp);
-            return { nome, nec: data.nec, disp, pendente, receitas: Array.from(data.receitas) };
+            const pendente = Math.max(0, nec - disp);
+            return { nome, nec, disp, pendente, receitas: Array.from(requiredBy.get(nome) || []) };
         });
         listaMaterias = filtrarItens(listaMaterias, termoBusca, "nome");
         if (categoriaFiltro) {
@@ -298,7 +293,8 @@ async function carregarListaFarmar(termoBusca = "", ordem = "pendente-desc", rec
                         const componenteNome = itemElement.dataset.componente;
                         const m = listaMaterias.find(mat => mat.nome === componenteNome);
                         if (m) {
-                            detalhes.innerHTML = `<ul>${getComponentChain(m.nome, m.nec, componentes, estoqueMap)}</ul>`;
+                            const remainingStock = { ...estoqueMap };
+                            detalhes.innerHTML = `<ul>${getComponentChain(m.nome, m.nec, componentes, remainingStock)}</ul>`;
                         }
                     }
                 });
@@ -479,3 +475,4 @@ async function fabricarComponente(nome, numCrafts = 1) {
         mostrarErro("Erro ao fabricar componente: " + error.message);
     }
 }
+//! FIM FARMAR.JS

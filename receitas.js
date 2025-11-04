@@ -1,6 +1,6 @@
+//! INICIO RECEITAS.JS
 // receitas.js - Funções para módulo de receitas
 // Dependências: core.js, utils.js
-
 async function montarReceitas() {
     const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
@@ -302,19 +302,16 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, col
             console.error(`[DETALHES] Elemento com detalhes para receita "${receitaNome}" não encontrado`);
             return;
         }
-        let requisitos = {};
-        receita.componentes.forEach(comp => {
-            const quantidadeNecessaria = comp.quantidade * qtd;
-            mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
-        });
+        const remainingStock = { ...estoque };
         let html = "<ul>";
         let counter = 1;
         for (const comp of receita.componentes) {
             const quantidadeNecessaria = comp.quantidade * qtd;
-            const disp = estoque[comp.nome] !== undefined ? estoque[comp.nome] : 0;
-            const falta = Math.max(0, quantidadeNecessaria - disp);
+            const effectiveDisp = Math.min(remainingStock[comp.nome] || 0, quantidadeNecessaria);
+            remainingStock[comp.nome] = (remainingStock[comp.nome] || 0) - effectiveDisp;
+            const falta = Math.max(0, quantidadeNecessaria - effectiveDisp);
             let classeLinha = '';
-            if (disp >= quantidadeNecessaria) {
+            if (effectiveDisp >= quantidadeNecessaria) {
                 classeLinha = 'comp-verde'; // Verde e negrito
             } else if (falta <= quantidadeNecessaria * 0.5) {
                 classeLinha = 'comp-amarelo'; // Amarelo e negrito
@@ -330,8 +327,8 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, col
             html += `
             <li class="${classeLinha}">
               ${toggleHtml}
-              ${!hidePrefix ? `<span class="prefix">${counter}-</span> ` : ''}${comp.nome} (Nec: ${formatQuantity(quantidadeNecessaria)}, Disp: ${formatQuantity(disp)}, Falta: ${formatQuantity(falta)})
-              ${getComponentChain(comp.nome, quantidadeNecessaria, componentesData, estoque, `${counter}.`, collapsible, hidePrefix)}
+              ${!hidePrefix ? `<span class="prefix">${counter}-</span> ` : ''}${comp.nome} (Nec: ${formatQuantity(quantidadeNecessaria)}, Disp: ${formatQuantity(effectiveDisp)}, Falta: ${formatQuantity(falta)})
+              ${falta > 0 ? getComponentChain(comp.nome, falta, componentesData, remainingStock, `${counter}.`, collapsible, hidePrefix) : ''}
             </li>`;
             counter++;
         }
@@ -358,11 +355,12 @@ async function atualizarDetalhes(receitaNome, qtd, componentesData, estoque, col
         console.error(`[DETALHES] Erro ao atualizar detalhes para ${receitaNome}:`, error);
     }
 }
-function getComponentChain(componentName, quantityNeeded, componentesData, estoque, prefix = "", collapsible = false, hidePrefix = false) {
+function getComponentChain(componentName, quantityNeeded, componentesData, remainingStock, prefix = "", collapsible = false, hidePrefix = false) {
+    const remainingDisp = remainingStock[componentName] || 0;
+    let effectiveDisp = Math.min(remainingDisp, quantityNeeded);
+    remainingStock[componentName] = (remainingStock[componentName] || 0) - effectiveDisp;
+    if (effectiveDisp >= quantityNeeded) return "";
     const component = componentesData.find(c => c.nome === componentName);
-    const disp = estoque[componentName] !== undefined ? estoque[componentName] : 0;
-    // Se o componente tem estoque suficiente, não exibir subcomponentes
-    if (disp >= quantityNeeded) return "";
     if (!component || !component.associados || component.associados.length === 0) return "";
     let ulStyle = "";
     if (collapsible) {
@@ -370,14 +368,15 @@ function getComponentChain(componentName, quantityNeeded, componentesData, estoq
     }
     let html = `<ul${ulStyle}>`;
     const qtdProd = component.quantidadeProduzida || 1;
-    const numCrafts = Math.ceil((quantityNeeded - disp) / qtdProd);
+    const numCrafts = Math.ceil((quantityNeeded - effectiveDisp) / qtdProd);
     let subCounter = 1;
     component.associados.forEach(a => {
         const subNec = a.quantidade * numCrafts;
-        const subDisp = estoque[a.nome] !== undefined ? estoque[a.nome] : 0;
-        const subFalta = Math.max(0, subNec - subDisp);
+        let subEffectiveDisp = Math.min(remainingStock[a.nome] || 0, subNec);
+        remainingStock[a.nome] = (remainingStock[a.nome] || 0) - subEffectiveDisp;
+        const subFalta = Math.max(0, subNec - subEffectiveDisp);
         let classeLinha = '';
-        if (subDisp >= subNec) {
+        if (subEffectiveDisp >= subNec) {
             classeLinha = 'comp-verde'; // Verde e negrito
         } else if (subFalta <= subNec * 0.5) {
             classeLinha = 'comp-amarelo'; // Amarelo e negrito
@@ -395,33 +394,43 @@ function getComponentChain(componentName, quantityNeeded, componentesData, estoq
         html += `
         <li class="${classeLinha}" style="margin-left: ${level * (10 + arrowWidth)}px;">
           ${toggleHtml}
-          ${!hidePrefix ? `<span class="prefix">${prefix}${subCounter}-</span> ` : ''}${a.nome} (Nec: ${formatQuantity(subNec)}, Disp: ${formatQuantity(subDisp)}, Falta: ${formatQuantity(subFalta)})
-          ${getComponentChain(a.nome, subNec, componentesData, estoque, `${prefix}${subCounter}.`, collapsible, hidePrefix)}
+          ${!hidePrefix ? `<span class="prefix">${prefix}${subCounter}-</span> ` : ''}${a.nome} (Nec: ${formatQuantity(subNec)}, Disp: ${formatQuantity(subEffectiveDisp)}, Falta: ${formatQuantity(subFalta)})
+          ${subFalta > 0 ? getComponentChain(a.nome, subFalta, componentesData, remainingStock, `${prefix}${subCounter}.`, collapsible, hidePrefix) : ''}
         </li>`;
         subCounter++;
     });
     html += "</ul>";
     return html;
 }
-function calculateComponentRequirements(componentName, quantityNeeded, componentesData, estoque) {
-    const disp = estoque[componentName] !== undefined ? estoque[componentName] : 0;
-    // Se o componente tem estoque suficiente, retornar apenas ele
-    if (disp >= quantityNeeded) {
-        return { [componentName]: quantityNeeded };
+function calculateComponentRequirementsWithRemaining(componentName, quantityNeeded, componentesData, remainingStock, totalNec = null, requiredBy = null, currentReceita = null) {
+    if (totalNec) {
+        totalNec.set(componentName, (totalNec.get(componentName) || 0) + quantityNeeded);
     }
-    const component = componentesData.find(c => c.nome === componentName);
-    if (!component || !component.associados || component.associados.length === 0) {
-        return { [componentName]: quantityNeeded };
+    if (requiredBy && currentReceita) {
+        if (!requiredBy.has(componentName)) requiredBy.set(componentName, new Set());
+        requiredBy.get(componentName).add(currentReceita);
     }
     let req = {};
-    const qtdProd = component.quantidadeProduzida || 1;
-    const numCrafts = Math.ceil((quantityNeeded - disp) / qtdProd);
-    component.associados.forEach(a => {
-        const subNec = a.quantidade * numCrafts;
-        mergeReq(req, calculateComponentRequirements(a.nome, subNec, componentesData, estoque));
-    });
-    // Incluir o componente principal apenas se não tiver estoque suficiente
-    req[componentName] = quantityNeeded;
+    const disp = remainingStock[componentName] || 0;
+    const effectiveDisp = Math.min(disp, quantityNeeded);
+    remainingStock[componentName] = disp - effectiveDisp;
+    if (effectiveDisp > 0) {
+        req[componentName] = effectiveDisp;
+    }
+    const stillNeeded = quantityNeeded - effectiveDisp;
+    if (stillNeeded > 0) {
+        const component = componentesData.find(c => c.nome === componentName);
+        if (component && component.associados && component.associados.length > 0) {
+            const qtdProd = component.quantidadeProduzida || 1;
+            const numCrafts = Math.ceil(stillNeeded / qtdProd);
+            component.associados.forEach(a => {
+                const subNec = a.quantidade * numCrafts;
+                mergeReq(req, calculateComponentRequirementsWithRemaining(a.nome, subNec, componentesData, remainingStock, totalNec, requiredBy, currentReceita));
+            });
+        } else {
+            req[componentName] = (req[componentName] || 0) + stillNeeded;
+        }
+    }
     return req;
 }
 function mergeReq(target, source) {
@@ -438,10 +447,12 @@ async function atualizarBotaoConcluir(receitaNome, qtd, componentesData, estoque
             console.error(`[CONCLUIR] Receita "${receitaNome}" não encontrada`);
             return;
         }
+        const remainingStock = { ...estoque };
         let requisitos = {};
         receita.componentes.forEach(comp => {
             const quantidadeNecessaria = comp.quantidade * qtd;
-            mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
+            const subReq = calculateComponentRequirementsWithRemaining(comp.nome, quantidadeNecessaria, componentesData, remainingStock);
+            mergeReq(requisitos, subReq);
         });
         const btn = document.querySelector(`[data-receita="${receitaNome}"] .btn-concluir`);
         if (!btn) return;
@@ -471,10 +482,12 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             mostrarErro("Receita não encontrada.");
             return;
         }
+        const remainingStock = { ...estoque };
         let requisitos = {};
         receita.componentes.forEach(comp => {
             const quantidadeNecessaria = comp.quantidade * qtd;
-            mergeReq(requisitos, calculateComponentRequirements(comp.nome, quantidadeNecessaria, componentesData, estoque));
+            const subReq = calculateComponentRequirementsWithRemaining(comp.nome, quantidadeNecessaria, componentesData, remainingStock);
+            mergeReq(requisitos, subReq);
         });
         const podeConcluir = Object.entries(requisitos).every(([nome, nec]) => {
             const disp = estoque[nome] !== undefined ? estoque[nome] : 0;
@@ -727,3 +740,4 @@ async function adicionarLinhaReceita(dados = {}) {
     row.querySelector("button").addEventListener("click", () => row.remove());
     container.appendChild(row);
 }
+//! FIM RECEITAS.JS

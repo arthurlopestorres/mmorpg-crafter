@@ -1,3 +1,4 @@
+//! INICIO SERVIDOR.JS
 // servidor.js
 const express = require('express');
 const fs = require('fs').promises;
@@ -3511,3 +3512,5 @@ async function scheduleAllReminders() {
 inicializarArquivos().then(() => {
     scheduleAllReminders();
 });
+
+//! FIM SERVIDOR.JS

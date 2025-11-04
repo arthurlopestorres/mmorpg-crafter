@@ -1,3 +1,4 @@
+//! INICIO UTILS.JS
 // utils.js - Funções utilitárias como formatQuantity, mostrarErro, mostrarSucesso, ordenarItens, etc.
 // Dependências: core.js (para safeApi, etc.)
 
@@ -142,3 +143,4 @@ function escapeHtml(s) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
 }
+//! FIM UTILS.JS
