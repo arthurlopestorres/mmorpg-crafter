@@ -1,3 +1,4 @@
+// servidor.js
 //! INICIO SERVIDOR.JS
 // servidor.js
 const express = require('express');
@@ -309,6 +310,13 @@ app.post('/login', async (req, res) => {
         if (!doisFatores) {
             // Login direto sem OTP
             req.session.user = email;
+            // Atribuir plano "basic" se não existir
+            if (!usuario.plano) {
+                usuario.plano = "basic";
+                const index = usuarios.findIndex(u => u.email === email);
+                usuarios[index] = usuario;
+                await saveUsuarios(usuarios);
+            }
             return res.json({ sucesso: true });
         }
         // Gerar OTP e enviar
@@ -348,6 +356,13 @@ app.post('/verify-otp-login', async (req, res) => {
         }
         if (!usuario.nome || usuario.nome.trim() === '') {
             usuario.nome = "Lorem Ipsum";
+            const index = usuarios.findIndex(u => u.email === email);
+            usuarios[index] = usuario;
+            await saveUsuarios(usuarios);
+        }
+        // Atribuir plano "basic" se não existir
+        if (!usuario.plano) {
+            usuario.plano = "basic";
             const index = usuarios.findIndex(u => u.email === email);
             usuarios[index] = usuario;
             await saveUsuarios(usuarios);
@@ -399,7 +414,7 @@ app.post('/verify-otp-cadastro', async (req, res) => {
         const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
         let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
         const id = await generateUniqueId();
-        usuarios.push({ nome, email, senhaHash, id, aprovado: false, doisFatores: true }); // Novo: doisFatores true por padrão
+        usuarios.push({ nome, email, senhaHash, id, aprovado: false, doisFatores: true, plano: "basic" }); // Novo: doisFatores true por padrão e plano "basic"
         await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
         // Enviar email para admin
         await transporter.sendMail({
@@ -959,6 +974,15 @@ app.post('/associate-self', isAuthenticated, async (req, res) => {
         if (!usuarios.some(u => u.email === secondary)) {
             return res.status(400).json({ sucesso: false, erro: 'Secondary não aprovado' });
         }
+        // Novo: Checar limite de membros baseado no plano do founder (user)
+        const founder = usuarios.find(u => u.email === user);
+        const plano = founder.plano || 'basic';
+        const memberLimits = { basic: 5, standard: 25, advanced: 100, fullpass: Infinity };
+        const limit = memberLimits[plano];
+        const currentMembers = associations.filter(a => a.primary === user).length;
+        if (currentMembers >= limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de membros atingido para o plano ${plano}` });
+        }
         associations.push({
             primary: user, secondary, role: 'member', permissao: {
                 criarCategorias: false,
@@ -1112,10 +1136,6 @@ app.post('/ban-user', isAuthenticated, async (req, res) => {
 // Novo endpoint para banir como secondary (banir o primary)
 app.post('/ban-as-secondary', isAuthenticated, async (req, res) => {
     const secondary = req.session.user;
-    const effectiveUser = await getEffectiveUser(secondary);
-    if (effectiveUser !== secondary) {
-        return res.status(403).json({ sucesso: false, erro: 'Não autorizado a banir usuários' });
-    }
     const { primary: banned } = req.body;
     if (!banned) {
         return res.status(400).json({ sucesso: false, erro: 'Primary a ser banido é obrigatório' });
@@ -1354,6 +1374,17 @@ app.post('/games', isAuthenticated, async (req, res) => {
     const userDir = path.join(DATA_DIR, safeUser);
     const gameDir = path.join(userDir, safeGame);
     try {
+        // Checar limite de jogos baseado no plano
+        const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const user = usuarios.find(u => u.email === sessionUser);
+        const plano = user.plano || 'basic';
+        const gameLimits = { basic: 3, standard: 10, advanced: 20, fullpass: Infinity };
+        const limit = gameLimits[plano];
+        const currentGames = await fs.readdir(userDir, { withFileTypes: true }).then(files => files.filter(f => f.isDirectory()).length);
+        if (currentGames >= limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de jogos atingido para o plano ${plano}` });
+        }
         await fs.access(gameDir);
         return res.status(400).json({ sucesso: false, erro: 'Jogo já existe' });
     } catch {
@@ -1505,6 +1536,17 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
     }
     const file = getFilePath(gameDir, 'receitas.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser); // Ajuste para função que busca usuário
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const novaReceita = req.body;
         if (Array.isArray(novaReceita)) {
             // Atualizar toda a lista de receitas (usado no arquivamento)
@@ -1563,6 +1605,17 @@ app.post('/receitas/editar', isAuthenticated, async (req, res) => {
     }
     const file = getFilePath(gameDir, 'receitas.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const { nomeOriginal, nome, componentes } = req.body;
         if (!nomeOriginal || !nome || !componentes) {
             console.log('[POST /receitas/editar] Erro: Nome original, nome ou componentes ausentes');
@@ -1622,6 +1675,17 @@ app.post('/receitas/favoritar', isAuthenticated, async (req, res) => {
     }
     const file = getFilePath(gameDir, 'receitas.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const { nome, favorita } = req.body;
         if (!nome || favorita === undefined) {
             console.log('[POST /receitas/favoritar] Erro: Nome ou favorita ausentes');
@@ -1709,6 +1773,17 @@ app.post('/categorias', isAuthenticated, async (req, res) => {
     }
     const file = getFilePath(gameDir, 'categorias.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const { nome } = req.body;
         if (!nome) {
             console.log('[POST /categorias] Erro: Nome ausente');
@@ -1772,6 +1847,16 @@ app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
         }
         let categorias = await fs.readFile(catFile, 'utf8').then(JSON.parse).catch(() => []);
         categorias = categorias.filter(c => c !== nome);
+        // Novo: Checar limite de armazenamento antes de salvar (embora exclusão reduza tamanho, checar por consistência)
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(categorias, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         await fs.writeFile(catFile, JSON.stringify(categorias, null, 2));
         console.log('[POST /categorias/excluir] Categoria excluída:', nome);
         io.to(game).emit('update', { type: 'categorias' });
@@ -1856,6 +1941,17 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
     const estoqueFileGame = getFilePath(gameDir, 'estoque.json');
     const catFile = getFilePath(gameDir, 'categorias.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const novoComponente = req.body;
         if (!novoComponente.nome) {
             console.log('[POST /componentes] Erro: Nome ausente');
@@ -1935,6 +2031,17 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
     const receitasFileGame = getFilePath(gameDir, 'receitas.json');
     const catFile = getFilePath(gameDir, 'categorias.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const { nomeOriginal, nome, categoria, associados, quantidadeProduzida } = req.body;
         if (!nomeOriginal || !nome) {
             console.log('[POST /componentes/editar] Erro: Nome original ou nome ausente');
@@ -2134,6 +2241,16 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
         }
         // Remover o componente
         componentes.splice(index, 1);
+        // Novo: Checar limite de armazenamento antes de salvar (embora exclusão reduza, por consistência)
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(componentes, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes/excluir] Componente excluído:', nome);
         // Removendo do estoque
@@ -2231,6 +2348,17 @@ app.post('/estoque/import', isAuthenticated, async (req, res) => {
     const estoqueFile = getFilePath(gameDir, 'estoque.json');
     const logFile = getFilePath(gameDir, 'log.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         let estoque = await fs.readFile(estoqueFile, 'utf8').then(JSON.parse).catch(() => []);
         const estoqueMap = {};
         estoque.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
@@ -2323,6 +2451,17 @@ app.post('/estoque', isAuthenticated, async (req, res) => {
     }
     const file = getFilePath(gameDir, 'estoque.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const { componente, quantidade, operacao } = req.body;
         if (!componente || !quantidade || !operacao) {
             console.log('[POST /estoque] Erro: Componente, quantidade ou operação ausentes');
@@ -2396,6 +2535,17 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
     const file = getFilePath(gameDir, 'estoque.json');
     const logFile = getFilePath(gameDir, 'log.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar (embora zerar reduza, por consistência)
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = [];
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         let estoque = [];
         try {
             estoque = JSON.parse(await fs.readFile(file, 'utf8'));
@@ -2476,6 +2626,16 @@ app.delete('/data', isAuthenticated, async (req, res) => {
             return res.status(404).json({ sucesso: false, erro: 'Componente não encontrado no estoque' });
         }
         estoque.splice(index, 1);
+        // Novo: Checar limite de armazenamento antes de salvar (embora exclusão reduza, por consistência)
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(estoque, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         await fs.writeFile(file, JSON.stringify(estoque, null, 2));
         console.log('[DELETE /data] Componente excluído do estoque:', componente);
         io.to(game).emit('update', { type: 'estoque' });
@@ -2546,6 +2706,17 @@ app.post('/arquivados', isAuthenticated, async (req, res) => {
     }
     const file = getFilePath(gameDir, 'arquivados.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const arquivados = req.body;
         await fs.writeFile(file, JSON.stringify(arquivados, null, 2));
         console.log('[POST /arquivados] Arquivados atualizados');
@@ -2612,6 +2783,17 @@ app.post('/log', isAuthenticated, async (req, res) => {
     }
     const file = getFilePath(gameDir, 'log.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         let novosLogs = Array.isArray(req.body) ? req.body : [req.body];
         // Novo: Adicionar user a cada entry se não existir
         const userEmail = req.session.user;
@@ -2666,6 +2848,17 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
     const estoqueFile = getFilePath(gameDir, 'estoque.json');
     const logFile = getFilePath(gameDir, 'log.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const { componente, numCrafts = 1 } = req.body;
         if (!componente) {
             console.log('[POST /fabricar] Erro: Componente ausente');
@@ -2793,6 +2986,17 @@ app.post('/roadmap', isAuthenticated, async (req, res) => {
     }
     const file = getFilePath(gameDir, 'roadmap.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const roadmap = req.body;
         await fs.writeFile(file, JSON.stringify(roadmap, null, 2));
         io.to(game).emit('update', { type: 'roadmap' });
@@ -2801,7 +3005,7 @@ app.post('/roadmap', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao salvar roadmap' });
     }
 });
-// Novo: Endpoint admin para listar todos os usuários e associações (protegido por headers)
+// Novo: Endpoint admin para listar usuários e associações (protegido por headers)
 app.get('/admin/users', async (req, res) => {
     const key = req.headers['atboficial-mmo-crafter'];
     const token = req.headers['aisdbfaidfbhyadhiyadhadhiyfad'];
@@ -2845,7 +3049,7 @@ app.post('/admin/users', async (req, res) => {
         }
         const senhaHash = await bcrypt.hash(senha, 10);
         const id = await generateUniqueId();
-        const newUser = { nome, email, senhaHash, id, aprovado, doisFatores: true }; // Novo: doisFatores true por padrão
+        const newUser = { nome, email, senhaHash, id, aprovado, doisFatores: true, plano: "basic" }; // Novo: doisFatores true por padrão e plano "basic"
         usuarios.push(newUser);
         await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
         res.json({ sucesso: true, user: { ...newUser, senhaHash: undefined } });
@@ -2913,8 +3117,6 @@ app.get('/admin/user-games', isAdmin, async (req, res) => {
         const userDir = path.join(DATA_DIR, safeUser);
         await fs.mkdir(userDir, { recursive: true });
         const files = await fs.readdir(userDir, { withFileTypes: true });
-        const jsonFiles = files.filter(f => f.endsWith('.json')).sort();
-        res.json(jsonFiles);
         const games = files.filter(f => f.isDirectory()).map(f => f.name).sort();
         res.json(games);
     } catch (error) {
@@ -3134,6 +3336,17 @@ app.post('/atividadesGuilda', isAuthenticated, async (req, res) => {
     }
     const file = getFilePath(gameDir, 'atividadesGuilda.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const { titulo, descricao, data, horario, timezone, avisoAntes } = req.body;
         if (!titulo || !descricao || !data || !horario || !timezone || isNaN(avisoAntes)) {
             return res.status(400).json({ sucesso: false, erro: 'Dados do evento incompletos' });
@@ -3224,6 +3437,17 @@ app.put('/atividadesGuilda/:id', isAuthenticated, async (req, res) => {
     }
     const file = getFilePath(gameDir, 'atividadesGuilda.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const { titulo, descricao, data, horario, timezone, avisoAntes } = req.body;
         if (!titulo || !descricao || !data || !horario || !timezone || isNaN(avisoAntes)) {
             return res.status(400).json({ sucesso: false, erro: 'Dados do evento incompletos' });
@@ -3321,6 +3545,17 @@ app.post('/atividadesGuilda/:id/membros', isAuthenticated, async (req, res) => {
     }
     const file = getFilePath(gameDir, 'atividadesGuilda.json');
     try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        const newData = req.body;
+        const newSize = currentSize + Buffer.byteLength(JSON.stringify(newData, null, 2));
+        if (newSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
         const { membros } = req.body;
         if (!Array.isArray(membros)) {
             return res.status(400).json({ sucesso: false, erro: 'Membros deve ser um array' });
@@ -3368,7 +3603,13 @@ app.post('/atividadesGuilda/:id/presenca', isAuthenticated, async (req, res) => 
     }
     const file = getFilePath(gameDir, 'atividadesGuilda.json');
     try {
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
         let eventos = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        const oldFileSize = await fs.stat(file).then(stats => stats.size).catch(() => 0);
         const index = eventos.findIndex(e => e.id === id);
         if (index === -1) {
             return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
@@ -3386,7 +3627,13 @@ app.post('/atividadesGuilda/:id/presenca', isAuthenticated, async (req, res) => 
         if (!evento.presencas.includes(sessionUser)) {
             evento.presencas.push(sessionUser);
         }
-        await fs.writeFile(file, JSON.stringify(eventos, null, 2));
+        const newFileString = JSON.stringify(eventos, null, 2);
+        const newFileSize = Buffer.byteLength(newFileString);
+        const newTotalSize = currentSize - oldFileSize + newFileSize;
+        if (newTotalSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
+        await fs.writeFile(file, newFileString);
         io.to(game).emit('update', { type: 'atividadesGuilda' });
         res.json({ sucesso: true });
     } catch (error) {
@@ -3421,7 +3668,13 @@ app.delete('/atividadesGuilda/:id/presenca', isAuthenticated, async (req, res) =
     }
     const file = getFilePath(gameDir, 'atividadesGuilda.json');
     try {
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
         let eventos = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        const oldFileSize = await fs.stat(file).then(stats => stats.size).catch(() => 0);
         const index = eventos.findIndex(e => e.id === id);
         if (index === -1) {
             return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
@@ -3440,7 +3693,13 @@ app.delete('/atividadesGuilda/:id/presenca', isAuthenticated, async (req, res) =
         if (userIndex !== -1) {
             evento.presencas.splice(userIndex, 1);
         }
-        await fs.writeFile(file, JSON.stringify(eventos, null, 2));
+        const newFileString = JSON.stringify(eventos, null, 2);
+        const newFileSize = Buffer.byteLength(newFileString);
+        const newTotalSize = currentSize - oldFileSize + newFileSize;
+        if (newTotalSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
+        await fs.writeFile(file, newFileString);
         io.to(game).emit('update', { type: 'atividadesGuilda' });
         res.json({ sucesso: true });
     } catch (error) {
@@ -3512,5 +3771,49 @@ async function scheduleAllReminders() {
 inicializarArquivos().then(() => {
     scheduleAllReminders();
 });
-
+// Novo: Função para calcular tamanho total do diretório do usuário (recursivo)
+async function getUserDirSize(userEmail) {
+    const safeUser = userEmail.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const userDir = path.join(DATA_DIR, safeUser);
+    let totalSize = 0;
+    try {
+        const files = await fs.readdir(userDir, { recursive: true });
+        for (const file of files) {
+            const filePath = path.join(userDir, file);
+            const stats = await fs.stat(filePath);
+            if (stats.isFile()) totalSize += stats.size;
+        }
+    } catch (error) {
+        console.warn('[getUserDirSize] Erro ao calcular tamanho:', error);
+    }
+    return totalSize;
+}
+// Novo: Função auxiliar para buscar usuário por email
+async function getUserByEmail(email) {
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+    return usuarios.find(u => u.email === email) || {};
+}
+// Novo: Endpoint admin para atualizar plano de usuário
+app.put('/admin/users/:email/plano', isAdmin, async (req, res) => {
+    const { email } = req.params;
+    const { plano } = req.body;
+    if (!plano) {
+        return res.status(400).json({ sucesso: false, erro: 'Plano é obrigatório' });
+    }
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const index = usuarios.findIndex(u => u.email === email);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+        }
+        usuarios[index].plano = plano;
+        await saveUsuarios(usuarios);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[PUT /admin/users/:email/plano] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar plano' });
+    }
+});
 //! FIM SERVIDOR.JS

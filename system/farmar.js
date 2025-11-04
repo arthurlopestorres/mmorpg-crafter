@@ -1,4 +1,3 @@
-//! INCIO FARMAR.JS
 // farmar.js - Funções para módulo "O que farmar?"
 // Dependências: core.js, utils.js
 async function montarFarmar() {
@@ -144,6 +143,22 @@ async function montarFarmar() {
         conteudo.innerHTML = '<h2>Favoritos</h2><p>Erro ao carregar dados.</p>';
     }
 }
+function calculateComponentRequirements(componentName, quantityNeeded, componentesData) {
+    let req = {};
+    const component = componentesData.find(c => c.nome === componentName);
+    if (component && component.associados && component.associados.length > 0) {
+        const qtdProd = component.quantidadeProduzida || 1;
+        const numCrafts = Math.ceil(quantityNeeded / qtdProd);
+        for (const a of component.associados) {
+            const subNec = a.quantidade * numCrafts;
+            const subReq = calculateComponentRequirements(a.nome, subNec, componentesData);
+            mergeReq(req, subReq);
+        }
+    } else {
+        req[componentName] = (req[componentName] || 0) + quantityNeeded;
+    }
+    return req;
+}
 async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
@@ -163,7 +178,7 @@ async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
             let req = {};
             receita.componentes.forEach(comp => {
                 const qtdNec = comp.quantidade * recipeQuantity;
-                mergeReq(req, calculateComponentRequirements(comp.nome, qtdNec, componentes, estoqueMap));
+                mergeReq(req, calculateComponentRequirements(comp.nome, qtdNec, componentes));
             });
             for (const [baseNome, baseQtd] of Object.entries(req)) {
                 if (!bases.has(baseNome)) {
@@ -475,4 +490,3 @@ async function fabricarComponente(nome, numCrafts = 1) {
         mostrarErro("Erro ao fabricar componente: " + error.message);
     }
 }
-//! FIM FARMAR.JS
