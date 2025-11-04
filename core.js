@@ -1,3 +1,4 @@
+//! INICIO CORE.JS
 // core.js - Configurações iniciais, API, socket, loading, safeApi, debounce, DOMContentLoaded
 
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -387,3 +388,4 @@ function mostrarPopupNovoJogo() {
         overlay.remove();
     });
 }
+//! FIM CORE.JS

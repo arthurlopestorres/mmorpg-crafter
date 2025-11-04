@@ -9,6 +9,7 @@ const axios = require('axios'); // Adicionado para verificação reCAPTCHA
 const multer = require('multer');
 const sharp = require('sharp');
 require('dotenv').config();
+const moment = require('moment-timezone');
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 10000;
@@ -544,12 +545,10 @@ app.post('/upload-foto', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const safeUser = sessionUser.replace(/[^a-zA-Z0-9@._-]/g, '');
     const userDir = path.join(DATA_DIR, safeUser);
-
     try {
         // Criar diretório se não existir (corrige erro para novos perfis)
         await fs.mkdir(userDir, { recursive: true });
         console.log(`[UPLOAD-FOTO] Diretório criado/verificado: ${userDir}`);
-
         // Wrapper para tornar upload async
         await new Promise((resolve, reject) => {
             upload.single('foto')(req, res, (err) => {
@@ -564,7 +563,6 @@ app.post('/upload-foto', isAuthenticated, async (req, res) => {
                 }
             });
         });
-
         // Processar com sharp, usando arquivo temporário para evitar erro de input/output igual
         const inputPath = path.join(userDir, 'profile.jpg');
         const tempOutputPath = path.join(userDir, 'profile-temp.jpg'); // Arquivo temporário
@@ -583,7 +581,6 @@ app.post('/upload-foto', isAuthenticated, async (req, res) => {
             try { await fs.unlink(tempOutputPath); } catch { }
             return res.status(500).json({ sucesso: false, erro: 'Erro ao processar imagem' });
         }
-
         // Atualizar usuarios.json com fotoPath
         const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
         let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
@@ -592,7 +589,6 @@ app.post('/upload-foto', isAuthenticated, async (req, res) => {
             usuarios[index].fotoPath = `/data/${safeUser}/profile.jpg`;
             await fs.writeFile(usuariosPath, JSON.stringify(usuarios, null, 2));
         }
-
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[UPLOAD-FOTO] Erro:', error);
@@ -783,7 +779,11 @@ app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
                 criarRoadmap: false,
                 excluirRoadmap: false,
                 reordenarRoadmap: false,
-                marcarProntoRoadmap: false
+                marcarProntoRoadmap: false,
+                criarEvento: false,
+                editarEvento: false,
+                excluirEvento: false,
+                associarMembrosEvento: false
             }
         });
         await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
@@ -867,7 +867,11 @@ app.post('/associate-users', async (req, res) => {
                 criarRoadmap: false,
                 excluirRoadmap: false,
                 reordenarRoadmap: false,
-                marcarProntoRoadmap: false
+                marcarProntoRoadmap: false,
+                criarEvento: false,
+                editarEvento: false,
+                excluirEvento: false,
+                associarMembrosEvento: false
             }
         }); // Novo: Role padrão 'member' com permissões padrão false
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
@@ -951,7 +955,7 @@ app.post('/associate-self', isAuthenticated, async (req, res) => {
         if (!usuarios.some(u => u.email === user && u.aprovado)) {
             return res.status(400).json({ sucesso: false, erro: 'Primary não autorizado' });
         }
-        if (!usuarios.some(u => u.email === secondary && u.aprovado)) {
+        if (!usuarios.some(u => u.email === secondary)) {
             return res.status(400).json({ sucesso: false, erro: 'Secondary não aprovado' });
         }
         associations.push({
@@ -972,7 +976,11 @@ app.post('/associate-self', isAuthenticated, async (req, res) => {
                 criarRoadmap: false,
                 excluirRoadmap: false,
                 reordenarRoadmap: false,
-                marcarProntoRoadmap: false
+                marcarProntoRoadmap: false,
+                criarEvento: false,
+                editarEvento: false,
+                excluirEvento: false,
+                associarMembrosEvento: false
             }
         }); // Novo: Role 'member' com permissões padrão false
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
@@ -1349,7 +1357,7 @@ app.post('/games', isAuthenticated, async (req, res) => {
         return res.status(400).json({ sucesso: false, erro: 'Jogo já existe' });
     } catch {
         await fs.mkdir(gameDir, { recursive: true });
-        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json'];
+        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json', 'atividadesGuilda.json'];
         for (const file of files) {
             await fs.writeFile(path.join(gameDir, file), JSON.stringify([]));
         }
@@ -2127,7 +2135,7 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
         componentes.splice(index, 1);
         await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes/excluir] Componente excluído:', nome);
-        // Remover do estoque
+        // Removendo do estoque
         let estoque = [];
         try {
             estoque = JSON.parse(await fs.readFile(estoqueFileGame, 'utf8'));
@@ -2904,6 +2912,8 @@ app.get('/admin/user-games', isAdmin, async (req, res) => {
         const userDir = path.join(DATA_DIR, safeUser);
         await fs.mkdir(userDir, { recursive: true });
         const files = await fs.readdir(userDir, { withFileTypes: true });
+        const jsonFiles = files.filter(f => f.endsWith('.json')).sort();
+        res.json(jsonFiles);
         const games = files.filter(f => f.isDirectory()).map(f => f.name).sort();
         res.json(games);
     } catch (error) {
@@ -2926,7 +2936,7 @@ app.post('/admin/user-games', isAdmin, async (req, res) => {
         return res.status(400).json({ sucesso: false, erro: 'Jogo já existe' });
     } catch {
         await fs.mkdir(gameDir, { recursive: true });
-        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json'];
+        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json', 'atividadesGuilda.json'];
         for (const file of files) {
             await fs.writeFile(path.join(gameDir, file), JSON.stringify([]));
         }
@@ -3052,4 +3062,452 @@ io.on('connection', (socket) => {
         socketToUser.delete(socket.id);
         console.log('[SOCKET.IO] Cliente desconectado:', socket.id);
     });
+});
+// Nova rota para atividadesGuilda: Listar eventos
+app.get('/atividadesGuilda', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        res.json([]);
+        return;
+    }
+    const file = getFilePath(gameDir, 'atividadesGuilda.json');
+    try {
+        let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        const hasAssocPerm = await hasPermission(sessionUser, 'associarMembrosEvento') || await isUserAdmin(sessionUser);
+        if (!hasAssocPerm) {
+            data = data.map(e => ({
+                ...e,
+                membros: e.membros?.includes(sessionUser) ? [sessionUser] : []
+            }));
+        }
+        res.json(data);
+    } catch (err) {
+        console.error('[GET /atividadesGuilda] Erro:', err);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao ler eventos' });
+    }
+});
+// Nova rota para atividadesGuilda: Criar evento
+app.post('/atividadesGuilda', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const hasCreatePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'criarEvento');
+    if (!hasCreatePermission) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const file = getFilePath(gameDir, 'atividadesGuilda.json');
+    try {
+        const { titulo, descricao, data, horario, timezone, avisoAntes } = req.body;
+        if (!titulo || !descricao || !data || !horario || !timezone || isNaN(avisoAntes)) {
+            return res.status(400).json({ sucesso: false, erro: 'Dados do evento incompletos' });
+        }
+        let eventos = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        const id = Date.now().toString(); // Gerar ID único
+        const novoEvento = { id, titulo, descricao, data, horario, timezone, avisoAntes, membros: [], presencas: [], criador: sessionUser };
+        eventos.push(novoEvento);
+        await fs.writeFile(file, JSON.stringify(eventos, null, 2));
+        // Agendar aviso
+        scheduleReminder(novoEvento, game);
+        io.to(game).emit('update', { type: 'atividadesGuilda' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /atividadesGuilda] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao criar evento' });
+    }
+});
+// Nova rota para atividadesGuilda: Obter evento por ID
+app.get('/atividadesGuilda/:id', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const { id } = req.params;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const isOwn = await isOwnGame(sessionUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+    }
+    const file = getFilePath(gameDir, 'atividadesGuilda.json');
+    try {
+        let eventos = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        const evento = eventos.find(e => e.id === id);
+        if (!evento) {
+            return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+        }
+        const hasAssocPerm = await hasPermission(sessionUser, 'associarMembrosEvento') || await isUserAdmin(sessionUser);
+        if (!hasAssocPerm) {
+            evento.membros = evento.membros?.includes(sessionUser) ? [sessionUser] : [];
+        }
+        res.json(evento);
+    } catch (err) {
+        console.error('[GET /atividadesGuilda/:id] Erro:', err);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao ler evento' });
+    }
+});
+// Nova rota para atividadesGuilda: Editar evento
+app.put('/atividadesGuilda/:id', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const { id } = req.params;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const hasEditPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'editarEvento');
+    if (!hasEditPermission) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+    }
+    const file = getFilePath(gameDir, 'atividadesGuilda.json');
+    try {
+        const { titulo, descricao, data, horario, timezone, avisoAntes } = req.body;
+        if (!titulo || !descricao || !data || !horario || !timezone || isNaN(avisoAntes)) {
+            return res.status(400).json({ sucesso: false, erro: 'Dados do evento incompletos' });
+        }
+        let eventos = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        const index = eventos.findIndex(e => e.id === id);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+        }
+        const updatedEvento = { ...eventos[index], titulo, descricao, data, horario, timezone, avisoAntes };
+        eventos[index] = updatedEvento;
+        await fs.writeFile(file, JSON.stringify(eventos, null, 2));
+        // Reagendar aviso
+        scheduleReminder(updatedEvento, game);
+        io.to(game).emit('update', { type: 'atividadesGuilda' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[PUT /atividadesGuilda/:id] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao editar evento' });
+    }
+});
+// Nova rota para atividadesGuilda: Excluir evento
+app.delete('/atividadesGuilda/:id', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const { id } = req.params;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirEvento');
+    if (!hasDeletePermission) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+    }
+    const file = getFilePath(gameDir, 'atividadesGuilda.json');
+    try {
+        let eventos = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        const index = eventos.findIndex(e => e.id === id);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+        }
+        eventos.splice(index, 1);
+        await fs.writeFile(file, JSON.stringify(eventos, null, 2));
+        io.to(game).emit('update', { type: 'atividadesGuilda' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[DELETE /atividadesGuilda/:id] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao excluir evento' });
+    }
+});
+// Nova rota para atividadesGuilda: Associar membros
+app.post('/atividadesGuilda/:id/membros', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const { id } = req.params;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const hasAssociarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'associarMembrosEvento');
+    if (!hasAssociarPermission) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+    }
+    const file = getFilePath(gameDir, 'atividadesGuilda.json');
+    try {
+        const { membros } = req.body;
+        if (!Array.isArray(membros)) {
+            return res.status(400).json({ sucesso: false, erro: 'Membros deve ser um array' });
+        }
+        let eventos = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        const index = eventos.findIndex(e => e.id === id);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+        }
+        eventos[index].membros = membros;
+        await fs.writeFile(file, JSON.stringify(eventos, null, 2));
+        // Reagendar aviso se necessário (membros mudaram)
+        scheduleReminder(eventos[index], game);
+        io.to(game).emit('update', { type: 'atividadesGuilda' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /atividadesGuilda/:id/membros] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao associar membros' });
+    }
+});
+// Nova rota para atividadesGuilda: Marcar presença
+app.post('/atividadesGuilda/:id/presenca', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const { id } = req.params;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+    }
+    const file = getFilePath(gameDir, 'atividadesGuilda.json');
+    try {
+        let eventos = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        const index = eventos.findIndex(e => e.id === id);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+        }
+        const evento = eventos[index];
+        const isCreator = evento.criador === sessionUser;
+        const isInvited = (evento.membros || []).includes(sessionUser);
+        const canMark = isInvited || isCreator || isAdminUser;
+        if (!canMark) {
+            return res.status(403).json({ sucesso: false, erro: 'Não autorizado a marcar presença neste evento' });
+        }
+        if (!evento.presencas) {
+            evento.presencas = [];
+        }
+        if (!evento.presencas.includes(sessionUser)) {
+            evento.presencas.push(sessionUser);
+        }
+        await fs.writeFile(file, JSON.stringify(eventos, null, 2));
+        io.to(game).emit('update', { type: 'atividadesGuilda' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /atividadesGuilda/:id/presenca] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao marcar presença' });
+    }
+});
+// Nova rota para atividadesGuilda: Desmarcar presença
+app.delete('/atividadesGuilda/:id/presenca', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const { id } = req.params;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+    }
+    const file = getFilePath(gameDir, 'atividadesGuilda.json');
+    try {
+        let eventos = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        const index = eventos.findIndex(e => e.id === id);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+        }
+        const evento = eventos[index];
+        const isCreator = evento.criador === sessionUser;
+        const isInvited = (evento.membros || []).includes(sessionUser);
+        const canUnmark = isInvited || isCreator || isAdminUser;
+        if (!canUnmark) {
+            return res.status(403).json({ sucesso: false, erro: 'Não autorizado a desmarcar presença neste evento' });
+        }
+        if (!evento.presencas) {
+            evento.presencas = [];
+        }
+        const userIndex = evento.presencas.indexOf(sessionUser);
+        if (userIndex !== -1) {
+            evento.presencas.splice(userIndex, 1);
+        }
+        await fs.writeFile(file, JSON.stringify(eventos, null, 2));
+        io.to(game).emit('update', { type: 'atividadesGuilda' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[DELETE /atividadesGuilda/:id/presenca] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao desmarcar presença' });
+    }
+});
+// Nova função para enviar emails de aviso
+async function sendReminderEmails(membros, titulo, datetime, timezone, game) {
+    for (const email of membros) {
+        try {
+            await transporter.sendMail({
+                from: process.env.EMAIL_USER,
+                to: email,
+                subject: `Aviso: Evento "${titulo}" em breve`,
+                text: `O evento "${titulo}" no jogo ${game} está prestes a começar em ${datetime} (${timezone}).`
+            });
+            console.log(`[REMINDER] Email enviado para ${email} sobre evento ${titulo}`);
+        } catch (err) {
+            console.error('[REMINDER] Erro ao enviar email para', email, ':', err);
+        }
+    }
+}
+// Nova função para agendar aviso de um evento
+function scheduleReminder(evento, game) {
+    const { id, titulo, data, horario, timezone, avisoAntes, membros, criador } = evento;
+    if (avisoAntes <= 0) return;
+    const recipients = [...new Set([...membros, criador || ''])].filter(Boolean);
+    if (recipients.length === 0) return;
+    const eventDateTime = moment.tz(`${data} ${horario}`, timezone);
+    const reminderTime = eventDateTime.clone().subtract(avisoAntes, 'minutes');
+    const now = moment();
+    if (reminderTime.isAfter(now)) {
+        const delay = reminderTime.diff(now);
+        setTimeout(() => {
+            sendReminderEmails(recipients, titulo, eventDateTime.format('YYYY-MM-DD HH:mm'), timezone, game);
+        }, delay);
+        console.log(`[SCHEDULE] Aviso agendado para evento ${id} em ${delay}ms`);
+    } else {
+        console.log(`[SCHEDULE] Aviso para evento ${id} já passou, não agendado`);
+    }
+}
+// Nova função para agendar todos os avisos ao iniciar
+async function scheduleAllReminders() {
+    try {
+        const users = await fs.readdir(DATA_DIR, { withFileTypes: true }).then(files => files.filter(f => f.isDirectory()).map(f => f.name));
+        for (const user of users) {
+            const userDir = path.join(DATA_DIR, user);
+            const games = await fs.readdir(userDir, { withFileTypes: true }).then(files => files.filter(f => f.isDirectory()).map(f => f.name));
+            for (const game of games) {
+                const gameDir = path.join(userDir, game);
+                const file = path.join(gameDir, 'atividadesGuilda.json');
+                try {
+                    const eventos = await fs.readFile(file, 'utf8').then(JSON.parse);
+                    for (const evento of eventos) {
+                        scheduleReminder(evento, game);
+                    }
+                } catch (err) {
+                    console.warn(`[SCHEDULE ALL] Erro ao ler atividades para user ${user} game ${game}:`, err);
+                }
+            }
+        }
+        console.log('[SCHEDULE ALL] Todos os avisos agendados');
+    } catch (error) {
+        console.error('[SCHEDULE ALL] Erro geral:', error);
+    }
+}
+// Chamar scheduleAllReminders após inicializar
+inicializarArquivos().then(() => {
+    scheduleAllReminders();
 });

@@ -38,7 +38,8 @@ function initMenu() {
     submenuGuildaUl.className = "submenu-guilda-inline";
     submenuGuildaUl.style.display = "none"; // Inicialmente fechado
     const guildaSections = [
-        { section: "time", text: "Membros" }
+        { section: "time", text: "Membros" },
+        { section: "atividadesGuilda", text: "Eventos" }
     ];
     submenuGuildaUl.innerHTML = guildaSections.map(sec => `
         <li onclick="carregarSecao('${sec.section}')">${sec.text}</li>
@@ -159,6 +160,7 @@ async function carregarSecao(secao) {
     if (secao === "roadmap") return montarRoadmap();
     if (secao === "categorias") return montarCategorias();
     if (secao === "time") return montarTime();
+    if (secao === "atividadesGuilda") return montarAtividadesGuilda();
     if (secao === "home") return montarManual(); // Manual de uso
     conteudo.innerHTML = `<h1 class="home--titulo-principal">Bem-vindo!</h1>
 <p>Essa aplicação tem como finalidade servir como calculadora e gestão de estoque para qualquer jogo de RPG (aqueles que envolvem craft e coleta de itens)!</p>
@@ -188,7 +190,7 @@ function montarManual() {
             titulo: "Introdução à Ferramenta",
             itens: [
                 "Esta ferramenta é um gerenciador completo para jogos MMORPG com foco em crafting e coleta de itens. Ela permite criar receitas, gerenciar componentes, rastrear estoque, planejar farms e mais.",
-                "Todas as ações são salvas por jogo (você pode alternar entre jogos no menu em Minha Conta).",
+                "Todas as ações são salvas por jogo (você pode alternar entre jogos no menu em Minha Conta). As configurações (filtros, quantidades) são salvas por jogo.",
                 "A autenticação é obrigatória para acessar as funcionalidades. Após login, você tem acesso total às ferramentas."
             ]
         },

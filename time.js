@@ -161,6 +161,11 @@ async function mostrarPopupPermissoes(secondary) {
             <label><input type="checkbox" class="perm-checkbox" data-key="excluirRoadmap"> Excluir Roadmap</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="reordenarRoadmap"> Reordenar Roadmap</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="marcarProntoRoadmap"> Marcar Pronto Roadmap</label>
+            <h3>Atividades da Guilda</h3>
+            <label><input type="checkbox" class="perm-checkbox" data-key="criarEvento"> Criar Evento</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="editarEvento"> Editar Evento</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="excluirEvento"> Excluir Evento</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="associarMembrosEvento"> Associar Membros ao Evento</label>
             <button type="submit">Salvar</button>
             <button type="button" id="btnCancelarPermissoes">Cancelar</button>
         </form>
