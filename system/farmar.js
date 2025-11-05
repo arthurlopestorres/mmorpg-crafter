@@ -170,36 +170,13 @@ async function updateCategoriaFilterOptions(termoBusca, selectedReceitas) {
         const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}&limit=9999`);
         const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}&limit=9999`);
         const receitasFiltradas = selectedReceitas.length > 0 ? receitasFavoritas.filter(r => selectedReceitas.includes(r.nome)) : receitasFavoritas;
-        const bases = new Map();
-        const estoqueMap = {};
-        estoqueList.forEach(e => { estoqueMap[e.componente] = e.quantidade || 0; });
+        const categoriasSet = new Set();
         for (const receita of receitasFiltradas) {
-            const recipeQuantity = quantities[receita.nome] || 1;
-            let req = {};
             receita.componentes.forEach(comp => {
-                const qtdNec = comp.quantidade * recipeQuantity;
-                mergeReq(req, calculateComponentRequirements(comp.nome, qtdNec, componentes));
+                collectCategories(comp.nome, componentes, categoriasSet);
             });
-            for (const [baseNome, baseQtd] of Object.entries(req)) {
-                if (!bases.has(baseNome)) {
-                    bases.set(baseNome, { nec: 0, receitas: new Set() });
-                }
-                bases.get(baseNome).nec += baseQtd;
-                bases.get(baseNome).receitas.add(receita.nome);
-            }
         }
-        let listaMateriasTemp = Array.from(bases.entries()).map(([nome, data]) => {
-            const disp = estoqueMap[nome] || 0;
-            const pendente = Math.max(0, data.nec - disp);
-            return { nome, nec: data.nec, disp, pendente, receitas: Array.from(data.receitas) };
-        });
-        // Aplicar filtro de busca para determinar itens relevantes
-        listaMateriasTemp = filtrarItens(listaMateriasTemp, termoBusca, "nome");
-        // Extrair categorias únicas dos itens relevantes
-        const categoriasUnicas = [...new Set(listaMateriasTemp.map(m => {
-            const comp = componentes.find(c => c.nome === m.nome);
-            return comp ? comp.categoria : null;
-        }).filter(cat => cat))].sort();
+        const categoriasUnicas = [...categoriasSet].filter(cat => cat).sort();
         // Atualizar select de categorias
         const categoriaSelect = document.getElementById("filtroCategoriaFarmar");
         if (categoriaSelect) {
@@ -488,5 +465,16 @@ async function fabricarComponente(nome, numCrafts = 1) {
         }
     } catch (error) {
         mostrarErro("Erro ao fabricar componente: " + error.message);
+    }
+}
+function collectCategories(name, componentesData, set) {
+    const component = componentesData.find(c => c.nome === name);
+    if (component && component.categoria) {
+        set.add(component.categoria);
+    }
+    if (component && component.associados && component.associados.length > 0) {
+        for (const a of component.associados) {
+            collectCategories(a.nome, componentesData, set);
+        }
     }
 }
