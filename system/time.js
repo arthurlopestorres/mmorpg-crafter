@@ -1,6 +1,6 @@
+//! INICIO TIME.JS
 // time.js - Módulo de time, permissões, compartilhamento de jogos
 // Dependências: core.js, utils.js (safeApi, mostrarErro, etc.)
-
 async function montarTime() {
     conteudo.innerHTML = `
         <h2>Membros</h2>
@@ -146,12 +146,14 @@ async function mostrarPopupPermissoes(secondary) {
             <label><input type="checkbox" class="perm-checkbox" data-key="criarComponente"> Criar Componente</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="editarComponente"> Editar Componente</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="excluirComponente"> Excluir Componente</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="debitarEstoque"> Debitar Estoque</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="zerarEstoque"> Zerar Estoque</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="exportarEstoque"> Exportar Estoque</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="importarEstoque"> Importar Estoque</label>
             <h3>Receitas</h3>
             <label><input type="checkbox" class="perm-checkbox" data-key="criarReceitas"> Criar Receitas</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="favoritarReceitas"> Favoritar Receitas</label>
-            <label><input type="checkbox" class="perm-checkbox" data-key="concluirReceitas"> Concluir Receitas</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="concluirReceitas"> Concluir e Arquivar Receitas</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="duplicarReceitas"> Duplicar Receitas</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="editarReceitas"> Editar Receitas</label>
             <h3>Farmar Receitas Favoritas</h3>
@@ -508,3 +510,4 @@ async function desbanirUsuario(email, role) {
         alert('Erro ao desbanir usuário');
     }
 }
+//! FIM TIME.JS

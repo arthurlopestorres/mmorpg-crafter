@@ -1,7 +1,7 @@
+//! INICIO ATIVIDADESGUILDA.JS
 // atividadesGuilda.js - Módulo para gerenciar atividades da guilda
 // Dependências: core.js, utils.js, time.js (para permissões e membros do time)
 // Removido: const socket = io(); // Assumindo que socket é definido globalmente em outro arquivo para evitar redeclaração
-
 async function montarAtividadesGuilda() {
     const currentUserResp = await safeApi('/me');
     window.currentUserEmail = currentUserResp.email; // Armazenar email do usuário atual para uso no módulo
@@ -65,7 +65,7 @@ function gerarHtmlEvento(e, currentUser) {
             <p class="evento-item--time">${e.data} ${e.horario} (${e.timezone})</p>
             <p class="evento-item--descricao">${escapeHtml(e.descricao)}</p>
             <p class="evento-item--aviso">Aviso: ${e.avisoAntes} minutos antes</p>
-            <button class="evento-item--botaoConvidar" onclick="mostrarPopupAssociarMembros('${e.id}')">Convidar Membros</button>
+            ${hasAssocPermission ? `<button class="evento-item--botaoConvidar" onclick="mostrarPopupAssociarMembros('${e.id}')">Convidar Membros</button>` : ''}
             ${botaoPresenca}
             ${(hasPermission('editarEvento') || isUserAdmin()) ? `<button class="evento-item--botaoEditar" onclick="mostrarPopupEditarEvento('${e.id}')">Editar</button>` : ''}
             ${(hasPermission('excluirEvento') || isUserAdmin()) ? `<button class="evento-item--botaoExcluirEvento" onclick="excluirEvento('${e.id}')">Excluir Evento</button>` : ''}
@@ -390,6 +390,6 @@ async function desmarcarPresenca(id) {
         mostrarErro('Erro ao desmarcar presença');
     }
 }
-
 // Exportar a função principal para o escopo global para ser acessível pelo menu.js
 window.montarAtividadesGuilda = montarAtividadesGuilda;
+//! FIM ATIVIDADES GUILDA.JS

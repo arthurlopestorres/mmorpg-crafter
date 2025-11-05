@@ -1,4 +1,3 @@
-// servidor.js
 //! INICIO SERVIDOR.JS
 // servidor.js
 const express = require('express');
@@ -786,6 +785,8 @@ app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
                 excluirComponente: false,
                 exportarEstoque: false,
                 importarEstoque: false,
+                debitarEstoque: false,
+                zerarEstoque: false,
                 criarReceitas: false,
                 favoritarReceitas: false,
                 concluirReceitas: false,
@@ -874,6 +875,8 @@ app.post('/associate-users', async (req, res) => {
                 excluirComponente: false,
                 exportarEstoque: false,
                 importarEstoque: false,
+                debitarEstoque: false,
+                zerarEstoque: false,
                 criarReceitas: false,
                 favoritarReceitas: false,
                 concluirReceitas: false,
@@ -992,6 +995,8 @@ app.post('/associate-self', isAuthenticated, async (req, res) => {
                 excluirComponente: false,
                 exportarEstoque: false,
                 importarEstoque: false,
+                debitarEstoque: false,
+                zerarEstoque: false,
                 criarReceitas: false,
                 favoritarReceitas: false,
                 concluirReceitas: false,
@@ -2380,12 +2385,13 @@ app.post('/estoque/import', isAuthenticated, async (req, res) => {
             return res.status(400).json({ sucesso: false, erro: `Componentes não encontrados: ${missing.join(', ')}` });
         }
         // Verificar se há débitos para membros
+        const hasDebitPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'debitarEstoque');
         const hasDebit = updates.some(update => {
             if (!update.componente || typeof update.novaQuantidade !== 'number' || update.novaQuantidade < 0) return false;
             const atual = estoqueMap[update.componente] || 0;
             return update.novaQuantidade < atual;
         });
-        if (hasDebit && !isOwn && !isAdminUser) {
+        if (hasDebit && !hasDebitPermission) {
             return res.status(403).json({ sucesso: false, erro: 'Não autorizado a debitar itens via importação' });
         }
         let updatedCount = 0;
@@ -2523,7 +2529,7 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    const hasZerarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirComponente'); // Usando excluirComponente como proxy
+    const hasZerarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'zerarEstoque');
     if (!hasZerarPermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }

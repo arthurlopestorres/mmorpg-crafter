@@ -1,6 +1,6 @@
+//! INICIO ESTOQUE.JS
 // estoque.js - Funções para módulo de estoque e log
 // Dependências: core.js, utils.js, componentes.js (para editarEstoqueItem)
-
 async function montarEstoque() {
     const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
@@ -21,20 +21,16 @@ async function montarEstoque() {
           <datalist id="componentesDatalist"></datalist>
           <select id="selectOperacao">
             <option value="adicionar">Adicionar</option>
-            ${isAdmin ? '<option value="debitar">Debitar</option>' : ''}
+            ${hasPermission('debitarEstoque') || isAdmin ? '<option value="debitar">Debitar</option>' : ''}
           </select>
           <input id="inputQuantidadeEstoque" type="number" min="0.001" step="any" value="0.001" />
           <button class="primary" type="submit">Confirmar</button>
         </form>
-        ${hasPermission('importarEstoque') ? `
         <div class="estoque--acoes">
-          <button id="btnExportEstoque" class="primary">Exportar Estoque (XLS)</button>
-          <label id="btnImportEstoque" for="fileImportEstoque" class="primary">Importar Estoque (XLS)</label>
-          <input type="file" id="fileImportEstoque" accept=".xls,.xlsx" style="display: none;">
-        ${hasPermission('excluirComponente') ? '<button id="btnZerarEstoque" class="warn">Zerar todo o estoque</button>' : ''}
+          ${hasPermission('exportarEstoque') ? '<button id="btnExportEstoque" class="primary">Exportar Estoque (XLS)</button>' : ''}
+          ${hasPermission('importarEstoque') ? '<label id="btnImportEstoque" for="fileImportEstoque" class="primary">Importar Estoque (XLS)</label><input type="file" id="fileImportEstoque" accept=".xls,.xlsx" style="display: none;">' : ''}
+          ${hasPermission('zerarEstoque') ? '<button id="btnZerarEstoque" class="warn">Zerar todo o estoque</button>' : ''}
         </div>
-        ` : ''}
-    
         ${hasPermission('criarComponente') ? '<button id="btnNovoComponenteEstoque" class="primary">+ Novo Componente</button>' : ''}
         <div id="listaEstoque" class="lista"></div>
       </div>
@@ -240,9 +236,9 @@ async function montarEstoque() {
     }
     const btnZerarEstoque = document.getElementById("btnZerarEstoque");
     if (btnZerarEstoque) {
-        btnZerarEstoque.disabled = !hasPermission('excluirComponente');
+        btnZerarEstoque.disabled = !hasPermission('zerarEstoque');
         btnZerarEstoque.addEventListener("click", async () => {
-            if (!hasPermission('excluirComponente')) {
+            if (!hasPermission('zerarEstoque')) {
                 alert('Você não tem permissão para zerar o estoque.');
                 return;
             }
@@ -622,3 +618,4 @@ async function carregarLog(componenteFiltro = "", userFiltro = "", dataFiltro = 
         if (div) div.innerHTML = '<p>Erro ao carregar log.</p>';
     }
 }
+//! FIM ESTOQUE.JS
