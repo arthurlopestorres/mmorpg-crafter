@@ -2347,6 +2347,7 @@ app.post('/estoque/import', isAuthenticated, async (req, res) => {
     }
     const estoqueFile = getFilePath(gameDir, 'estoque.json');
     const logFile = getFilePath(gameDir, 'log.json');
+    const componentesFile = getFilePath(gameDir, 'componentes.json');
     try {
         // Novo: Checar limite de armazenamento antes de salvar
         const user = await getUserByEmail(effectiveUser);
@@ -2365,6 +2366,18 @@ app.post('/estoque/import', isAuthenticated, async (req, res) => {
         const updates = req.body; // Array de {componente, novaQuantidade}
         if (!Array.isArray(updates) || updates.length === 0) {
             return res.status(400).json({ sucesso: false, erro: 'Dados inválidos para importação' });
+        }
+        // Novo: Verificar se todos os componentes existem em componentes.json
+        let componentes = await fs.readFile(componentesFile, 'utf8').then(JSON.parse).catch(() => []);
+        const compSet = new Set(componentes.map(c => c.nome));
+        let missing = [];
+        updates.forEach((update, i) => {
+            if (!compSet.has(update.componente)) {
+                missing.push(`Linha ${i + 2}: ${update.componente}`); // Assumindo linha 1 como header
+            }
+        });
+        if (missing.length > 0) {
+            return res.status(400).json({ sucesso: false, erro: `Componentes não encontrados: ${missing.join(', ')}` });
         }
         // Verificar se há débitos para membros
         const hasDebit = updates.some(update => {
@@ -2390,14 +2403,9 @@ app.post('/estoque/import', isAuthenticated, async (req, res) => {
             // Atualizar estoque
             let index = estoque.findIndex(e => e.componente === componente);
             if (index === -1) {
-                if (operacao === 'adicionar') {
-                    estoque.push({ componente, quantidade: novaQuantidade });
-                    estoqueMap[componente] = novaQuantidade;
-                }
+                estoque.push({ componente, quantidade: novaQuantidade });
+                estoqueMap[componente] = novaQuantidade;
             } else {
-                if (operacao === 'debitar' && atual < qtd) {
-                    continue; // Pular se insuficiente, mas como é set, não deve acontecer se nova >=0
-                }
                 estoque[index].quantidade = novaQuantidade;
                 estoqueMap[componente] = novaQuantidade;
             }
@@ -2895,7 +2903,7 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
                 user: userEmail // Novo: Adicionar usuário
             });
         }
-        // Adicionar o componente produzido
+        // Adicionar o componente
         const qtdProd = comp.quantidadeProduzida || 1;
         const cIndex = estoque.findIndex(e => e.componente === componente);
         if (cIndex === -1) {
