@@ -1,3 +1,4 @@
+//! INICIO auth.js
 // auth.js - Funções de autenticação, login, cadastro, minha conta, foto, senha, etc.
 // Dependências: core.js (safeApi, mostrarErro, etc.), utils.js (criarOverlay, etc.)
 
@@ -26,6 +27,7 @@ async function previewFotoPerfil(event) {
     };
     reader.readAsDataURL(file);
 }
+
 // Função para upload da foto
 async function uploadFotoPerfil() {
     if (!processedFotoBlob && !document.getElementById('inputFotoPerfil').files[0]) {
@@ -62,6 +64,7 @@ async function uploadFotoPerfil() {
         }
     }
 }
+
 // Dropdown para "Minha Conta"
 async function mostrarPopupMinhaConta() {
     // Remover dropdown existente se houver
@@ -282,6 +285,7 @@ async function mostrarPopupMinhaConta() {
         });
     }
 }
+
 function loadProfilePhotoWithFallback() {
     const preview = document.getElementById("previewFotoPerfil");
     if (!preview) return;
@@ -293,6 +297,7 @@ function loadProfilePhotoWithFallback() {
         preview.src = '/imagens/default-profile.jpg'; // Fallback se 404
     };
 }
+
 // Função para pré-visualizar a imagem selecionada
 function previewImage(event, previewElementId) {
     const file = event.target.files[0];
@@ -308,6 +313,7 @@ function previewImage(event, previewElementId) {
         reader.readAsDataURL(file);
     }
 }
+
 function abrirPopupEditarFoto() {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
@@ -389,6 +395,7 @@ function abrirPopupEditarFoto() {
         overlay.remove();
     });
 }
+
 // Função para comprimir e redimensionar imagem (cliente-side)
 async function compressAndResizeImage(file) {
     return new Promise((resolve, reject) => {
@@ -429,6 +436,7 @@ async function compressAndResizeImage(file) {
         img.src = URL.createObjectURL(file);
     });
 }
+
 // Popup para Mudar Senha
 async function mostrarPopupMudarSenha() {
     const overlay = criarOverlay();
@@ -510,6 +518,7 @@ async function mostrarPopupMudarSenha() {
         overlay.remove();
     });
 }
+
 function abrirPopupTrocarFoto() {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
@@ -604,6 +613,7 @@ function abrirPopupTrocarFoto() {
         }
     });
 }
+
 /* ------------------ Funções de Login e Cadastro ------------------ */
 function criarOverlay() {
     const overlay = document.createElement("div");
@@ -618,6 +628,7 @@ function criarOverlay() {
     document.body.appendChild(overlay);
     return overlay;
 }
+
 function mostrarPopupLogin() {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
@@ -647,29 +658,30 @@ function mostrarPopupLogin() {
         </div>
     `;
     document.body.appendChild(popup);
-    // Carregar reCAPTCHA script se não carregado
-    if (!window.grecaptcha) {
+
+    // Load reCAPTCHA with onload callback for better reliability
+    if (!window.grecaptcha || !window.recaptchaLoadedLogin) {
         const script = document.createElement('script');
-        script.src = 'https://www.google.com/recaptcha/api.js';
+        script.src = 'https://www.google.com/recaptcha/api.js?onload=recaptchaLoadedLogin&render=explicit';
         script.async = true;
         script.defer = true;
         document.head.appendChild(script);
+    } else {
+        recaptchaLoadedLogin();
     }
-    // Renderizar reCAPTCHA explicitamente
-    let recaptchaWidgetLogin;
-    const renderRecaptchaLogin = () => {
+
+    // Define the onload function
+    window.recaptchaLoadedLogin = () => {
         if (window.grecaptcha && document.getElementById('recaptcha-login')) {
-            recaptchaWidgetLogin = grecaptcha.render('recaptcha-login', {
+            window.recaptchaWidgetLogin = grecaptcha.render('recaptcha-login', {
                 'sitekey': RECAPTCHA_SITE_KEY
             });
-        } else {
-            setTimeout(renderRecaptchaLogin, 100);
         }
     };
-    renderRecaptchaLogin();
+
     document.getElementById("formLogin").addEventListener("submit", async (e) => {
         e.preventDefault();
-        const token = grecaptcha.getResponse(recaptchaWidgetLogin);
+        const token = grecaptcha.getResponse(window.recaptchaWidgetLogin);
         if (!token) {
             document.getElementById("erroLogin").textContent = "Por favor, valide o reCAPTCHA.";
             document.getElementById("erroLogin").style.display = "block";
@@ -704,14 +716,14 @@ function mostrarPopupLogin() {
                 document.getElementById("erroLogin").style.display = "block";
                 document.getElementById("emailLogin").style.border = "1px solid red";
                 document.getElementById("senhaLogin").style.border = "1px solid red";
-                grecaptcha.reset(recaptchaWidgetLogin); // Reset reCAPTCHA em caso de erro
+                grecaptcha.reset(window.recaptchaWidgetLogin); // Reset reCAPTCHA em caso de erro
             }
         } catch (error) {
             document.getElementById("erroLogin").textContent = "Erro ao fazer login";
             document.getElementById("erroLogin").style.display = "block";
             document.getElementById("emailLogin").style.border = "1px solid red";
             document.getElementById("senhaLogin").style.border = "1px solid red";
-            grecaptcha.reset(recaptchaWidgetLogin);
+            grecaptcha.reset(window.recaptchaWidgetLogin);
         }
     });
     // Listener para verificar OTP
@@ -754,6 +766,7 @@ function mostrarPopupLogin() {
         mostrarPopupCadastro();
     });
 }
+
 function mostrarPopupCadastro() {
     const overlay = criarOverlay();
     const popup = document.createElement("div");
@@ -789,29 +802,30 @@ function mostrarPopupCadastro() {
         </div>
     `;
     document.body.appendChild(popup);
-    // Carregar reCAPTCHA script se não carregado
-    if (!window.grecaptcha) {
+
+    // Load reCAPTCHA with onload callback for better reliability
+    if (!window.grecaptcha || !window.recaptchaLoadedCadastro) {
         const script = document.createElement('script');
-        script.src = 'https://www.google.com/recaptcha/api.js';
+        script.src = 'https://www.google.com/recaptcha/api.js?onload=recaptchaLoadedCadastro&render=explicit';
         script.async = true;
         script.defer = true;
         document.head.appendChild(script);
+    } else {
+        recaptchaLoadedCadastro();
     }
-    // Renderizar reCAPTCHA explicitamente
-    let recaptchaWidgetCadastro;
-    const renderRecaptchaCadastro = () => {
+
+    // Define the onload function
+    window.recaptchaLoadedCadastro = () => {
         if (window.grecaptcha && document.getElementById('recaptcha-cadastro')) {
-            recaptchaWidgetCadastro = grecaptcha.render('recaptcha-cadastro', {
+            window.recaptchaWidgetCadastro = grecaptcha.render('recaptcha-cadastro', {
                 'sitekey': RECAPTCHA_SITE_KEY
             });
-        } else {
-            setTimeout(renderRecaptchaCadastro, 100);
         }
     };
-    renderRecaptchaCadastro();
+
     document.getElementById("formCadastro").addEventListener("submit", async (e) => {
         e.preventDefault();
-        const token = grecaptcha.getResponse(recaptchaWidgetCadastro);
+        const token = grecaptcha.getResponse(window.recaptchaWidgetCadastro);
         if (!token) {
             document.getElementById("erroCadastro").textContent = "Por favor, valide o reCAPTCHA.";
             document.getElementById("erroCadastro").style.display = "block";
@@ -826,7 +840,7 @@ function mostrarPopupCadastro() {
             document.getElementById("erroCadastro").style.display = "block";
             document.getElementById("senhaCadastro").style.border = "1px solid red";
             document.getElementById("confirmaSenha").style.border = "1px solid red";
-            grecaptcha.reset(recaptchaWidgetCadastro);
+            grecaptcha.reset(window.recaptchaWidgetCadastro);
             return;
         }
         try {
@@ -854,13 +868,13 @@ function mostrarPopupCadastro() {
                 document.getElementById("erroCadastro").textContent = data.erro || "Erro ao cadastrar";
                 document.getElementById("erroCadastro").style.display = "block";
                 document.getElementById("emailCadastro").style.border = "1px solid red";
-                grecaptcha.reset(recaptchaWidgetCadastro);
+                grecaptcha.reset(window.recaptchaWidgetCadastro);
             }
         } catch (error) {
             document.getElementById("erroCadastro").textContent = "Erro ao cadastrar";
             document.getElementById("erroCadastro").style.display = "block";
             document.getElementById("emailCadastro").style.border = "1px solid red";
-            grecaptcha.reset(recaptchaWidgetCadastro);
+            grecaptcha.reset(window.recaptchaWidgetCadastro);
         }
     });
     // Listener para verificar OTP
@@ -909,3 +923,5 @@ function mostrarPopupCadastro() {
         mostrarPopupLogin();
     });
 }
+
+//! FIM auth.js
