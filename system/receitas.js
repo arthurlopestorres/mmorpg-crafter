@@ -272,7 +272,7 @@ async function arquivarReceita(receitaNome) {
         localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
         // Atualizar UI
         console.log(`[ARQUIVAR] Atualizando interface do usuário para receita: ${receitaNome}`);
-        await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az");
+        await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
         await carregarArquivados();
         // Correção: Só recarregar farmar se a seção existir (evita erro de null.innerHTML)
         if (document.getElementById("listaFarmar")) {
@@ -575,7 +575,7 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
         console.log("[CONCLUIR] Atualizando interface do usuário");
         const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
         estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
-        await carregarListaReceitas();
+        await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
         await carregarEstoque();
         await carregarLog();
         await carregarArquivados();
@@ -704,7 +704,7 @@ function abrirPopupReceita(nome = null, duplicar = false, nomeSugerido = null) {
                 }
             }
             popup.style.display = "none";
-            await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az");
+            await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
         } catch (error) {
             console.error("[FORM] Erro no fetch:", error);
             mostrarErro("Erro ao salvar a receita: " + error.message);

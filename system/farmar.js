@@ -377,7 +377,7 @@ function renderSequence(sequence, listaMateriasPendentes, componentes) {
     // Adicionar event listeners para reordenação se admin
     if (true) { // Modificado: Sempre adicionar listeners para usuários logados
         sequenceList.querySelectorAll('.btn-seq-up').forEach(btn => {
-            btn.addEventListener('click', () => handleSequenceReorder('up', btn, btn, sequence, listaMateriasPendentes, componentes));
+            btn.addEventListener('click', () => handleSequenceReorder('up', btn, sequence, listaMateriasPendentes, componentes));
         });
         sequenceList.querySelectorAll('.btn-seq-down').forEach(btn => {
             btn.addEventListener('click', () => handleSequenceReorder('down', btn, sequence, listaMateriasPendentes, componentes));
