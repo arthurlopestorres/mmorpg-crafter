@@ -1817,7 +1817,6 @@ app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
         return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
     }
     const effectiveUser = await getEffectiveUser(sessionUser);
-    const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirCategorias');
     if (!hasDeletePermission) {
