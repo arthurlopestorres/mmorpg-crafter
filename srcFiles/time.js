@@ -1,3 +1,4 @@
+// time.js
 //! INICIO TIME.JS
 // time.js - Módulo de time, permissões, compartilhamento de jogos
 // Dependências: core.js, utils.js (safeApi, mostrarErro, etc.)
@@ -156,6 +157,7 @@ async function mostrarPopupPermissoes(secondary) {
             <label><input type="checkbox" class="perm-checkbox" data-key="concluirReceitas"> Concluir e Arquivar Receitas</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="duplicarReceitas"> Duplicar Receitas</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="editarReceitas"> Editar Receitas</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="excluirArquivados"> Excluir Arquivados</label>
             <h3>Farmar Receitas Favoritas</h3>
             <label><input type="checkbox" class="perm-checkbox" data-key="fabricarComponentes"> Fabricar Componentes</label>
             <h3>Roadmap</h3>
@@ -167,7 +169,7 @@ async function mostrarPopupPermissoes(secondary) {
             <label><input type="checkbox" class="perm-checkbox" data-key="criarEvento"> Criar Evento</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="editarEvento"> Editar Evento</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="excluirEvento"> Excluir Evento</label>
-            <label><input type="checkbox" class="perm-checkbox" data-key="associarMembrosEvento"> Associar Membros ao Evento</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="associarMembrosEvento"> Associar Membros ao Evento</label>           
             <button type="submit">Salvar</button>
             <button type="button" id="btnCancelarPermissoes">Cancelar</button>
         </form>

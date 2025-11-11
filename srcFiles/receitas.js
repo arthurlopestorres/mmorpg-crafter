@@ -1,3 +1,4 @@
+// receitas.js
 //! INICIO RECEITAS.JS
 // receitas.js - Funções para módulo de receitas
 // Dependências: core.js, utils.js
@@ -12,6 +13,10 @@ async function montarReceitas() {
             <option value="za">Alfabética Z-A</option>
         </select>
         <label><input type="checkbox" id="filtroFavoritas"> Somente Favoritas</label>
+        <select id="modoReceitas">
+            <option value="ativas">Ativas</option>
+            <option value="arquivadas">Arquivadas</option>
+        </select>
         ${hasPermission('criarReceitas') ? '<button id="btnNovaReceita" class="primary">+ Nova Receita</button>' : ''}
     </div>
     <div id="listaReceitas" class="lista"></div>
@@ -22,38 +27,45 @@ async function montarReceitas() {
     const buscaInput = document.getElementById("buscaReceitas");
     const ordemSelect = document.getElementById("ordemReceitas");
     const filtroFavoritas = document.getElementById("filtroFavoritas");
+    const modoSelect = document.getElementById("modoReceitas");
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const savedFilters = JSON.parse(localStorage.getItem(`receitasFilters_${currentGame}`)) || {};
     buscaInput.value = savedFilters.termoBusca || "";
     ordemSelect.value = savedFilters.ordem || "az";
     filtroFavoritas.checked = savedFilters.onlyFavorites || false;
+    modoSelect.value = savedFilters.modo || "ativas";
     const saveFilters = () => {
         localStorage.setItem(`receitasFilters_${currentGame}`, JSON.stringify({
             termoBusca: buscaInput.value,
             ordem: ordemSelect.value,
-            onlyFavorites: filtroFavoritas.checked
+            onlyFavorites: filtroFavoritas.checked,
+            modo: modoSelect.value
         }));
     };
     const debouncedCarregarListaReceitas = debounce(carregarListaReceitas, 300);
     buscaInput.addEventListener("input", () => {
-        debouncedCarregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
+        debouncedCarregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked, modoSelect.value);
         saveFilters();
     });
     ordemSelect.addEventListener("change", () => {
-        debouncedCarregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
+        debouncedCarregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked, modoSelect.value);
         saveFilters();
     });
     filtroFavoritas.addEventListener("change", () => {
-        debouncedCarregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
+        debouncedCarregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked, modoSelect.value);
         saveFilters();
     });
-    await carregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked);
+    modoSelect.addEventListener("change", () => {
+        debouncedCarregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked, modoSelect.value);
+        saveFilters();
+    });
+    await carregarListaReceitas(buscaInput.value, ordemSelect.value, filtroFavoritas.checked, modoSelect.value);
 }
-async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorites = false) {
+async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorites = false, modo = "ativas") {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const quantitiesKey = `recipeQuantities_${currentGame}`;
     let quantities = JSON.parse(localStorage.getItem(quantitiesKey)) || {};
-    let url = `/receitas?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
+    let url = (modo === "ativas") ? `/receitas?game=${encodeURIComponent(currentGame)}&order=${ordem}` : `/arquivados?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
     if (termoBusca) {
         url += `&search=${encodeURIComponent(termoBusca)}`;
     }
@@ -90,23 +102,35 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
             const id = `receita-${r.nome.replace(/\s/g, '-')}`;
             const comps = (r.componentes || []).map(c => `${formatQuantity(c.quantidade)} x ${c.nome}`).join(", ");
             const savedQtd = quantities[r.nome] || 1;
-            const btnConcluirHtml = hasPermission('concluirReceitas') ? `<button class="btn-concluir" data-receita="${r.nome}">Concluir</button>` : '';
-            const btnEditarHtml = hasPermission('editarReceitas') ? `<button class="btn-editar" data-nome="${r.nome}">Editar</button>` : '';
-            const btnArquivarHtml = hasPermission('concluirReceitas') ? `<button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>` : '';
-            const btnDuplicarHtml = hasPermission('duplicarReceitas') ? `<button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>` : '';
-            const btnFavoritarHtml = hasPermission('favoritarReceitas') ? `<button class="btn-favoritar ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desfavoritar' : 'Favoritar'}</button>` : '';
+            let btnConcluirHtml = '';
+            let btnEditarHtml = '';
+            let btnArquivarHtml = '';
+            let btnDuplicarHtml = '';
+            let btnFavoritarHtml = '';
+            let btnExcluirHtml = '';
+            if (modo === "ativas") {
+                btnConcluirHtml = hasPermission('concluirReceitas') ? `<button class="btn-concluir" data-receita="${r.nome}">Concluir</button>` : '';
+                btnEditarHtml = hasPermission('editarReceitas') ? `<button class="btn-editar" data-nome="${r.nome}">Editar</button>` : '';
+                btnArquivarHtml = hasPermission('concluirReceitas') ? `<button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>` : '';
+                btnDuplicarHtml = hasPermission('duplicarReceitas') ? `<button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>` : '';
+                btnFavoritarHtml = hasPermission('favoritarReceitas') ? `<button class="btn-favoritar ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desfavoritar' : 'Favoritar'}</button>` : '';
+            } else if (modo === "arquivadas") {
+                btnExcluirHtml = hasPermission('excluirArquivados') ? `<button class="btn-excluir" data-nome="${r.nome}">Excluir Permanentemente</button>` : '';
+            }
             return `
         <div class="item ${r.favorita ? 'favorita' : ''}" data-receita="${r.nome}">
           <div class="receita-header">
             <div class = "receita-header--container1"><div style="margin-right: 15px;"><strong class= "receita-header--titulo">${r.nome}</strong>
             ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
-            <input type="number" class="qtd-desejada" min="0.001" step="any" value="${savedQtd}" data-receita="${r.nome}"></div>
-            <button class="toggle-detalhes" data-target="${id}-detalhes">▼</button></div><div class="receitas-ButtonContainer">
+            ${modo === "ativas" ? `<input type="number" class="qtd-desejada" min="0.001" step="any" value="${savedQtd}" data-receita="${r.nome}">` : ''}
+            ${modo === "arquivadas" && r.arquivadoPor ? `<div class="arquivado-info">Arquivado por: ${r.arquivadoPor} em ${r.dataArquivamento}</div>` : ''}</div>
+            ${modo === "ativas" ? `<button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>` : ''}</div><div class="receitas-ButtonContainer">
             ${btnConcluirHtml}
             ${btnEditarHtml}
             ${btnDuplicarHtml}
             ${btnFavoritarHtml}
-            ${btnArquivarHtml}</div>
+            ${btnArquivarHtml}
+            ${btnExcluirHtml}</div>
           </div>
           <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
         </div>`;
@@ -188,6 +212,16 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
                 });
             });
         }
+        if (hasPermission('excluirArquivados')) {
+            document.querySelectorAll(".btn-excluir").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const nome = btn.dataset.nome;
+                    console.log(`[EXCLUIR ARQUIVADA] Botão Excluir clicado para receita arquivada: ${nome}`);
+                    if (!confirm(`Confirmar exclusão permanente de "${nome}"?`)) return;
+                    await excluirArquivada(nome);
+                });
+            });
+        }
         // Verificar botões inicialmente
         if (hasPermission('concluirReceitas')) {
             document.querySelectorAll(".item").forEach(async item => {
@@ -211,7 +245,7 @@ async function toggleFavorita(nome, favorita) {
             body: JSON.stringify({ nome, favorita })
         });
         if (data.sucesso) {
-            await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
+            await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false, document.getElementById("modoReceitas")?.value || "ativas");
         } else {
             mostrarErro(data.erro || "Erro ao favoritar receita");
         }
@@ -239,6 +273,8 @@ async function arquivarReceita(receitaNome) {
         }
         // Remover receita de receitas.json
         const receitaArquivada = receitasAtuais.splice(receitaIndex, 1)[0];
+        receitaArquivada.arquivadoPor = sessionStorage.getItem('userEmail');
+        receitaArquivada.dataArquivamento = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
         console.log(`[ARQUIVAR] Removendo receita "${receitaNome}" de receitas.json`);
         const receitasData = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`, {
             method: "POST",
@@ -272,8 +308,7 @@ async function arquivarReceita(receitaNome) {
         localStorage.setItem(quantitiesKey, JSON.stringify(quantities));
         // Atualizar UI
         console.log(`[ARQUIVAR] Atualizando interface do usuário para receita: ${receitaNome}`);
-        await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
-        await carregarArquivados();
+        await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false, document.getElementById("modoReceitas")?.value || "ativas");
         // Correção: Só recarregar farmar se a seção existir (evita erro de null.innerHTML)
         if (document.getElementById("listaFarmar")) {
             await carregarListaFarmar(
@@ -541,6 +576,8 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
             return;
         }
         const receitaArquivada = receitasAtuais.splice(receitaIndex, 1)[0];
+        receitaArquivada.arquivadoPor = sessionStorage.getItem('userEmail');
+        receitaArquivada.dataArquivamento = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
         console.log(`[CONCLUIR] Removendo receita "${receitaNome}" de receitas.json`);
         console.log("[CONCLUIR] Receitas após remoção:", receitasAtuais);
         const receitasData = await safeApi(`/receitas?game=${encodeURIComponent(currentGame)}`, {
@@ -575,10 +612,9 @@ async function concluirReceita(receitaNome, qtd, componentesData, estoque) {
         console.log("[CONCLUIR] Atualizando interface do usuário");
         const estoqueList = await safeApi(`/estoque?game=${encodeURIComponent(currentGame)}`);
         estoqueList.forEach(e => { estoque[e.componente] = e.quantidade || 0; });
-        await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
+        await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false, document.getElementById("modoReceitas")?.value || "ativas");
         await carregarEstoque();
         await carregarLog();
-        await carregarArquivados();
         // Correção: Só recarregar farmar sea seção existir (evita erro de null.innerHTML)
         if (document.getElementById("listaFarmar")) {
             await carregarListaFarmar(
@@ -618,6 +654,52 @@ async function duplicarReceita(nome) {
     } catch (error) {
         console.error(`[DUPLICAR] Erro ao duplicar receita ${nome}:`, error);
         mostrarErro("Erro ao duplicar receita.");
+    }
+}
+async function excluirArquivada(nome) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    try {
+        let arquivados = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`);
+        const index = arquivados.findIndex(r => r.nome === nome);
+        if (index === -1) {
+            console.error(`[EXCLUIR ARQUIVADA] Receita "${nome}" não encontrada em arquivados.json`);
+            mostrarErro("Receita não encontrada para exclusão.");
+            return;
+        }
+        arquivados.splice(index, 1);
+        const data = await safeApi(`/arquivados?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(arquivados)
+        });
+        if (!data.sucesso) {
+            console.error(`[EXCLUIR ARQUIVADA] Erro ao salvar arquivados.json:`, data.erro);
+            mostrarErro("Erro ao excluir receita: " + (data.erro || "Falha desconhecida"));
+            return;
+        }
+        // Registrar no log
+        const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
+        const userEmail = sessionStorage.getItem('userEmail');
+        const logEntry = {
+            dataHora,
+            componente: nome,
+            quantidade: 0,
+            operacao: "excluir_arquivada",
+            origem: `Exclusão permanente de receita arquivada ${nome}`,
+            user: userEmail
+        };
+        const logData = await safeApi(`/log?game=${encodeURIComponent(currentGame)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([logEntry])
+        });
+        if (!logData.sucesso) {
+            mostrarErro("Erro ao registrar log de exclusão.");
+        }
+        await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false, document.getElementById("modoReceitas")?.value || "ativas");
+    } catch (error) {
+        console.error(`[EXCLUIR ARQUIVADA] Erro ao excluir receita "${nome}":`, error);
+        mostrarErro("Erro ao excluir receita: " + error.message);
     }
 }
 function abrirPopupReceita(nome = null, duplicar = false, nomeSugerido = null) {
@@ -704,7 +786,7 @@ function abrirPopupReceita(nome = null, duplicar = false, nomeSugerido = null) {
                 }
             }
             popup.style.display = "none";
-            await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false);
+            await carregarListaReceitas(document.getElementById("buscaReceitas")?.value || "", document.getElementById("ordemReceitas")?.value || "az", document.getElementById("filtroFavoritas")?.checked || false, document.getElementById("modoReceitas")?.value || "ativas");
         } catch (error) {
             console.error("[FORM] Erro no fetch:", error);
             mostrarErro("Erro ao salvar a receita: " + error.message);

@@ -2586,3 +2586,20 @@ body.bright-mode #conteudo .evento-item--membrosConvidados--item {
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(252, 70, 107, 0.4);
 }
+
+.btn-excluir {
+    background: linear-gradient(135deg, #fc466b 0%, #3f5efb 100%);
+    color: white;
+    padding: 12px 24px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.95rem;
+    box-shadow: 0 4px 12px rgba(252, 70, 107, 0.3);
+    width: 100% !important;
+    height: auto !important;
+}
+
+.btn-excluir:hover {
+    background: linear-gradient(135deg, #e63950 0%, #3548d4 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(252, 70, 107, 0.4);
+}

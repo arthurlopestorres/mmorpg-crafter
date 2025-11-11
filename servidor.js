@@ -782,10 +782,10 @@ app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
                 criarComponente: false,
                 editarComponente: false,
                 excluirComponente: false,
-                exportarEstoque: false,
-                importarEstoque: false,
                 debitarEstoque: false,
                 zerarEstoque: false,
+                exportarEstoque: false,
+                importarEstoque: false,
                 criarReceitas: false,
                 favoritarReceitas: false,
                 concluirReceitas: false,
@@ -799,7 +799,8 @@ app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
                 criarEvento: false,
                 editarEvento: false,
                 excluirEvento: false,
-                associarMembrosEvento: false
+                associarMembrosEvento: false,
+                excluirArquivados: false
             }
         });
         await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
@@ -889,7 +890,8 @@ app.post('/associate-users', async (req, res) => {
                 criarEvento: false,
                 editarEvento: false,
                 excluirEvento: false,
-                associarMembrosEvento: false
+                associarMembrosEvento: false,
+                excluirArquivados: false
             }
         }); // Novo: Role padrão 'member' com permissões padrão false
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
@@ -1009,7 +1011,8 @@ app.post('/associate-self', isAuthenticated, async (req, res) => {
                 criarEvento: false,
                 editarEvento: false,
                 excluirEvento: false,
-                associarMembrosEvento: false
+                associarMembrosEvento: false,
+                excluirArquivados: false
             }
         }); // Novo: Role 'member' com permissões padrão false
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
@@ -1541,7 +1544,7 @@ app.post('/receitas', isAuthenticated, async (req, res) => {
     const file = getFilePath(gameDir, 'receitas.json');
     try {
         // Novo: Checar limite de armazenamento antes de salvar
-        const user = await getUserByEmail(effectiveUser); // Ajuste para função que busca usuário
+        const user = await getUserByEmail(effectiveUser);
         const plano = user.plano || 'basic';
         const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
         const limit = storageLimits[plano];
@@ -1817,6 +1820,7 @@ app.post('/categorias/excluir', isAuthenticated, async (req, res) => {
         return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
     }
     const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirCategorias');
     if (!hasDeletePermission) {
@@ -2013,8 +2017,11 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasEditPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'editarComponente');
+
     if (!hasEditPermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2148,8 +2155,11 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirComponente');
+
     if (!hasDeletePermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2332,8 +2342,11 @@ app.post('/estoque/import', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasImportPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'importarEstoque');
+
     if (!hasImportPermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2528,8 +2541,11 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasZerarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'zerarEstoque');
+
     if (!hasZerarPermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2603,8 +2619,11 @@ app.delete('/data', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirComponente');
+
     if (!hasDeletePermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2700,8 +2719,11 @@ app.post('/arquivados', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasConcluirPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'concluirReceitas');
+
     if (!hasConcluirPermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2732,7 +2754,7 @@ app.post('/arquivados', isAuthenticated, async (req, res) => {
         const arquivados = req.body;
         await fs.writeFile(file, JSON.stringify(arquivados, null, 2));
         console.log('[POST /arquivados] Arquivados atualizados');
-        io.to(game).emit('update', { type: 'arquivados' });
+        io.to(game).emit('update', { type: 'receitas' });
         res.json({ sucesso: true });
     } catch (error) {
         console.error('[POST /arquivados] Erro:', error);
@@ -2840,8 +2862,11 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasFabricarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'fabricarComponentes');
+
     if (!hasFabricarPermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -3051,8 +3076,11 @@ app.post('/roadmap', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasCreatePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'criarRoadmap');
+
     if (!hasCreatePermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -3401,8 +3429,11 @@ app.post('/atividadesGuilda', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasCreatePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'criarEvento');
+
     if (!hasCreatePermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -3502,8 +3533,11 @@ app.put('/atividadesGuilda/:id', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasEditPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'editarEvento');
+
     if (!hasEditPermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -3565,8 +3599,11 @@ app.delete('/atividadesGuilda/:id', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirEvento');
+
     if (!hasDeletePermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -3610,8 +3647,11 @@ app.post('/atividadesGuilda/:id/membros', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasAssociarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'associarMembrosEvento');
+
     if (!hasAssociarPermission) {
+
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {

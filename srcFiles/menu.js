@@ -1,6 +1,5 @@
 // menu.js - Inicialização do menu, seções, minimizar menu, manual
-// Dependências: core.js, auth.js, utils.js, time.js, receitas.js, componentes.js, estoque.js, arquivados.js, farmar.js, roadmap.js, categorias.js
-
+// Dependências: core.js, auth.js, utils.js, time.js, receitas.js, componentes.js, estoque.js, farmar.js, roadmap.js, categorias.js
 function initMenu() {
     const menu = document.querySelector(".menu");
     if (!menu) return;
@@ -74,8 +73,7 @@ function initMenu() {
         { section: "estoque", text: "Componentes e Estoque" },
         { section: "receitas", text: "Receitas" },
         { section: "farmar", text: "Farmar Receitas Favoritas" },
-        { section: "roadmap", text: "Roadmap" },
-        { section: "arquivados", text: "Arquivados" }
+        { section: "roadmap", text: "Roadmap" }
     ];
     submenuUl.innerHTML = craftingSections.map(sec => `
         <li onclick="carregarSecao('${sec.section}')">${sec.text}</li>
@@ -155,7 +153,6 @@ async function carregarSecao(secao) {
     if (secao === "receitas") return montarReceitas();
     if (secao === "componentes") return montarComponentes();
     if (secao === "estoque") return montarEstoque();
-    if (secao === "arquivados") return montarArquivados();
     if (secao === "farmar") return montarFarmar();
     if (secao === "roadmap") return montarRoadmap();
     if (secao === "categorias") return montarCategorias();
