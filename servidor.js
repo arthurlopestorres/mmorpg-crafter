@@ -1,4 +1,3 @@
-//! INICIO SERVIDOR.JS
 // servidor.js
 const express = require('express');
 const fs = require('fs').promises;
@@ -2938,6 +2937,77 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao fabricar componente' });
     }
 });
+// Novo: Endpoint para atualizar quantidade total de um componente no estoque
+app.post('/estoque/set', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        await fs.mkdir(gameDir, { recursive: true });
+    }
+    const estoqueFile = getFilePath(gameDir, 'estoque.json');
+    const logFile = getFilePath(gameDir, 'log.json');
+    try {
+        const { componente, novaQuantidade } = req.body;
+        if (!componente || isNaN(novaQuantidade) || novaQuantidade < 0) {
+            return res.status(400).json({ sucesso: false, erro: 'Componente e nova quantidade são obrigatórios e válidos' });
+        }
+        let estoque = await fs.readFile(estoqueFile, 'utf8').then(JSON.parse).catch(() => []);
+        let index = estoque.findIndex(e => e.componente === componente);
+        const atualQtd = index !== -1 ? estoque[index].quantidade : 0;
+        const diff = novaQuantidade - atualQtd;
+        const hasDebitPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'debitarEstoque');
+        if (diff < 0 && !hasDebitPermission) {
+            return res.status(403).json({ sucesso: false, erro: 'Não autorizado a debitar estoque' });
+        }
+        if (index === -1) {
+            estoque.push({ componente, quantidade: novaQuantidade });
+        } else {
+            estoque[index].quantidade = novaQuantidade;
+        }
+        await fs.writeFile(estoqueFile, JSON.stringify(estoque, null, 2));
+        // Logar a mudança
+        if (diff !== 0) {
+            const operacao = diff > 0 ? 'adicionar' : 'debitar';
+            const qtd = Math.abs(diff);
+            const dataHora = new Date().toLocaleString("pt-BR", { timeZone: 'America/Sao_Paulo' });
+            const userEmail = req.session.user;
+            const logEntry = {
+                dataHora,
+                componente,
+                quantidade: qtd,
+                operacao,
+                origem: "Atualização total de estoque",
+                user: userEmail
+            };
+            let logs = await fs.readFile(logFile, 'utf8').then(JSON.parse).catch(() => []);
+            logs.push(logEntry);
+            await fs.writeFile(logFile, JSON.stringify(logs, null, 2));
+        }
+        console.log(`[POST /estoque/set] Estoque atualizado para ${componente}: ${novaQuantidade}`);
+        io.to(game).emit('update', { type: 'estoque' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /estoque/set] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar estoque' });
+    }
+});
 // Endpoint para roadmap
 app.get('/roadmap', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
@@ -3830,4 +3900,3 @@ app.put('/admin/users/:email/plano', isAdmin, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar plano' });
     }
 });
-//! FIM SERVIDOR.JS

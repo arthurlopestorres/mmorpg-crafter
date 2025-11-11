@@ -2534,3 +2534,55 @@ body.bright-mode #conteudo .evento-item--listaDePresencaWrapper--lista li,
 body.bright-mode #conteudo .evento-item--membrosConvidados--item {
     color: #2d3748;
 }
+
+.btn-atualizar-estoque {
+    background: var(--primary-gradient);
+    color: white;
+    padding: 8px 16px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.95rem;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-atualizar-estoque:hover {
+    background: var(--primary-gradient-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.atualizar-estoque-input {
+    display: flex;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.btn-save-stock {
+    background: var(--primary-gradient);
+    color: white;
+    padding: 8px 16px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.95rem;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    margin: 0px 10px;
+}
+
+.btn-save-stock:hover {
+    background: var(--primary-gradient-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.btn-cancel-stock {
+    background: linear-gradient(135deg, #fc466b 0%, #3f5efb 100%);
+    color: white;
+    padding: 8px 16px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.95rem;
+    box-shadow: 0 4px 12px rgba(252, 70, 107, 0.3);
+}
+
+.btn-cancel-stock:hover {
+    background: linear-gradient(135deg, #e63950 0%, #3548d4 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(252, 70, 107, 0.4);
+}
