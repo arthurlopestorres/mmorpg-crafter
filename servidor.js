@@ -2325,13 +2325,24 @@ app.post('/componentes/add-tabela', isAuthenticated, async (req, res) => {
     }
     try {
         let componentes = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        let updated = false;
         componentes = componentes.map(c => {
-            const precos = c.precos || { "Principal": { precoUnitario: 0 } };
-            if (precos[nomeTabela]) return c; // Já existe, não adicionar
-            precos[nomeTabela] = { precoUnitario: precos["Principal"]?.precoUnitario || 0 };
-            return { ...c, precos };
+            if (!c.precos) c.precos = { "Principal": { precoUnitario: 0 } };
+            if (!c.precos[nomeTabela]) {
+                let precoHerdado = 0;
+                const tabelasExistentes = Object.keys(c.precos);
+                if (tabelasExistentes.length > 0) {
+                    const primeiraTabela = tabelasExistentes[0];
+                    precoHerdado = c.precos[primeiraTabela].precoUnitario || 0;
+                }
+                c.precos[nomeTabela] = { precoUnitario: precoHerdado };
+                updated = true;
+            }
+            return c;
         });
-        await fs.writeFile(file, JSON.stringify(componentes, null, 2));
+        if (updated) {
+            await fs.writeFile(file, JSON.stringify(componentes, null, 2));
+        }
         io.to(game).emit('update', { type: 'componentes' });
         res.json({ sucesso: true });
     } catch (error) {
@@ -3527,6 +3538,115 @@ io.on('connection', (socket) => {
         console.log('[SOCKET.IO] Cliente desconectado:', socket.id);
     });
 });
+// Nova função para enviar emails de aviso
+async function sendReminderEmails(membros, titulo, datetime, timezone, game) {
+    for (const email of membros) {
+        try {
+            await transporter.sendMail({
+                from: process.env.EMAIL_USER,
+                to: email,
+                subject: `Aviso: Evento "${titulo}" em breve`,
+                text: `O evento "${titulo}" no jogo ${game} está prestes a começar em ${datetime} (${timezone}).`
+            });
+            console.log(`[REMINDER] Email enviado para ${email} sobre evento ${titulo}`);
+        } catch (err) {
+            console.error('[REMINDER] Erro ao enviar email para', email, ':', err);
+        }
+    }
+}
+// Nova função para agendar aviso de um evento
+function scheduleReminder(evento, game) {
+    const { id, titulo, data, horario, timezone, avisoAntes, membros, criador } = evento;
+    if (avisoAntes <= 0) return;
+    const recipients = [...new Set([...membros, criador || ''])].filter(Boolean);
+    if (recipients.length === 0) return;
+    const eventDateTime = moment.tz(`${data} ${horario}`, timezone);
+    const reminderTime = eventDateTime.clone().subtract(avisoAntes, 'minutes');
+    const now = moment();
+    if (reminderTime.isAfter(now)) {
+        const delay = reminderTime.diff(now);
+        setTimeout(() => {
+            sendReminderEmails(recipients, titulo, eventDateTime.format('YYYY-MM-DD HH:mm'), timezone, game);
+        }, delay);
+        console.log(`[SCHEDULE] Aviso agendado para evento ${id} em ${delay}ms`);
+    } else {
+        console.log(`[SCHEDULE] Aviso para evento ${id} já passou, não agendado`);
+    }
+}
+// Nova função para agendar todos os avisos ao iniciar
+async function scheduleAllReminders() {
+    try {
+        const users = await fs.readdir(DATA_DIR, { withFileTypes: true }).then(files => files.filter(f => f.isDirectory()).map(f => f.name));
+        for (const user of users) {
+            const userDir = path.join(DATA_DIR, user);
+            const games = await fs.readdir(userDir, { withFileTypes: true }).then(files => files.filter(f => f.isDirectory()).map(f => f.name));
+            for (const game of games) {
+                const gameDir = path.join(userDir, game);
+                const file = path.join(gameDir, 'atividadesGuilda.json');
+                try {
+                    const eventos = await fs.readFile(file, 'utf8').then(JSON.parse);
+                    for (const evento of eventos) {
+                        scheduleReminder(evento, game);
+                    }
+                } catch (err) {
+                    console.warn(`[SCHEDULE ALL] Erro ao ler atividades para user ${user} game ${game}:`, err);
+                }
+            }
+        }
+        console.log('[SCHEDULE ALL] Todos os avisos agendados');
+    } catch (error) {
+        console.error('[SCHEDULE ALL] Erro geral:', error);
+    }
+}
+// Chamar scheduleAllReminders após inicializar
+inicializarArquivos().then(() => {
+    scheduleAllReminders();
+});
+// Novo: Função para calcular tamanho total do diretório do usuário (recursivo)
+async function getUserDirSize(userEmail) {
+    const safeUser = userEmail.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const userDir = path.join(DATA_DIR, safeUser);
+    let totalSize = 0;
+    try {
+        const files = await fs.readdir(userDir, { recursive: true });
+        for (const file of files) {
+            const filePath = path.join(userDir, file);
+            const stats = await fs.stat(filePath);
+            if (stats.isFile()) totalSize += stats.size;
+        }
+    } catch (error) {
+        console.warn('[getUserDirSize] Erro ao calcular tamanho:', error);
+    }
+    return totalSize;
+}
+// Novo: Função auxiliar para buscar usuário por email
+async function getUserByEmail(email) {
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+    return usuarios.find(u => u.email === email) || {};
+}
+// Novo: Endpoint admin para atualizar plano de usuário
+app.put('/admin/users/:email/plano', isAdmin, async (req, res) => {
+    const { email } = req.params;
+    const { plano } = req.body;
+    if (!plano) {
+        return res.status(400).json({ sucesso: false, erro: 'Plano é obrigatório' });
+    }
+    const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+    try {
+        let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+        const index = usuarios.findIndex(u => u.email === email);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+        }
+        usuarios[index].plano = plano;
+        await saveUsuarios(usuarios);
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[PUT /admin/users/:email/plano] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar plano' });
+    }
+});
 // Nova rota para atividadesGuilda: Listar eventos
 app.get('/atividadesGuilda', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
@@ -4036,111 +4156,217 @@ app.delete('/atividadesGuilda/:id/presenca', isAuthenticated, async (req, res) =
     }
 });
 // Nova função para enviar emails de aviso
+
 async function sendReminderEmails(membros, titulo, datetime, timezone, game) {
+
     for (const email of membros) {
+
         try {
+
             await transporter.sendMail({
+
                 from: process.env.EMAIL_USER,
+
                 to: email,
+
                 subject: `Aviso: Evento "${titulo}" em breve`,
+
                 text: `O evento "${titulo}" no jogo ${game} está prestes a começar em ${datetime} (${timezone}).`
+
             });
+
             console.log(`[REMINDER] Email enviado para ${email} sobre evento ${titulo}`);
+
         } catch (err) {
+
             console.error('[REMINDER] Erro ao enviar email para', email, ':', err);
+
         }
+
     }
+
 }
+
 // Nova função para agendar aviso de um evento
+
 function scheduleReminder(evento, game) {
+
     const { id, titulo, data, horario, timezone, avisoAntes, membros, criador } = evento;
+
     if (avisoAntes <= 0) return;
+
     const recipients = [...new Set([...membros, criador || ''])].filter(Boolean);
+
     if (recipients.length === 0) return;
+
     const eventDateTime = moment.tz(`${data} ${horario}`, timezone);
+
     const reminderTime = eventDateTime.clone().subtract(avisoAntes, 'minutes');
+
     const now = moment();
+
     if (reminderTime.isAfter(now)) {
+
         const delay = reminderTime.diff(now);
+
         setTimeout(() => {
+
             sendReminderEmails(recipients, titulo, eventDateTime.format('YYYY-MM-DD HH:mm'), timezone, game);
+
         }, delay);
+
         console.log(`[SCHEDULE] Aviso agendado para evento ${id} em ${delay}ms`);
+
     } else {
+
         console.log(`[SCHEDULE] Aviso para evento ${id} já passou, não agendado`);
+
     }
+
 }
+
 // Nova função para agendar todos os avisos ao iniciar
+
 async function scheduleAllReminders() {
+
     try {
+
         const users = await fs.readdir(DATA_DIR, { withFileTypes: true }).then(files => files.filter(f => f.isDirectory()).map(f => f.name));
+
         for (const user of users) {
+
             const userDir = path.join(DATA_DIR, user);
+
             const games = await fs.readdir(userDir, { withFileTypes: true }).then(files => files.filter(f => f.isDirectory()).map(f => f.name));
+
             for (const game of games) {
+
                 const gameDir = path.join(userDir, game);
+
                 const file = path.join(gameDir, 'atividadesGuilda.json');
+
                 try {
+
                     const eventos = await fs.readFile(file, 'utf8').then(JSON.parse);
+
                     for (const evento of eventos) {
+
                         scheduleReminder(evento, game);
+
                     }
+
                 } catch (err) {
+
                     console.warn(`[SCHEDULE ALL] Erro ao ler atividades para user ${user} game ${game}:`, err);
+
                 }
+
             }
+
         }
+
         console.log('[SCHEDULE ALL] Todos os avisos agendados');
+
     } catch (error) {
+
         console.error('[SCHEDULE ALL] Erro geral:', error);
+
     }
+
 }
+
 // Chamar scheduleAllReminders após inicializar
+
 inicializarArquivos().then(() => {
+
     scheduleAllReminders();
+
 });
+
 // Novo: Função para calcular tamanho total do diretório do usuário (recursivo)
+
 async function getUserDirSize(userEmail) {
+
     const safeUser = userEmail.replace(/[^a-zA-Z0-9@._-]/g, '');
+
     const userDir = path.join(DATA_DIR, safeUser);
+
     let totalSize = 0;
+
     try {
+
         const files = await fs.readdir(userDir, { recursive: true });
+
         for (const file of files) {
+
             const filePath = path.join(userDir, file);
+
             const stats = await fs.stat(filePath);
+
             if (stats.isFile()) totalSize += stats.size;
+
         }
+
     } catch (error) {
+
         console.warn('[getUserDirSize] Erro ao calcular tamanho:', error);
+
     }
+
     return totalSize;
+
 }
+
 // Novo: Função auxiliar para buscar usuário por email
+
 async function getUserByEmail(email) {
+
     const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+
     let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+
     return usuarios.find(u => u.email === email) || {};
+
 }
+
 // Novo: Endpoint admin para atualizar plano de usuário
+
 app.put('/admin/users/:email/plano', isAdmin, async (req, res) => {
+
     const { email } = req.params;
+
     const { plano } = req.body;
+
     if (!plano) {
+
         return res.status(400).json({ sucesso: false, erro: 'Plano é obrigatório' });
+
     }
+
     const usuariosPath = path.join(DATA_DIR, 'usuarios.json');
+
     try {
+
         let usuarios = await fs.readFile(usuariosPath, 'utf8').then(JSON.parse).catch(() => []);
+
         const index = usuarios.findIndex(u => u.email === email);
+
         if (index === -1) {
+
             return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' });
+
         }
+
         usuarios[index].plano = plano;
+
         await saveUsuarios(usuarios);
+
         res.json({ sucesso: true });
+
     } catch (error) {
+
         console.error('[PUT /admin/users/:email/plano] Erro:', error);
+
         res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar plano' });
     }
 });

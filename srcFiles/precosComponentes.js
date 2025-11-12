@@ -1,4 +1,3 @@
-// precosComponentes.js
 // precosComponentes.js - Funções para módulo de preços de componentes
 // Dependências: core.js, utils.js
 async function montarPrecosComponentes() {
@@ -24,6 +23,8 @@ async function montarPrecosComponentes() {
     const podeEditarNomeTabela = isAdmin || permissao.editarNomeTabelaPrecos;
     const podeExcluirTabela = isAdmin || permissao.excluirTabelaPrecos;
     const podeAlterarPrecoUnitario = isAdmin || permissao.alterarPrecoUnitario;
+    // Armazenar permissões para uso em chamadas subsequentes
+    window.precosPermissions = { podeEditarNomeTabela, podeExcluirTabela, podeAlterarPrecoUnitario };
     // Adicionar botão de nova tabela apenas se permitido
     if (podeCadastrarNovaTabela) {
         const btnNova = document.createElement("button");
@@ -56,7 +57,7 @@ async function montarPrecosComponentes() {
     filtroCategoriaSelect.value = localStorage.getItem('precosFiltroCategoria') || '';
 }
 async function carregarTabelaPrecos(options = {}) {
-    const { podeEditarNomeTabela = false, podeExcluirTabela = false, podeAlterarPrecoUnitario = false } = options;
+    const { podeEditarNomeTabela = window.precosPermissions?.podeEditarNomeTabela ?? false, podeExcluirTabela = window.precosPermissions?.podeExcluirTabela ?? false, podeAlterarPrecoUnitario = window.precosPermissions?.podeAlterarPrecoUnitario ?? false } = options;
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     const filtroNome = document.getElementById("filtroNome")?.value.toLowerCase() || "";
     const filtroCategoria = document.getElementById("filtroCategoria")?.value || "";
@@ -71,19 +72,13 @@ async function carregarTabelaPrecos(options = {}) {
             document.getElementById("tabelaPrecos").innerHTML = '<p>Nenhum componente encontrado.</p>';
             return;
         }
-        // Limitar a 20 primeiros
-        componentes = componentes.slice(0, 20);
-        // Filtrar por nome e categoria
-        componentes = componentes.filter(c =>
-            c.nome.toLowerCase().includes(filtroNome) &&
-            (!filtroCategoria || c.categoria === filtroCategoria)
-        );
+        // Calcular todas as categorias a partir de todos os componentes
+        const categorias = [...new Set(componentes.map(c => c.categoria).filter(Boolean))];
         window.allComponentes = componentes;
         // Determinar as tabelas de preços (usando o primeiro componente como referência)
-        const todasTabelas = Object.keys(componentes[0].precos || { "Principal": {} });
+        const todasTabelas = Object.keys(componentes[0]?.precos || { "Principal": {} });
         window.tabelas = todasTabelas;
         // Popular select de categorias (único)
-        const categorias = [...new Set(componentes.map(c => c.categoria).filter(Boolean))];
         const selectCategoria = document.getElementById("filtroCategoria");
         if (selectCategoria && selectCategoria.options.length === 1) {
             categorias.forEach(cat => {
@@ -116,6 +111,16 @@ async function carregarTabelaPrecos(options = {}) {
                 });
             }
         }
+        // Filtrar por nome e categoria
+        componentes = componentes.filter(c =>
+            c.nome.toLowerCase().includes(filtroNome) &&
+            (!filtroCategoria || c.categoria === filtroCategoria)
+        );
+        // Limitar a 10 se não há filtros
+        const noFilters = !filtroNome && !filtroCategoria;
+        if (noFilters) {
+            componentes = componentes.slice(0, 10);
+        }
         // Filtrar tabelas a mostrar
         const tabelasMostrar = filtroTabelas.length > 0 ? filtroTabelas : todasTabelas;
         // Cabeçalho da tabela
@@ -137,7 +142,7 @@ async function carregarTabelaPrecos(options = {}) {
             // Calcular lucros por tabela para encontrar a tabela com maior lucro
             let lucros = {};
             tabelasMostrar.forEach(t => {
-                const custo = calcularCustoProducao(c, componentes, t);
+                const custo = calcularCustoProducao(c, window.allComponentes, t);
                 const preco = c.precos?.[t]?.precoUnitario || 0;
                 let lucroAdj = preco - custo;
                 if (custo === 0) {
@@ -158,7 +163,7 @@ async function carregarTabelaPrecos(options = {}) {
             let subsHtml = '';
             if (c.associados && c.associados.length > 0) {
                 subsHtml = '<br>Subcomponentes:<br>' + c.associados.map(a => {
-                    const subComp = componentes.find(sc => sc.nome === a.nome);
+                    const subComp = window.allComponentes.find(sc => sc.nome === a.nome);
                     const precoSub = subComp ? (subComp.precos?.[tabelasMostrar[0]]?.precoUnitario || 0) : 0;
                     return `${a.nome} (qtd: ${a.quantidade}, unit: ${precoSub.toFixed(2)})`;
                 }).join('<br>');
@@ -166,7 +171,7 @@ async function carregarTabelaPrecos(options = {}) {
             html += `<tr class="${rowClass}"><td>${c.nome} (${c.categoria || '—'}) <label>Quantidade:</label> <input type="number" min="1" value="1" onchange="atualizarQuantidade('${c.nome}', this.value)" />${subsHtml}<br>Maior Lucro: ${tabelaMax}</td>`;
             tabelasMostrar.forEach(tabela => {
                 const preco = c.precos?.[tabela]?.precoUnitario || 0;
-                const custo = calcularCustoProducao(c, componentes, tabela);
+                const custo = calcularCustoProducao(c, window.allComponentes, tabela);
                 let custoDisplay = custo;
                 let lucro = preco - custo;
                 if (custo === 0) {
@@ -287,33 +292,6 @@ async function criarNovaTabela() {
             body: JSON.stringify({ nomeTabela: nome })
         });
         if (data.sucesso) {
-            // Herdar o preço da primeira tabela
-            const componentes = await safeApi(`/componentes?game=${encodeURIComponent(currentGame)}`);
-            for (const comp of componentes) {
-                let precoHerdado = 0;
-                if (comp.precos) {
-                    const tabelasExistentes = Object.keys(comp.precos);
-                    if (tabelasExistentes.length > 0) {
-                        const primeiraTabela = tabelasExistentes[0];
-                        precoHerdado = comp.precos[primeiraTabela]?.precoUnitario || 0;
-                    }
-                }
-                if (!comp.precos) comp.precos = {};
-                comp.precos[nome] = { precoUnitario: precoHerdado };
-                const payload = {
-                    nomeOriginal: comp.nome,
-                    nome: comp.nome,
-                    categoria: comp.categoria,
-                    associados: comp.associados,
-                    quantidadeProduzida: comp.quantidadeProduzida,
-                    precos: comp.precos
-                };
-                await safeApi(`/componentes/editar?game=${encodeURIComponent(currentGame)}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                });
-            }
             document.getElementById("popupNovaTabela").remove();
             await carregarTabelaPrecos();
         } else {
