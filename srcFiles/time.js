@@ -151,6 +151,11 @@ async function mostrarPopupPermissoes(secondary) {
             <label><input type="checkbox" class="perm-checkbox" data-key="zerarEstoque"> Zerar Estoque</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="exportarEstoque"> Exportar Estoque</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="importarEstoque"> Importar Estoque</label>
+            <h3>Preços de Componentes</h3>
+            <label><input type="checkbox" class="perm-checkbox" data-key="cadastrarNovaTabelaPrecos"> Cadastrar Nova Tabela de Preços</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="editarNomeTabelaPrecos"> Editar Nome de Tabelas de Preços</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="excluirTabelaPrecos"> Excluir Tabelas de Preços</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="alterarPrecoUnitario"> Alterar Preço Unitário de Componentes</label>
             <h3>Receitas</h3>
             <label><input type="checkbox" class="perm-checkbox" data-key="criarReceitas"> Criar Receitas</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="favoritarReceitas"> Favoritar Receitas</label>
@@ -169,7 +174,8 @@ async function mostrarPopupPermissoes(secondary) {
             <label><input type="checkbox" class="perm-checkbox" data-key="criarEvento"> Criar Evento</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="editarEvento"> Editar Evento</label>
             <label><input type="checkbox" class="perm-checkbox" data-key="excluirEvento"> Excluir Evento</label>
-            <label><input type="checkbox" class="perm-checkbox" data-key="associarMembrosEvento"> Associar Membros ao Evento</label>           
+            <label><input type="checkbox" class="perm-checkbox" data-key="associarMembrosEvento"> Associar Membros ao Evento</label>
+            <label><input type="checkbox" class="perm-checkbox" data-key="concluirEvento"> Concluir Evento</label>
             <button type="submit">Salvar</button>
             <button type="button" id="btnCancelarPermissoes">Cancelar</button>
         </form>

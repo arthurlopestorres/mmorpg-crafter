@@ -801,7 +801,11 @@ app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
                 excluirEvento: false,
                 associarMembrosEvento: false,
                 excluirArquivados: false,
-                concluirEvento: false
+                concluirEvento: false,
+                cadastrarNovaTabelaPrecos: false,
+                editarNomeTabelaPrecos: false,
+                excluirTabelaPrecos: false,
+                alterarPrecoUnitario: false
             }
         });
         await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
@@ -893,7 +897,11 @@ app.post('/associate-users', async (req, res) => {
                 excluirEvento: false,
                 associarMembrosEvento: false,
                 excluirArquivados: false,
-                concluirEvento: false
+                concluirEvento: false,
+                cadastrarNovaTabelaPrecos: false,
+                editarNomeTabelaPrecos: false,
+                excluirTabelaPrecos: false,
+                alterarPrecoUnitario: false
             }
         }); // Novo: Role padrão 'member' com permissões padrão false
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
@@ -1015,7 +1023,11 @@ app.post('/associate-self', isAuthenticated, async (req, res) => {
                 excluirEvento: false,
                 associarMembrosEvento: false,
                 excluirArquivados: false,
-                concluirEvento: false
+                concluirEvento: false,
+                cadastrarNovaTabelaPrecos: false,
+                editarNomeTabelaPrecos: false,
+                excluirTabelaPrecos: false,
+                alterarPrecoUnitario: false
             }
         }); // Novo: Role 'member' com permissões padrão false
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
@@ -1982,6 +1994,8 @@ app.post('/componentes', isAuthenticated, async (req, res) => {
             console.log('[POST /componentes] Erro: Componente já existe:', novoComponente.nome);
             return res.status(400).json({ sucesso: false, erro: 'Componente já existe' });
         }
+        // Adicionar precos default se não existir
+        novoComponente.precos = novoComponente.precos || { "Principal": { precoUnitario: 0 } };
         componentes.push(novoComponente);
         await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes] Componente adicionado:', novoComponente.nome);
@@ -2024,7 +2038,7 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
     const effectiveUser = await getEffectiveUser(sessionUser);
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
-    const hasEditPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'editarComponente');
+    const hasEditPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'editarComponente') || await hasPermission(sessionUser, 'alterarPrecoUnitario');
     if (!hasEditPermission) {
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
     }
@@ -2057,7 +2071,7 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
         if (newSize > limit) {
             return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
         }
-        const { nomeOriginal, nome, categoria, associados, quantidadeProduzida } = req.body;
+        const { nomeOriginal, nome, categoria, associados, quantidadeProduzida, precos } = req.body;
         if (!nomeOriginal || !nome) {
             console.log('[POST /componentes/editar] Erro: Nome original ou nome ausente');
             return res.status(400).json({ sucesso: false, erro: 'Nome original e nome são obrigatórios' });
@@ -2077,7 +2091,7 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
             console.log('[POST /componentes/editar] Erro: Novo nome já existe:', nome);
             return res.status(400).json({ sucesso: false, erro: 'Novo nome de componente já existe' });
         }
-        componentes[index] = { nome, categoria, associados, quantidadeProduzida };
+        componentes[index] = { nome, categoria, associados, quantidadeProduzida, precos: precos || componentes[index].precos || { "Principal": { precoUnitario: 0 } } };
         await fs.writeFile(file, JSON.stringify(componentes, null, 2));
         console.log('[POST /componentes/editar] Componente editado:', nomeOriginal, '->', nome);
         // Adicionar categoria se nova
@@ -2286,6 +2300,158 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
     } catch (error) {
         console.error('[POST /componentes/excluir] Erro:', error);
         res.status(500).json({ sucesso: false, erro: 'Erro ao excluir componente' });
+    }
+});
+// Novo endpoint para adicionar nova tabela de preços
+app.post('/componentes/add-tabela', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const hasPermissionToAdd = isOwn || isAdminUser || await hasPermission(sessionUser, 'cadastrarNovaTabelaPrecos');
+    if (!hasPermissionToAdd) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const file = getFilePath(gameDir, 'componentes.json');
+    const { nomeTabela } = req.body;
+    if (!nomeTabela) {
+        return res.status(400).json({ sucesso: false, erro: 'Nome da tabela é obrigatório' });
+    }
+    try {
+        let componentes = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        componentes = componentes.map(c => {
+            const precos = c.precos || { "Principal": { precoUnitario: 0 } };
+            if (precos[nomeTabela]) return c; // Já existe, não adicionar
+            precos[nomeTabela] = { precoUnitario: precos["Principal"]?.precoUnitario || 0 };
+            return { ...c, precos };
+        });
+        await fs.writeFile(file, JSON.stringify(componentes, null, 2));
+        io.to(game).emit('update', { type: 'componentes' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /componentes/add-tabela] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao adicionar tabela de preços' });
+    }
+});
+// Novo endpoint para renomear tabela de preços
+app.post('/componentes/rename-tabela', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const hasPermissionToRename = isOwn || isAdminUser || await hasPermission(sessionUser, 'editarNomeTabelaPrecos');
+    if (!hasPermissionToRename) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const file = getFilePath(gameDir, 'componentes.json');
+    const { oldName, newName } = req.body;
+    if (!oldName || !newName) {
+        return res.status(400).json({ sucesso: false, erro: 'Nomes antigo e novo são obrigatórios' });
+    }
+    try {
+        let componentes = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        componentes = componentes.map(c => {
+            const precos = c.precos || {};
+            if (precos[oldName]) {
+                precos[newName] = precos[oldName];
+                delete precos[oldName];
+            }
+            return { ...c, precos };
+        });
+        await fs.writeFile(file, JSON.stringify(componentes, null, 2));
+        io.to(game).emit('update', { type: 'componentes' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /componentes/rename-tabela] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao renomear tabela de preços' });
+    }
+});
+app.post('/componentes/delete-tabela', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const hasPermissionToDelete = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirTabelaPrecos');
+    if (!hasPermissionToDelete) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const file = getFilePath(gameDir, 'componentes.json');
+    const { nomeTabela } = req.body;
+    if (!nomeTabela) {
+        return res.status(400).json({ sucesso: false, erro: 'Nome da tabela é obrigatório' });
+    }
+    if (nomeTabela === "Principal") {
+        return res.status(400).json({ sucesso: false, erro: 'Não pode excluir a tabela Principal' });
+    }
+    try {
+        let componentes = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        componentes = componentes.map(c => {
+            const precos = c.precos || {};
+            if (precos[nomeTabela]) {
+                delete precos[nomeTabela];
+            }
+            return { ...c, precos };
+        });
+        await fs.writeFile(file, JSON.stringify(componentes, null, 2));
+        io.to(game).emit('update', { type: 'componentes' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /componentes/delete-tabela] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao excluir tabela de preços' });
+    }
+});
+app.post('/componentes/update-preco', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const hasUpdatePrecoPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'alterarPrecoUnitario');
+    if (!hasUpdatePrecoPermission) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    const file = getFilePath(gameDir, 'componentes.json');
+    const { nome, tabela, precoUnitario } = req.body;
+    if (!nome || !tabela || isNaN(precoUnitario)) {
+        return res.status(400).json({ sucesso: false, erro: 'Nome, tabela e precoUnitario são obrigatórios' });
+    }
+    try {
+        let componentes = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
+        const index = componentes.findIndex(c => c.nome === nome);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Componente não encontrado' });
+        }
+        if (!componentes[index].precos) componentes[index].precos = {};
+        componentes[index].precos[tabela] = { precoUnitario };
+        await fs.writeFile(file, JSON.stringify(componentes, null, 2));
+        io.to(game).emit('update', { type: 'componentes' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /componentes/update-preco] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar preço' });
     }
 });
 app.get('/estoque', isAuthenticated, async (req, res) => {

@@ -1,3 +1,4 @@
+// menu.js
 // menu.js - Inicialização do menu, seções, minimizar menu, manual
 // Dependências: core.js, auth.js, utils.js, time.js, receitas.js, componentes.js, estoque.js, farmar.js, roadmap.js, categorias.js
 function initMenu() {
@@ -71,6 +72,7 @@ function initMenu() {
         { section: "categorias", text: "Categorias" },
         { section: "componentes", text: "Gerenciar Componentes" },
         { section: "estoque", text: "Estoque de Componentes" },
+        { section: "precosComponentes", text: "Preços de Componentes" },
         { section: "receitas", text: "Receitas" },
         { section: "farmar", text: "Farmar Receitas Favoritas" },
         { section: "roadmap", text: "Roadmap" }
@@ -153,6 +155,7 @@ async function carregarSecao(secao) {
     if (secao === "receitas") return montarReceitas();
     if (secao === "componentes") return montarComponentes();
     if (secao === "estoque") return montarEstoque();
+    if (secao === "precosComponentes") return montarPrecosComponentes();
     if (secao === "farmar") return montarFarmar();
     if (secao === "roadmap") return montarRoadmap();
     if (secao === "categorias") return montarCategorias();

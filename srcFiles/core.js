@@ -1,6 +1,6 @@
+// core.js
 //! INICIO CORE.JS
 // core.js - Configurações iniciais, API, socket, loading, safeApi, debounce, DOMContentLoaded
-
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API = isLocal ? "http://localhost:10000" : "https://mmorpg-crafter.onrender.com";
 const RECAPTCHA_SITE_KEY = "6LeLG-krAAAAAFhUEHtBb3UOQefm93Oz8k5DTpx_"; // SUBSTITUA PELA SITE KEY OBTIDA NO GOOGLE
@@ -189,6 +189,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (currentSecao === 'estoque') await carregarEstoque(document.getElementById("buscaEstoque")?.value || "", document.getElementById("ordemEstoque")?.value || "az");
             if (currentSecao === 'farmar') await carregarListaFarmar(document.getElementById("buscaFarmar")?.value || "", document.getElementById("ordemFarmar")?.value || "pendente-desc", document.getElementById("filtroReceitaFarmar")?.value || "", document.getElementById("filtroCategoriaFarmar")?.value || "");
             if (currentSecao === 'roadmap') await carregarListaRoadmap(document.getElementById("filtroProntasRoadmap")?.checked || false);
+            if (currentSecao === 'precosComponentes') await montarPrecosComponentes();
         } else if (data.type === 'categorias') {
             if (currentSecao === 'categorias') await carregarCategoriasLista(document.getElementById("buscaCategorias")?.value || "", document.getElementById("ordemCategorias")?.value || "az");
         } else if (data.type === 'log') {

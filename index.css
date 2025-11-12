@@ -142,29 +142,23 @@ table {
     --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
     --danger-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
     --warning-gradient: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
-
     --text-primary: #2d3748;
     --text-secondary: #718096;
     --text-muted: #a0aec0;
-
     --bg-primary: #f7fafc;
     --bg-secondary: #edf2f7;
     --bg-white: #ffffff;
-
     --border-color: #e2e8f0;
     --border-radius-sm: 8px;
     --border-radius-md: 12px;
     --border-radius-lg: 16px;
     --border-radius-xl: 20px;
-
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.05);
     --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.08), 0 4px 6px rgba(0, 0, 0, 0.05);
     --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1), 0 10px 10px rgba(0, 0, 0, 0.04);
-
     --sidebar-width: 280px;
     --sidebar-width-mini: 80px;
-
     --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -1358,7 +1352,7 @@ form select:focus {
 #btnVoltarLogin,
 #btnVoltarLoginConfirmacao {
     background: #e2e8f0;
-    color: var(--text-primary);
+    color: #2d3748;
     border: none;
 }
 
@@ -1668,11 +1662,9 @@ body.dark-mode {
     --text-primary: #e2e8f0;
     --text-secondary: #cbd5e0;
     --text-muted: #a0aec0;
-
     --bg-primary: #1a202c;
     --bg-secondary: #2d3748;
     --bg-white: #2d3748;
-
     --border-color: #4a5568;
 }
 
@@ -2641,4 +2633,197 @@ body.bright-mode #conteudo .evento-item--membrosConvidados--item {
 .favorita-star:hover {
     color: #ffed4e;
     /* hover mais claro */
+}
+
+/* ========================================================================
+   TABELA DE PREÇOS - ESTILOS MODERNOS
+   ======================================================================== */
+.tabela-precos {
+    overflow-x: auto;
+    margin-top: 20px;
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-md);
+    background: rgba(255, 255, 255, 0.98);
+}
+
+.modern-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 800px;
+}
+
+.modern-table thead th {
+    background: var(--primary-gradient);
+    color: white;
+    padding: 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.modern-table thead th button:first-of-type {
+    background: transparent;
+    margin: 0px 20px;
+    border: none;
+    cursor: pointer;
+    color: white;
+    font-size: 1rem;
+    transition: color var(--transition-fast);
+    padding: 12px 24px;
+    border-radius: var(--border-radius-sm);
+    box-shadow: 0 4px 12px rgba(252, 70, 107, 0.3);
+}
+
+.modern-table thead th button:first-of-type:hover {
+    background: linear-gradient(135deg, #e63950 0%, #3548d4 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(252, 70, 107, 0.4);
+}
+
+.modern-table thead th:first-child {
+    border-top-left-radius: var(--border-radius-md);
+}
+
+.modern-table thead th:last-child {
+    border-top-right-radius: var(--border-radius-md);
+}
+
+.modern-table tbody tr {
+    transition: background var(--transition-fast);
+}
+
+.modern-table tbody tr:hover {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.modern-table tbody td {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.modern-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.modern-table tbody tr:last-child td:first-child {
+    border-bottom-left-radius: var(--border-radius-md);
+}
+
+.modern-table tbody tr:last-child td:last-child {
+    border-bottom-right-radius: var(--border-radius-md);
+}
+
+.modern-table input[type="number"] {
+    width: 80px;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    font-size: 0.95rem;
+    transition: border-color var(--transition-fast);
+}
+
+.modern-table input[type="number"]:focus {
+    border-color: #667eea;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.modern-table button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: white;
+    font-size: 1rem;
+    transition: color var(--transition-fast);
+}
+
+.modern-table button:hover {
+    color: #ffd700;
+}
+
+/* Dark mode para tabela */
+body.dark-mode .tabela-precos {
+    background: rgba(45, 55, 72, 0.95);
+}
+
+body.dark-mode .modern-table thead th {
+    background: var(--primary-gradient-hover);
+    color: #e2e8f0;
+}
+
+body.dark-mode .modern-table tbody td {
+    color: #e2e8f0;
+    border-bottom-color: #4a5568;
+}
+
+body.dark-mode .modern-table tbody tr:hover {
+    background: rgba(102, 126, 234, 0.2);
+}
+
+body.dark-mode .modern-table input[type="number"] {
+    background: #1a202c;
+    color: #e2e8f0;
+    border-color: #4a5568;
+}
+
+/* Bright mode para tabela (default light) */
+body.bright-mode .tabela-precos {
+    background: rgba(255, 255, 255, 0.98);
+}
+
+body.bright-mode .modern-table thead th {
+    background: var(--primary-gradient);
+    color: white;
+}
+
+body.bright-mode .modern-table tbody td {
+    color: var(--text-primary);
+    border-bottom-color: var(--border-color);
+}
+
+body.bright-mode .modern-table tbody tr:hover {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+body.bright-mode .modern-table input[type="number"] {
+    background: white;
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.row-positive {
+    background-color: lightgreen !important;
+    color: black !important;
+}
+
+body.dark-mode .row-positive {
+    background-color: darkgreen !important;
+    color: white !important;
+}
+
+.row-negative {
+    background-color: lightcoral !important;
+    color: black !important;
+}
+
+body.dark-mode .row-negative {
+    background-color: maroon !important;
+    color: white !important;
+}
+
+#btnFiltroTabela {
+    height: 49px;
+    width: 180px;
+    border-radius: 7px;
+}
+
+#dropdownTabela {
+    width: 180px;
 }
