@@ -4,7 +4,7 @@
 async function montarEstoque() {
     const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
-    <h2>Componentes e Estoque</h2>
+    <h2>Estoque de Componentes</h2>
     <div class="filtros">
         <h3 class="filtros-label">Filtros:</h3>
         <input type="text" id="buscaEstoque" placeholder="Buscar por nome...">

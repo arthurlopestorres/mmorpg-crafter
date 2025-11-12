@@ -69,8 +69,8 @@ function initMenu() {
     submenuUl.style.display = "none"; // Inicialmente fechado
     const craftingSections = [
         { section: "categorias", text: "Categorias" },
-        // { section: "componentes", text: "Componentes" },
-        { section: "estoque", text: "Componentes e Estoque" },
+        { section: "componentes", text: "Gerenciar Componentes" },
+        { section: "estoque", text: "Estoque de Componentes" },
         { section: "receitas", text: "Receitas" },
         { section: "farmar", text: "Farmar Receitas Favoritas" },
         { section: "roadmap", text: "Roadmap" }

@@ -4,7 +4,7 @@
 async function montarComponentes() {
     const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
-    <h2>Componentes</h2>
+    <h2>Gerenciar Componentes</h2>
     <div class="filtros">
         <input type="text" id="buscaComponentes" placeholder="Buscar por nome...">
         <select id="ordemComponentes">

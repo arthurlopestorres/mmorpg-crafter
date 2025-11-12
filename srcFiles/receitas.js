@@ -7,17 +7,17 @@ async function montarReceitas() {
     conteudo.innerHTML = `
     <h2>Receitas</h2>
     <div class="filtros">
+    ${hasPermission('criarReceitas') ? '<button id="btnNovaReceita" class="primary">+ Nova Receita</button>' : ''}
         <input type="text" id="buscaReceitas" placeholder="Buscar por nome...">
         <select id="ordemReceitas">
             <option value="az">Alfabética A-Z</option>
             <option value="za">Alfabética Z-A</option>
         </select>
-        <label><input type="checkbox" id="filtroFavoritas"> Somente Favoritas</label>
         <select id="modoReceitas">
             <option value="ativas">Ativas</option>
             <option value="arquivadas">Arquivadas</option>
         </select>
-        ${hasPermission('criarReceitas') ? '<button id="btnNovaReceita" class="primary">+ Nova Receita</button>' : ''}
+        <label><input type="checkbox" id="filtroFavoritas"> Somente Favoritas</label>
     </div>
     <div id="listaReceitas" class="lista"></div>
     `;
@@ -106,30 +106,29 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
             let btnEditarHtml = '';
             let btnArquivarHtml = '';
             let btnDuplicarHtml = '';
-            let btnFavoritarHtml = '';
             let btnExcluirHtml = '';
+            let favoritaStarHtml = '';
             if (modo === "ativas") {
                 btnConcluirHtml = hasPermission('concluirReceitas') ? `<button class="btn-concluir" data-receita="${r.nome}">Concluir</button>` : '';
                 btnEditarHtml = hasPermission('editarReceitas') ? `<button class="btn-editar" data-nome="${r.nome}">Editar</button>` : '';
                 btnArquivarHtml = hasPermission('concluirReceitas') ? `<button class="btn-arquivar" data-nome="${r.nome}">Arquivar</button>` : '';
                 btnDuplicarHtml = hasPermission('duplicarReceitas') ? `<button class="btn-duplicar" data-nome="${r.nome}">Duplicar</button>` : '';
-                btnFavoritarHtml = hasPermission('favoritarReceitas') ? `<button class="btn-favoritar ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}">${r.favorita ? 'Desfavoritar' : 'Favoritar'}</button>` : '';
+                favoritaStarHtml = hasPermission('favoritarReceitas') ? `<span class="favorita-star ${r.favorita ? 'favorita' : ''}" data-nome="${r.nome}" title="${r.favorita ? 'Desfavoritar' : 'Favoritar'}">${r.favorita ? '★' : '☆'}</span>` : '';
             } else if (modo === "arquivadas") {
                 btnExcluirHtml = hasPermission('excluirArquivados') ? `<button class="btn-excluir" data-nome="${r.nome}">Excluir Permanentemente</button>` : '';
             }
             return `
         <div class="item ${r.favorita ? 'favorita' : ''}" data-receita="${r.nome}">
           <div class="receita-header">
-            <div class = "receita-header--container1"><div style="margin-right: 15px;"><strong class= "receita-header--titulo">${r.nome}</strong>
+            <div class = "receita-header--container1"><div style="margin-right: 15px;"><strong class= "receita-header--titulo">${favoritaStarHtml}${r.nome}</strong>
             ${comps ? `<div class="comps-lista">${comps}</div>` : ""}
-            ${modo === "ativas" ? `<input type="number" class="qtd-desejada" min="0.001" step="any" value="${savedQtd}" data-receita="${r.nome}">` : ''}
+            ${modo === "ativas" ? `<span class="qtdFarmar-receitas">Quantidade a Farmar: </span><input type="number" class="qtd-desejada" min="0.001" step="any" value="${savedQtd}" data-receita="${r.nome}">` : ''}
             ${modo === "arquivadas" && r.arquivadoPor ? `<div class="arquivado-info">Arquivado por: ${r.arquivadoPor} em ${r.dataArquivamento}</div>` : ''}</div>
             ${modo === "ativas" ? `<button class="toggle-detalhes" data-target="${id}-detalhes">▼</button>` : ''}</div><div class="receitas-ButtonContainer">
-            ${btnConcluirHtml}
             ${btnEditarHtml}
             ${btnDuplicarHtml}
-            ${btnFavoritarHtml}
             ${btnArquivarHtml}
+            ${btnConcluirHtml}
             ${btnExcluirHtml}</div>
           </div>
           <div class="detalhes" id="${id}-detalhes" style="display:none;"></div>
@@ -204,10 +203,10 @@ async function carregarListaReceitas(termoBusca = "", ordem = "az", onlyFavorite
             });
         }
         if (hasPermission('favoritarReceitas')) {
-            document.querySelectorAll(".btn-favoritar").forEach(btn => {
-                btn.addEventListener("click", async () => {
-                    const nome = btn.dataset.nome;
-                    const isFavorita = btn.classList.contains('favorita');
+            document.querySelectorAll(".favorita-star").forEach(star => {
+                star.addEventListener("click", async () => {
+                    const nome = star.dataset.nome;
+                    const isFavorita = star.classList.contains('favorita');
                     await toggleFavorita(nome, !isFavorita);
                 });
             });
