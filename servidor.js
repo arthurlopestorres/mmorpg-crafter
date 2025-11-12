@@ -800,7 +800,8 @@ app.post('/aceitar-convite', isAuthenticated, async (req, res) => {
                 editarEvento: false,
                 excluirEvento: false,
                 associarMembrosEvento: false,
-                excluirArquivados: false
+                excluirArquivados: false,
+                concluirEvento: false
             }
         });
         await fs.writeFile(pendenciasPath, JSON.stringify(pendencias, null, 2));
@@ -873,10 +874,10 @@ app.post('/associate-users', async (req, res) => {
                 criarComponente: false,
                 editarComponente: false,
                 excluirComponente: false,
-                exportarEstoque: false,
-                importarEstoque: false,
                 debitarEstoque: false,
                 zerarEstoque: false,
+                exportarEstoque: false,
+                importarEstoque: false,
                 criarReceitas: false,
                 favoritarReceitas: false,
                 concluirReceitas: false,
@@ -891,7 +892,8 @@ app.post('/associate-users', async (req, res) => {
                 editarEvento: false,
                 excluirEvento: false,
                 associarMembrosEvento: false,
-                excluirArquivados: false
+                excluirArquivados: false,
+                concluirEvento: false
             }
         }); // Novo: Role padrão 'member' com permissões padrão false
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
@@ -958,7 +960,7 @@ app.post('/associate-self', isAuthenticated, async (req, res) => {
     const user = req.session.user;
     const effectiveUser = await getEffectiveUser(user);
     if (effectiveUser !== user) {
-        return res.status(403).json({ sucesso: false, erro: 'Não autorizado a adicionar membros' });
+        return res.status(403).json({ sucesso: false, erro: 'Apenas o fundador pode adicionar membros' });
     }
     const { secondary } = req.body;
     if (!secondary) {
@@ -1012,7 +1014,8 @@ app.post('/associate-self', isAuthenticated, async (req, res) => {
                 editarEvento: false,
                 excluirEvento: false,
                 associarMembrosEvento: false,
-                excluirArquivados: false
+                excluirArquivados: false,
+                concluirEvento: false
             }
         }); // Novo: Role 'member' com permissões padrão false
         await fs.writeFile(associationsPath, JSON.stringify(associations, null, 2));
@@ -1121,6 +1124,11 @@ app.post('/ban-user', isAuthenticated, async (req, res) => {
         }
         if (!usuarios.some(u => u.email === user && u.aprovado)) {
             return res.status(400).json({ sucesso: false, erro: 'Primary não autorizado' });
+        }
+        const index = banidos.findIndex(b => b.primary === user && b.banned === secondary);
+        if (index !== -1) {
+            banidos.splice(index, 1);
+            await fs.writeFile(banidosPath, JSON.stringify(banidos, null, 2));
         }
         if (!usuarios.some(u => u.email === secondary)) {
             return res.status(400).json({ sucesso: false, erro: 'Secondary não encontrado' });
@@ -1276,7 +1284,7 @@ app.get('/', (req, res) => {
     console.log('[GET /] Servindo index.html');
     res.sendFile(path.join(__dirname, 'index.html'));
 });
-// Endpoint: Aprovação manual (não protegido, pois manual via Postman)
+// Endpoint: Aprovação manual (não protegido)
 app.put('/usuarios', async (req, res) => {
     const { email, aprovadoParaAcesso } = req.body;
     try {
@@ -1396,7 +1404,7 @@ app.post('/games', isAuthenticated, async (req, res) => {
         return res.status(400).json({ sucesso: false, erro: 'Jogo já existe' });
     } catch {
         await fs.mkdir(gameDir, { recursive: true });
-        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json', 'atividadesGuilda.json'];
+        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json', 'atividadesGuilda.json', 'eventosConcluidos.json'];
         for (const file of files) {
             await fs.writeFile(path.join(gameDir, file), JSON.stringify([]));
         }
@@ -2017,11 +2025,8 @@ app.post('/componentes/editar', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasEditPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'editarComponente');
-
     if (!hasEditPermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2155,11 +2160,8 @@ app.post('/componentes/excluir', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirComponente');
-
     if (!hasDeletePermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2342,11 +2344,8 @@ app.post('/estoque/import', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasImportPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'importarEstoque');
-
     if (!hasImportPermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2541,11 +2540,8 @@ app.post('/estoque/zerar', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasZerarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'zerarEstoque');
-
     if (!hasZerarPermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2619,11 +2615,8 @@ app.delete('/data', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirComponente');
-
     if (!hasDeletePermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2719,11 +2712,8 @@ app.post('/arquivados', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasConcluirPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'concluirReceitas');
-
     if (!hasConcluirPermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -2862,11 +2852,8 @@ app.post('/fabricar', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasFabricarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'fabricarComponentes');
-
     if (!hasFabricarPermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -3076,11 +3063,8 @@ app.post('/roadmap', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasCreatePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'criarRoadmap');
-
     if (!hasCreatePermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -3250,7 +3234,7 @@ app.post('/admin/user-games', isAdmin, async (req, res) => {
         return res.status(400).json({ sucesso: false, erro: 'Jogo já existe' });
     } catch {
         await fs.mkdir(gameDir, { recursive: true });
-        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json', 'atividadesGuilda.json'];
+        const files = ['receitas.json', 'componentes.json', 'estoque.json', 'arquivados.json', 'log.json', 'roadmap.json', 'categorias.json', 'atividadesGuilda.json', 'eventosConcluidos.json'];
         for (const file of files) {
             await fs.writeFile(path.join(gameDir, file), JSON.stringify([]));
         }
@@ -3381,6 +3365,7 @@ io.on('connection', (socket) => {
 app.get('/atividadesGuilda', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
     const game = req.query.game || DEFAULT_GAME;
+    const concluded = req.query.concluded === 'true';
     const userGames = await getUserGames(sessionUser);
     if (!userGames.includes(game)) {
         return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
@@ -3401,7 +3386,8 @@ app.get('/atividadesGuilda', isAuthenticated, async (req, res) => {
         res.json([]);
         return;
     }
-    const file = getFilePath(gameDir, 'atividadesGuilda.json');
+    const filename = concluded ? 'eventosConcluidos.json' : 'atividadesGuilda.json';
+    const file = getFilePath(gameDir, filename);
     try {
         let data = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => []);
         const hasAssocPerm = await hasPermission(sessionUser, 'associarMembrosEvento') || await isUserAdmin(sessionUser);
@@ -3429,11 +3415,8 @@ app.post('/atividadesGuilda', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasCreatePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'criarEvento');
-
     if (!hasCreatePermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -3533,11 +3516,8 @@ app.put('/atividadesGuilda/:id', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasEditPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'editarEvento');
-
     if (!hasEditPermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -3599,11 +3579,8 @@ app.delete('/atividadesGuilda/:id', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasDeletePermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'excluirEvento');
-
     if (!hasDeletePermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {
@@ -3634,6 +3611,71 @@ app.delete('/atividadesGuilda/:id', isAuthenticated, async (req, res) => {
         res.status(500).json({ sucesso: false, erro: 'Erro ao excluir evento' });
     }
 });
+// Nova rota para atividadesGuilda: Concluir evento
+app.post('/atividadesGuilda/:id/concluir', isAuthenticated, async (req, res) => {
+    const sessionUser = req.session.user;
+    const { id } = req.params;
+    const game = req.query.game || DEFAULT_GAME;
+    const userGames = await getUserGames(sessionUser);
+    if (!userGames.includes(game)) {
+        return res.status(403).json({ sucesso: false, erro: 'Jogo não acessível' });
+    }
+    const effectiveUser = await getEffectiveUser(sessionUser);
+    const isAdminUser = await isUserAdmin(sessionUser);
+    const isOwn = await isOwnGame(sessionUser, game);
+    const hasConcluirPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'concluirEvento');
+    if (!hasConcluirPermission) {
+        return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
+    }
+    const gameDir = await getGameDir(sessionUser, effectiveUser, game);
+    if (!isOwn && effectiveUser !== sessionUser) {
+        const sharedPath = path.join(DATA_DIR, effectiveUser.replace(/[^a-zA-Z0-9@._-]/g, ''), 'shared.json');
+        const shared = await fs.readFile(sharedPath, 'utf8').then(JSON.parse).catch(() => []);
+        if (!shared.includes(game)) {
+            return res.status(403).json({ sucesso: false, erro: 'Jogo não compartilhado' });
+        }
+    }
+    try {
+        await fs.access(gameDir);
+    } catch {
+        return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+    }
+    const atividadesFile = getFilePath(gameDir, 'atividadesGuilda.json');
+    const concluidosFile = getFilePath(gameDir, 'eventosConcluidos.json');
+    try {
+        // Novo: Checar limite de armazenamento antes de salvar
+        const user = await getUserByEmail(effectiveUser);
+        const plano = user.plano || 'basic';
+        const storageLimits = { basic: 10 * 1024 * 1024, standard: 50 * 1024 * 1024, advanced: 150 * 1024 * 1024, fullpass: Infinity };
+        const limit = storageLimits[plano];
+        const currentSize = await getUserDirSize(effectiveUser);
+        let atividades = await fs.readFile(atividadesFile, 'utf8').then(JSON.parse).catch(() => []);
+        let concluidos = await fs.readFile(concluidosFile, 'utf8').then(JSON.parse).catch(() => []);
+        const index = atividades.findIndex(e => e.id === id);
+        if (index === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Evento não encontrado' });
+        }
+        const evento = atividades[index];
+        // Mover para concluídos
+        concluidos.push(evento);
+        atividades.splice(index, 1);
+        const newAtividadesSize = Buffer.byteLength(JSON.stringify(atividades, null, 2));
+        const newConcluidosSize = Buffer.byteLength(JSON.stringify(concluidos, null, 2));
+        const oldAtividadesSize = await fs.stat(atividadesFile).then(stats => stats.size).catch(() => 0);
+        const oldConcluidosSize = await fs.stat(concluidosFile).then(stats => stats.size).catch(() => 0);
+        const newTotalSize = currentSize - oldAtividadesSize - oldConcluidosSize + newAtividadesSize + newConcluidosSize;
+        if (newTotalSize > limit) {
+            return res.status(403).json({ sucesso: false, erro: `Limite de armazenamento atingido para o plano ${plano}` });
+        }
+        await fs.writeFile(atividadesFile, JSON.stringify(atividades, null, 2));
+        await fs.writeFile(concluidosFile, JSON.stringify(concluidos, null, 2));
+        io.to(game).emit('update', { type: 'atividadesGuilda' });
+        res.json({ sucesso: true });
+    } catch (error) {
+        console.error('[POST /atividadesGuilda/:id/concluir] Erro:', error);
+        res.status(500).json({ sucesso: false, erro: 'Erro ao concluir evento' });
+    }
+});
 // Nova rota para atividadesGuilda: Associar membros
 app.post('/atividadesGuilda/:id/membros', isAuthenticated, async (req, res) => {
     const sessionUser = req.session.user;
@@ -3647,11 +3689,8 @@ app.post('/atividadesGuilda/:id/membros', isAuthenticated, async (req, res) => {
     const isAdminUser = await isUserAdmin(sessionUser);
     const isOwn = await isOwnGame(sessionUser, game);
     const hasAssociarPermission = isOwn || isAdminUser || await hasPermission(sessionUser, 'associarMembrosEvento');
-
     if (!hasAssociarPermission) {
-
         return res.status(403).json({ sucesso: false, erro: 'Não autorizado' });
-
     }
     const gameDir = await getGameDir(sessionUser, effectiveUser, game);
     if (!isOwn && effectiveUser !== sessionUser) {

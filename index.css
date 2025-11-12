@@ -2451,6 +2451,7 @@ body.bright-mode #popupMinhaConta button#btnLogout {
 }
 
 .evento-item--botaoExcluirEvento {
+    display: none;
     background: linear-gradient(135deg, #fc466b 0%, #3f5efb 100%);
     color: white;
     padding: 12px 24px;
@@ -2481,6 +2482,11 @@ body.bright-mode #popupMinhaConta button#btnLogout {
     color: #e2e8f0;
     border-color: #4a5568;
     border-radius: 7px;
+}
+
+#popupNovoEvento {
+    height: 100vh;
+    overflow: scroll;
 }
 
 body.dark-mode #popupNovoEvento h2 {
@@ -2602,4 +2608,18 @@ body.bright-mode #conteudo .evento-item--membrosConvidados--item {
     background: linear-gradient(135deg, #e63950 0%, #3548d4 100%);
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(252, 70, 107, 0.4);
+}
+
+.evento-item--botaoConcluir {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+    font-size: 0.95rem;
+    padding: 12px 24px;
+    border-radius: var(--border-radius-sm);
+    box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3);
+}
+
+.evento-item--botaoConcluir:hover {
+    background: linear-gradient(135deg, #0e8074 0%, #2dd96b 100%);
+    transform: translateY(-2px);
 }

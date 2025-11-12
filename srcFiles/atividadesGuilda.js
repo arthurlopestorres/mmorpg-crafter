@@ -1,3 +1,4 @@
+// atividadesGuilda.js
 //! INICIO ATIVIDADESGUILDA.JS
 // atividadesGuilda.js - Módulo para gerenciar atividades da guilda
 // Dependências: core.js, utils.js, time.js (para permissões e membros do time)
@@ -7,9 +8,16 @@ async function montarAtividadesGuilda() {
     window.currentUserEmail = currentUserResp.email; // Armazenar email do usuário atual para uso no módulo
     conteudo.innerHTML = `
         <h2>Eventos</h2>
+        <div class="filtros">
+            <label for="filtroEventos">Filtrar por:</label>
+            <select id="filtroEventos">
+                <option value="proximos">Próximos Eventos</option>
+                <option value="concluidos">Eventos Concluídos</option>
+            </select>
+        </div>
         <div id="atividades-lista" class="lista"></div>
     `;
-    await carregarListaEventos();
+    await carregarListaEventos(); // Carrega próximos eventos por padrão
     // Registrar usuário e entrar no game via socket
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
     socket.emit('registerUser', { email: window.currentUserEmail, game: currentGame });
@@ -17,9 +25,26 @@ async function montarAtividadesGuilda() {
     // Listener para atualizações via websocket
     socket.on('update', (data) => {
         if (data.type === 'atividadesGuilda') {
-            carregarListaEventos();
+            atualizarListaEventos();
         }
     });
+    // Evento de mudança no filtro
+    document.getElementById("filtroEventos").addEventListener("change", async (e) => {
+        const valor = e.target.value;
+        if (valor === "proximos") {
+            await carregarListaEventos();
+        } else if (valor === "concluidos") {
+            await carregarListaEventosConcluidos();
+        }
+    });
+}
+async function atualizarListaEventos() {
+    const filtro = document.getElementById("filtroEventos").value;
+    if (filtro === "proximos") {
+        await carregarListaEventos();
+    } else if (filtro === "concluidos") {
+        await carregarListaEventosConcluidos();
+    }
 }
 async function carregarListaEventos() {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
@@ -48,7 +73,27 @@ async function carregarListaEventos() {
     }
     div.innerHTML = html;
 }
-function gerarHtmlEvento(e, currentUser) {
+async function carregarListaEventosConcluidos() {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    const currentUser = window.currentUserEmail;
+    const div = document.getElementById("atividades-lista");
+    div.innerHTML = '';
+    let html = '';
+    try {
+        const eventos = await safeApi(`/atividadesGuilda?game=${encodeURIComponent(currentGame)}&concluded=true`);
+        html += `
+            <div class="secao">
+                <h3>Eventos Concluídos</h3>
+                <ul>${eventos.map(e => gerarHtmlEvento(e, currentUser, true)).join("") || '<li class="fraseNenhumEvento">Nenhum evento concluído</li>'}</ul>
+            </div>
+        `;
+    } catch (error) {
+        console.error('[ATIVIDADES GUILDA] Erro ao carregar eventos concluídos:', error);
+        html += '<p>Erro ao carregar eventos concluídos.</p>';
+    }
+    div.innerHTML = html;
+}
+function gerarHtmlEvento(e, currentUser, isConcluded = false) {
     const hasPresence = e.presencas && e.presencas.includes(currentUser);
     const isCreator = e.criador === currentUser;
     const isInvited = (e.membros || []).includes(currentUser);
@@ -56,8 +101,43 @@ function gerarHtmlEvento(e, currentUser) {
     const podeMarcarPresenca = !hasPresence && (isInvited || isCreator || isAdmin);
     const hasAssocPermission = hasPermission('associarMembrosEvento') || isUserAdmin();
     let botaoPresenca = '';
-    if (hasPresence || podeMarcarPresenca) {
+    if (!isConcluded && (hasPresence || podeMarcarPresenca)) {
         botaoPresenca = `<button class="evento-item--botaoMarcarPresenca" onclick="${hasPresence ? 'desmarcarPresenca' : 'marcarPresenca'}('${e.id}')">${hasPresence ? 'Desmarcar Presença' : 'Marcar Presença'}</button>`;
+    }
+    let botaoConcluir = '';
+    if (!isConcluded && (hasPermission('concluirEvento') || isUserAdmin())) {
+        botaoConcluir = `<button class="evento-item--botaoConcluir" onclick="concluirEvento('${e.id}')">Concluir</button>`;
+    }
+    let botaoConvidar = '';
+    if (!isConcluded && hasAssocPermission) {
+        botaoConvidar = `<button class="evento-item--botaoConvidar" onclick="mostrarPopupAssociarMembros('${e.id}')">Convidar Membros</button>`;
+    }
+    let botaoEditar = '';
+    if (!isConcluded && (hasPermission('editarEvento') || isUserAdmin())) {
+        botaoEditar = `<button class="evento-item--botaoEditar" onclick="mostrarPopupEditarEvento('${e.id}')">Editar</button>`;
+    }
+    let botaoExcluir = '';
+    if (hasPermission('excluirEvento') || isUserAdmin()) {
+        botaoExcluir = `<button class="evento-item--botaoExcluirEvento" onclick="excluirEvento('${e.id}')">Excluir Evento</button>`;
+    }
+    let membrosHtml = '';
+    if (hasAssocPermission) {
+        membrosHtml = `
+            <ul class="evento-item--membrosConvidados--lista">${e.membros ? e.membros.map(m => `
+                <li class="evento-item--membrosConvidados--item">
+                    ${escapeHtml(m)}
+                    ${!isConcluded ? `<button class="evento-item--membrosConvidados--item--botaoCancelar" onclick="cancelarConvite('${e.id}', '${m}')">Cancelar Convite</button>` : ''}
+                </li>
+            `).join('') : '' || '<li>Nenhum</li>'}</ul>
+        `;
+    } else if (e.membros && e.membros.includes(currentUser)) {
+        membrosHtml = `
+            <ul class="evento-item--membrosConvidados--lista"><li class="evento-item--membrosConvidados--item">${escapeHtml(currentUser)}</li></ul>
+        `;
+    } else {
+        membrosHtml = `
+            <p class="evento-item--membrosConvidados--avisoNaoConvidado">Você não está convidado para este evento.</p>
+        `;
     }
     return `
         <li class="evento-item item" data-id="${e.id}">
@@ -65,30 +145,34 @@ function gerarHtmlEvento(e, currentUser) {
             <p class="evento-item--time">${e.data} ${e.horario} (${e.timezone})</p>
             <p class="evento-item--descricao">${escapeHtml(e.descricao)}</p>
             <p class="evento-item--aviso">Aviso: ${e.avisoAntes} minutos antes</p>
-            ${hasAssocPermission ? `<button class="evento-item--botaoConvidar" onclick="mostrarPopupAssociarMembros('${e.id}')">Convidar Membros</button>` : ''}
+            ${botaoConvidar}
             ${botaoPresenca}
-            ${(hasPermission('editarEvento') || isUserAdmin()) ? `<button class="evento-item--botaoEditar" onclick="mostrarPopupEditarEvento('${e.id}')">Editar</button>` : ''}
-            ${(hasPermission('excluirEvento') || isUserAdmin()) ? `<button class="evento-item--botaoExcluirEvento" onclick="excluirEvento('${e.id}')">Excluir Evento</button>` : ''}
+            ${botaoEditar}
+            ${botaoExcluir}
+            ${botaoConcluir}
             <div class="evento-item--listaDePresencaWrapper">Presenças:
                 <ul class="evento-item--listaDePresencaWrapper--lista">${e.presencas ? e.presencas.map(p => `<li class="evento-item--listaDePresencaWrapper--lista--item" data-email="${escapeHtml(p)}">${escapeHtml(p)}</li>`).join('') : '<li>Nenhuma</li>'}</ul>
             </div>
             <div class="evento-item--membrosConvidados--Wrapper">
                 <h4 class="evento-item--membrosConvidados--titulo">Membros Convidados:</h4>
-                ${hasAssocPermission ? `
-                <ul class="evento-item--membrosConvidados--lista">${e.membros ? e.membros.map(m => `
-                    <li class="evento-item--membrosConvidados--item">
-                        ${escapeHtml(m)}
-                        <button class="evento-item--membrosConvidados--item--botaoCancelar" onclick="cancelarConvite('${e.id}', '${m}')">Cancelar Convite</button>
-                    </li>
-                `).join('') : '' || '<li>Nenhum</li>'}</ul>
-                ` : e.membros && e.membros.includes(currentUser) ? `
-                    <ul class="evento-item--membrosConvidados--lista"><li class="evento-item--membrosConvidados--item">${escapeHtml(currentUser)}</li></ul>
-                ` : `
-                    <p class="evento-item--membrosConvidados--avisoNaoConvidado">Você não está convidado para este evento.</p>
-                `}
+                ${membrosHtml}
             </div>
         </li>
     `;
+}
+async function concluirEvento(id) {
+    const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
+    if (!confirm('Concluir este evento?')) return;
+    try {
+        const data = await safeApi(`/atividadesGuilda/${id}/concluir?game=${encodeURIComponent(currentGame)}`, { method: "POST" });
+        if (data.sucesso) {
+            atualizarListaEventos();
+        } else {
+            mostrarErro(data.erro || 'Erro ao concluir evento');
+        }
+    } catch (error) {
+        mostrarErro('Erro ao concluir evento');
+    }
 }
 async function cancelarConvite(id, email) {
     const currentGame = localStorage.getItem("currentGame") || "Pax Dei";
@@ -102,7 +186,7 @@ async function cancelarConvite(id, email) {
             body: JSON.stringify({ membros: novosMembros })
         });
         if (data.sucesso) {
-            await carregarListaEventos();
+            atualizarListaEventos();
         } else {
             mostrarErro(data.erro || 'Erro ao cancelar convite');
         }
@@ -164,7 +248,7 @@ function mostrarPopupNovoEvento() {
             if (dataResp.sucesso) {
                 popup.remove();
                 overlay.remove();
-                await carregarListaEventos();
+                atualizarListaEventos();
             } else {
                 mostrarErro(dataResp.erro || 'Erro ao criar evento');
             }
@@ -233,7 +317,7 @@ async function mostrarPopupEditarEvento(id) {
                 if (dataResp.sucesso) {
                     popup.remove();
                     overlay.remove();
-                    await carregarListaEventos();
+                    atualizarListaEventos();
                 } else {
                     mostrarErro(dataResp.erro || 'Erro ao editar evento');
                 }
@@ -255,7 +339,7 @@ async function excluirEvento(id) {
     try {
         const data = await safeApi(`/atividadesGuilda/${id}?game=${encodeURIComponent(currentGame)}`, { method: "DELETE" });
         if (data.sucesso) {
-            await carregarListaEventos();
+            atualizarListaEventos();
         } else {
             mostrarErro(data.erro || 'Erro ao excluir evento');
         }
@@ -336,7 +420,7 @@ async function mostrarPopupAssociarMembros(id) {
                 if (data.sucesso) {
                     popup.remove();
                     overlay.remove();
-                    await carregarListaEventos();
+                    atualizarListaEventos();
                 } else {
                     mostrarErro(data.erro || 'Erro ao associar membros');
                 }
@@ -362,7 +446,7 @@ async function marcarPresenca(id) {
             if (existingLi) {
                 existingLi.outerHTML = gerarHtmlEvento(updatedEvent, window.currentUserEmail);
             } else {
-                await carregarListaEventos();
+                atualizarListaEventos();
             }
         } else {
             mostrarErro(data.erro || 'Erro ao marcar presença');
@@ -381,7 +465,7 @@ async function desmarcarPresenca(id) {
             if (existingLi) {
                 existingLi.outerHTML = gerarHtmlEvento(updatedEvent, window.currentUserEmail);
             } else {
-                await carregarListaEventos();
+                atualizarListaEventos();
             }
         } else {
             mostrarErro(data.erro || 'Erro ao desmarcar presença');
