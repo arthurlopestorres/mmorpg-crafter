@@ -1,6 +1,5 @@
 // componentes.js - Funções para módulo de componentes
 // Dependências: core.js, utils.js
-
 async function montarComponentes() {
     const isAdmin = isUserAdmin();
     conteudo.innerHTML = `
@@ -83,7 +82,8 @@ async function carregarComponentesLista(termoBusca = "", ordem = "az", categoria
     let url = `/componentes?game=${encodeURIComponent(currentGame)}&order=${ordem}`;
     if (termoBusca) {
         url += `&search=${encodeURIComponent(termoBusca)}`;
-    } else {
+    }
+    if (!termoBusca && !categoria) {
         url += `&limit=10`;
     }
     try {
